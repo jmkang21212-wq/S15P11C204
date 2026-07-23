@@ -2,6 +2,9 @@ spring:
   application:
     name: laive
 
+  config:
+    import: "optional:file:.env[.properties]"
+
   datasource:
     url: "jdbc:postgresql://${POSTGRES_HOST:127.0.0.1}:${POSTGRES_PORT:5432}/${POSTGRES_DB:laive}"
     username: "${POSTGRES_USER:laive}"
