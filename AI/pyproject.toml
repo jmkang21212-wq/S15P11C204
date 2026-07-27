@@ -1,0 +1,28 @@
+[project]
+name = "laive-ai"
+version = "0.1.0"
+description = "실시간 위험 발언 감지 서버 (VAD -> STT -> 사전매칭/LLM 판정)"
+requires-python = ">=3.12"
+
+dependencies = [
+    # 서버
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "websockets>=13",
+    "httpx>=0.27",          # Spring 전송
+    "python-dotenv>=1.0",
+
+    # 음성 처리
+    "numpy>=2.0",
+    "silero-vad>=6.0",      # torch, torchaudio를 함께 설치한다
+    "onnxruntime>=1.20",    # VAD를 ONNX로 실행 (CPU에서 PyTorch보다 가볍다)
+
+    # 판정
+    "groq>=1.6",            # Whisper STT
+    "openai>=2.0",          # SSAFY GMS(OpenAI 호환 프록시) 경유 LLM 판정
+    "pyahocorasick>=2.1",   # 사전매칭
+    "pyyaml>=6.0",          # 사전 파일 로드
+]
+
+[tool.uv]
+package = false
