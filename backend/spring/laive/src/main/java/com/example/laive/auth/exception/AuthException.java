@@ -1,10 +1,12 @@
 package com.example.laive.auth.exception;
 
+import lombok.Getter;
 import org.springframework.http.HttpStatus;
 
 /**
  * 인증 처리 중 발생한 HTTP 상태, 공개 오류 코드와 사용자 메시지를 함께 전달한다.
  */
+@Getter
 public class AuthException extends RuntimeException {
 
     private final HttpStatus status;
@@ -14,14 +16,6 @@ public class AuthException extends RuntimeException {
         super(message);
         this.status = status;
         this.code = code;
-    }
-
-    public HttpStatus getStatus() {
-        return status;
-    }
-
-    public String getCode() {
-        return code;
     }
 
     public static AuthException invalidCredentials() {
