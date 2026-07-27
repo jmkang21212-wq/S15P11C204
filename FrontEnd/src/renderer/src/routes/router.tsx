@@ -3,6 +3,7 @@ import AppLayout from '@renderer/layouts/AppLayout'
 import ConsoleLayout from '@renderer/layouts/ConsoleLayout'
 import { PATHS } from './paths'
 import LoginPage from '@renderer/pages/auth/LoginPage'
+import PlatformConnectPage from '@renderer/pages/auth/PlatformConnectPage'
 
 /**
  * 앱 라우터 정의.
@@ -19,7 +20,7 @@ export const router = createHashRouter([
 
   // ── 인증 / 온보딩: 레이아웃 없음 ──
   { path: PATHS.login, element: <LoginPage /> },
-  // { path: PATHS.platformConnect, element: <PlatformConnectPage /> },  // ← 다음 단계
+  { path: PATHS.platformConnect, element: <PlatformConnectPage /> },
 
   // ── 앱 화면: GNB 레이아웃 ──
   {
