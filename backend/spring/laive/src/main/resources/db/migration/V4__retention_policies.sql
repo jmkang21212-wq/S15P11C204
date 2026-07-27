@@ -40,8 +40,8 @@ SELECT add_retention_policy('live_briefings', INTERVAL '90 days', if_not_exists 
 --                  세션 리포트의 viewerTimeline(SC-06)이 이 원본을 그대로 조회한다.
 --                  과거 리포트를 언제까지 온전히 보여줄지 정한 뒤 활성화할 것.
 -- -----------------------------------------------------------------------------
--- SELECT add_retention_policy('viewer_metrics',      INTERVAL '365 days', if_not_exists => true);
--- SELECT add_retention_policy('sentiment_snapshots', INTERVAL '365 days', if_not_exists => true);
+SELECT add_retention_policy('viewer_metrics',      INTERVAL '90 days', if_not_exists => true);
+SELECT add_retention_policy('sentiment_snapshots', INTERVAL '30 days', if_not_exists => true);
 
 
 -- -----------------------------------------------------------------------------
