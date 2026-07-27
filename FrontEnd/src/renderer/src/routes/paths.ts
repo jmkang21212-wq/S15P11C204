@@ -12,7 +12,8 @@ export const PATHS = {
   growth: '/growth',
   portfolio: '/portfolio',
   matching: '/matching',
-  console: '/console/:sessionId',
+  console: '/console', // 방송 콘솔 진입(GNB 메뉴) — 실제 세션은 consoleSession로 라우팅
+  consoleSession: '/console/:sessionId',
 } as const
 
 export type PathKey = keyof typeof PATHS

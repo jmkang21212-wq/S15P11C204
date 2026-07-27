@@ -8,7 +8,8 @@ import GNB from '@renderer/components/common/GNB'
 export default function ConsoleLayout(): React.JSX.Element {
   return (
     <div className="flex h-screen">
-      <GNB collapsed />
+      {/* 콘솔은 방송 진행 중 맥락이므로 LIVE 배너 노출 (추후 실제 세션 상태로 대체) */}
+      <GNB collapsed live />
       <main className="flex-1 overflow-hidden">
         <Outlet />
       </main>

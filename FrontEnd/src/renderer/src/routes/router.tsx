@@ -35,7 +35,7 @@ export const router = createHashRouter([
   {
     element: <ConsoleLayout />,
     children: [
-      // { path: PATHS.console, element: <ConsolePage /> },
+      // { path: PATHS.consoleSession, element: <ConsolePage /> },
     ],
   },
 ])
