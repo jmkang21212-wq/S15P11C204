@@ -22,6 +22,13 @@ dependencies = [
     "openai>=2.0",          # SSAFY GMS(OpenAI 호환 프록시) 경유 LLM 판정
     "pyahocorasick>=2.1",   # 사전매칭
     "pyyaml>=6.0",          # 사전 파일 로드
+
+    # 채팅 감정 분류 (chat-ai/) — fastapi·uvicorn·onnxruntime·numpy는 위와 공유
+    "transformers>=4.46,<5",  # KcELECTRA 토크나이저
+    "requests>=2.31",         # fetch_model.py 모델 다운로드
+    # 리플레이 시뮬레이터 (chat-ai/replay/)
+    "aiohttp>=3.10",
+    "websocket-client>=1.7",
 ]
 
 [tool.uv]
