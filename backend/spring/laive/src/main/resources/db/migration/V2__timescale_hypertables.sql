@@ -88,4 +88,17 @@ ALTER TABLE viewer_metrics SET (
 
 CALL add_columnstore_policy('viewer_metrics', after => INTERVAL '7 days', if_not_exists => true);
 
--- sentiment_snapshots / live_briefings는 볼륨이 작아 컬럼스토어를 적용하지 않는다.
+-- sentiment_snapshots는 행 수 자체는 적지만(3분 윈도우 × 3시간 = 세션당 60행)
+-- 비율 3개가 numeric(4,3)이라 행당 크기가 viewer_metrics의 5배다.
+-- (TimescaleDB는 정수·타임스탬프에 delta 인코딩을 쓰지만 numeric은 가변길이라
+--  일반 압축으로 폴백한다 — 실측 압축비 3.3배, viewer_metrics는 16.3배)
+-- 압축비가 낮아도 3배는 줄어들므로 적용한다.
+ALTER TABLE sentiment_snapshots SET (
+    timescaledb.enable_columnstore = true,
+    timescaledb.segmentby          = 'session_id',
+    timescaledb.orderby            = 'captured_at DESC, id'
+);
+
+CALL add_columnstore_policy('sentiment_snapshots', after => INTERVAL '7 days', if_not_exists => true);
+
+-- live_briefings는 세션당 수십 행 수준이라 컬럼스토어를 적용하지 않는다.

@@ -364,8 +364,10 @@ CREATE TABLE viewer_metrics (
     CONSTRAINT ck_viewer_metrics_viewer_count CHECK (viewer_count >= 0)
 );
 
--- 세션 리포트의 viewerTimeline 조회
-CREATE INDEX ix_viewer_metrics_session_measured ON viewer_metrics (session_id, measured_at DESC);
+-- 세션 리포트의 viewerTimeline 조회는 uq_viewer_metrics_session_measured가 커버한다.
+-- (session_id, measured_at DESC) 전용 인덱스는 만들지 않는다 —
+-- B-tree 역방향 스캔은 정방향과 비용이 같고, hypertable은 청크마다 인덱스가
+-- 복제되므로(청크당 최소 8KB) 중복 인덱스의 낭비가 그대로 곱해진다.
 
 COMMENT ON TABLE viewer_metrics IS '시청자 수 시계열. V2에서 hypertable로 전환한다';
 
@@ -422,8 +424,8 @@ CREATE TABLE transcripts (
     CONSTRAINT ck_transcripts_range    CHECK (end_ms > start_ms)
 );
 
--- 세션 전문 조회, 리포트 생성 입력
-CREATE INDEX ix_transcripts_session_start ON transcripts (session_id, start_ms);
+-- 세션 전문 조회·리포트 생성 입력은 uq_transcripts_session_range
+-- (session_id, start_ms, end_ms)의 선두 컬럼으로 커버되므로 별도 인덱스를 두지 않는다.
 
 COMMENT ON TABLE transcripts IS 'STT 변환 결과. 세션당 수백 행 수준이라 일반 테이블로 둔다';
 
