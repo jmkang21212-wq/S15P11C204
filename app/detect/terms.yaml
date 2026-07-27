@@ -1,0 +1,81 @@
+# 위험 발언 사전 (테스트용 최소 목록)
+#
+# 매칭 전에 정규화가 적용되므로 "씨 발", "씨이이발" 같은 변형은
+# 따로 넣지 않아도 잡힌다. variants에는 정규화로 흡수되지 않는
+# 철자 차이(시발 / 씨팔 / ㅅㅂ)만 적는다.
+#
+# severity: high | medium | low
+# category: profanity(비속어) | insult(모욕) | threat(위협) | aggressive(공격적)
+
+terms:
+  - term: 씨발
+    severity: high
+    category: profanity
+    variants: [시발, 씨팔, 씨바, 쉬발, 씨불, ㅅㅂ, ㅆㅂ]
+
+  - term: 개새끼
+    severity: high
+    category: insult
+    variants: [개색끼, 개쉐끼, 개세끼, 개시키]
+
+  - term: 병신
+    severity: high
+    category: insult
+    variants: [병시니, 븅신, ㅄ]
+
+  - term: 좆
+    severity: high
+    category: profanity
+    variants: [좃]
+
+  - term: 지랄
+    severity: medium
+    category: profanity
+    variants: [지럴, ㅈㄹ]
+
+  - term: 미친놈
+    severity: medium
+    category: insult
+    variants: [미친년, 미친새끼]
+
+  - term: 닥쳐
+    severity: medium
+    category: aggressive
+    variants: [닥치라고, 주둥이닥쳐]
+
+  - term: 등신
+    severity: medium
+    category: insult
+    variants: []
+
+  - term: 죽여버린다
+    severity: high
+    category: threat
+    variants: [죽여버릴거야, 죽고싶냐, 뒤질래]
+
+  - term: 꺼져
+    severity: low
+    category: aggressive
+    variants: [꺼지라고]
+
+  - term: 새끼
+    severity: low
+    category: insult
+    variants: []
+
+  - term: 멍청이
+    severity: low
+    category: insult
+    variants: [멍청아]
+
+# 여기에 걸리는 구간 안에서 발견된 단어는 무시한다.
+# Aho-Corasick은 부분 문자열을 전부 잡으므로 "시발점"에서 "시발"이 걸린다.
+allowlist:
+  - 시발점
+  - 시발역
+  - 시발자동차
+  - 십장생
+  - 강아지새끼
+  - 고양이새끼
+  - 새끼손가락
+  - 새끼발가락
