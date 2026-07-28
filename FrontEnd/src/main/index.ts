@@ -6,14 +6,20 @@ import icon from '../../resources/icon.png?asset'
 /**
  * 렌더러가 넘긴 URL이 외부로 내보내도 되는 주소인지 검증한다.
  * shell.openExternal에 임의 프로토콜(file:, javascript: 등)이 들어가면 위험하므로
- * http/https만 허용한다.
+ * 허용 목록 방식으로 막는다.
+ *
+ * `mailto:`는 포트폴리오 공개 뷰(SC-10)의 비즈니스 문의 버튼에서 쓴다 — 기본 메일
+ * 클라이언트를 열 뿐이라 안전하다. 다운로드는 여기에 해당하지 않으므로 http/https만 받는다.
  */
-function assertHttpUrl(url: string): void {
+function assertAllowedUrl(url: string, allowed: readonly string[]): void {
   const parsed = new URL(url)
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+  if (!allowed.includes(parsed.protocol)) {
     throw new Error('UNSUPPORTED_PROTOCOL')
   }
 }
+
+const OPEN_EXTERNAL_PROTOCOLS = ['http:', 'https:', 'mailto:'] as const
+const DOWNLOAD_PROTOCOLS = ['http:', 'https:'] as const
 
 function createWindow(): void {
   // Create the browser window.
@@ -68,12 +74,12 @@ app.whenReady().then(() => {
   // SC-07 클립 재생·다운로드와 SC-01b 플랫폼 연동(인증 URL 열기)이 함께 쓴다.
 
   ipcMain.handle('app:open-external', async (_event, url: string) => {
-    assertHttpUrl(url)
+    assertAllowedUrl(url, OPEN_EXTERNAL_PROTOCOLS)
     await shell.openExternal(url)
   })
 
   ipcMain.handle('app:download-file', (event, url: string) => {
-    assertHttpUrl(url)
+    assertAllowedUrl(url, DOWNLOAD_PROTOCOLS)
     const window = BrowserWindow.fromWebContents(event.sender)
     if (!window) throw new Error('WINDOW_NOT_FOUND')
     // Electron 기본 다운로드 흐름(저장 다이얼로그)을 탄다.
