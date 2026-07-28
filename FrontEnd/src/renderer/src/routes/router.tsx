@@ -4,6 +4,7 @@ import ConsoleLayout from '@renderer/layouts/ConsoleLayout'
 import { PATHS } from './paths'
 import LoginPage from '@renderer/pages/auth/LoginPage'
 import PlatformConnectPage from '@renderer/pages/auth/PlatformConnectPage'
+import DashboardPage from '@renderer/pages/dashboard/DashboardPage'
 import SessionReportListPage from '@renderer/pages/report/SessionReportListPage'
 import SessionReportDetailPage from '@renderer/pages/report/SessionReportDetailPage'
 
@@ -28,11 +29,11 @@ export const router = createHashRouter([
   {
     element: <AppLayout />,
     children: [
-      // 각 담당자가 자기 화면을 여기에 한 줄씩 추가:
-      // { path: PATHS.dashboard, element: <DashboardPage /> },
-      // { path: PATHS.schedule,  element: <SchedulePage /> },
+      { path: PATHS.dashboard, element: <DashboardPage /> },
       { path: PATHS.sessionReport, element: <SessionReportListPage /> },
       { path: PATHS.sessionReportDetail, element: <SessionReportDetailPage /> },
+      // 각 담당자가 자기 화면을 여기에 한 줄씩 추가:
+      // { path: PATHS.schedule, element: <SchedulePage /> },
     ],
   },
 

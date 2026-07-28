@@ -72,3 +72,12 @@ export function formatTime(iso: string): string {
   if (Number.isNaN(d.getTime())) return '-'
   return TIME_FORMAT.format(d)
 }
+
+/** ISO 문자열을 `07.20` 형태로. 카드의 짧은 날짜 표기용. */
+export function formatMonthDay(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '-'
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${mm}.${dd}`
+}
