@@ -1,39 +1,48 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import { formatCount, formatTime } from '@renderer/lib/format'
-import { PATHS } from '@renderer/routes/paths'
 import type { BriefingType, LiveSnapshot } from '@renderer/types/console'
 
 interface MiniWidgetProps {
   data: LiveSnapshot
-  /** HIGH 위험 강조(확대) 상태로 렌더 — 목업의 "HIGH 경고 시 확대·강조" */
+  /** HIGH 위험 강조 상태로 렌더 */
   isHigh: boolean
+  /** "콘솔로" — 메인 콘솔 창 포커스 */
+  onGoConsole: () => void
+  /** 미니 창 닫기 */
+  onClose: () => void
 }
 
 const TYPE_META: Record<BriefingType, { label: string; accent: string }> = {
   RISK: { label: '위험 발언 감지', accent: 'text-[#fb7185]' },
   CHAT_SUMMARY: { label: '채팅 요약', accent: 'text-[#67e8f9]' },
   FAQ: { label: '반복 질문', accent: 'text-[#c4b5fd]' },
-  PROMISE: { label: '약속 감지', accent: 'text-[#fcd34d]' },
+  PROMISE: { label: '약속 감지', accent: 'text-[#fcd34d]' }
 }
 
+// 프레임 없는 창을 잡아 끌 수 있게 하는 영역 / 그 위 조작 요소는 끌기 제외
+const DRAG = '[-webkit-app-region:drag]'
+const NO_DRAG = '[-webkit-app-region:no-drag]'
+
 /**
- * 미니 모드 위젯 본체.
- * 기본 상태: 브리핑을 타입별 카드로 보여주고 ‹ › 로 직접 넘겨가며 확인한다.
- * HIGH 상태: 위험 발언을 확대·강조(별도 변형).
- * 라우트 미리보기(MiniModePage)와 콘솔 내 인앱 토글에서 공용으로 쓴다.
+ * 미니 모드 위젯 — 항상-위 별도 창(340×220)의 내용.
+ * 창 전체를 채우며, 빈 영역은 드래그로 창을 옮길 수 있다.
  */
-export default function MiniWidget({ data, isHigh }: MiniWidgetProps): React.JSX.Element {
+export default function MiniWidget({
+  data,
+  isHigh,
+  onGoConsole,
+  onClose
+}: MiniWidgetProps): React.JSX.Element {
   const briefings = data.briefings
   const total = briefings.length
   const [idx, setIdx] = useState(0)
 
   const highBriefing = briefings.find((b) => b.briefingType === 'RISK' && b.level === 'HIGH')
 
-  // ── HIGH 경고 시 확대·강조 ──
+  // ── HIGH 경고 시 강조 ──
   if (isHigh && highBriefing) {
     return (
-      <div className="flex h-[200px] w-[340px] flex-col rounded-xl border-2 border-destructive bg-[#1a0e12] p-4 text-[#ffe4e6] shadow-[0_0_0_3px_rgba(225,29,72,.25)]">
+      <div className={`flex h-full w-full flex-col bg-[#1a0e12] p-4 text-[#ffe4e6] ${DRAG}`}>
         <div className="mb-2.5 flex items-center gap-2">
           <span className="flex size-5 items-center justify-center rounded bg-destructive text-xs font-extrabold text-white">
             !
@@ -42,18 +51,27 @@ export default function MiniWidget({ data, isHigh }: MiniWidgetProps): React.JSX
           <span className="ml-auto font-mono text-[11px] text-[#fb7185]">
             {formatTime(highBriefing.createdAt)}
           </span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="닫기"
+            className={`text-[#fb7185] ${NO_DRAG}`}
+          >
+            ✕
+          </button>
         </div>
-        <div className="flex-1 rounded-lg border border-destructive/35 bg-destructive/15 p-3 text-[12.5px] leading-relaxed">
+        <div className="flex-1 overflow-y-auto rounded-lg border border-destructive/35 bg-destructive/15 p-3 text-[12.5px] leading-relaxed">
           {highBriefing.message}
         </div>
         <div className="mt-3 flex items-center gap-2">
           <span className="text-[11px] text-[#fda4af]">사운드 알림 재생됨</span>
-          <Link
-            to={PATHS.console}
-            className="ml-auto rounded-md bg-destructive px-3 py-1.5 text-[11.5px] font-bold text-white"
+          <button
+            type="button"
+            onClick={onGoConsole}
+            className={`ml-auto rounded-md bg-destructive px-3 py-1.5 text-[11.5px] font-bold text-white ${NO_DRAG}`}
           >
             콘솔에서 확인 ↗
-          </Link>
+          </button>
         </div>
       </div>
     )
@@ -68,8 +86,8 @@ export default function MiniWidget({ data, isHigh }: MiniWidgetProps): React.JSX
   const next = (): void => setIdx((i) => (i + 1) % total)
 
   return (
-    <div className="flex h-[220px] w-[340px] flex-col rounded-xl bg-[#12151d] p-4 text-[#e6ebf2]">
-      {/* 상단: LIVE · 시청자 · 여론 (항상 표시) */}
+    <div className={`flex h-full w-full flex-col bg-[#12151d] p-4 text-[#e6ebf2] ${DRAG}`}>
+      {/* 상단: LIVE · 시청자 · 닫기 */}
       <div className="mb-2.5 flex items-center gap-2.5">
         <span className="rounded bg-destructive px-1.5 py-0.5 text-[10px] font-bold text-white">
           ● LIVE
@@ -78,6 +96,14 @@ export default function MiniWidget({ data, isHigh }: MiniWidgetProps): React.JSX
           <span className="opacity-70">👁</span>
           <span className="font-mono">{formatCount(data.session.currentViewers)}</span>
         </span>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="닫기"
+          className={`ml-auto text-[#7b8494] hover:text-[#e6ebf2] ${NO_DRAG}`}
+        >
+          ✕
+        </button>
       </div>
       <div className="mb-2.5 flex h-1.5 overflow-hidden rounded-full">
         <div className="bg-success" style={{ width: `${data.sentiment.positiveRatio * 100}%` }} />
@@ -118,7 +144,7 @@ export default function MiniWidget({ data, isHigh }: MiniWidgetProps): React.JSX
           type="button"
           onClick={prev}
           disabled={total <= 1}
-          className="flex size-6 items-center justify-center rounded-full bg-white/10 text-[#a7b0bf] disabled:opacity-40"
+          className={`flex size-6 items-center justify-center rounded-full bg-white/10 text-[#a7b0bf] disabled:opacity-40 ${NO_DRAG}`}
           aria-label="이전 브리핑"
         >
           ‹
@@ -130,17 +156,18 @@ export default function MiniWidget({ data, isHigh }: MiniWidgetProps): React.JSX
           type="button"
           onClick={next}
           disabled={total <= 1}
-          className="flex size-6 items-center justify-center rounded-full bg-white/10 text-[#a7b0bf] disabled:opacity-40"
+          className={`flex size-6 items-center justify-center rounded-full bg-white/10 text-[#a7b0bf] disabled:opacity-40 ${NO_DRAG}`}
           aria-label="다음 브리핑"
         >
           ›
         </button>
-        <Link
-          to={PATHS.console}
-          className="ml-auto rounded-md bg-[#22d3ee] px-3 py-1.5 text-[11.5px] font-bold text-[#0b0d12]"
+        <button
+          type="button"
+          onClick={onGoConsole}
+          className={`ml-auto rounded-md bg-[#22d3ee] px-3 py-1.5 text-[11.5px] font-bold text-[#0b0d12] ${NO_DRAG}`}
         >
           콘솔로 ↗
-        </Link>
+        </button>
       </div>
     </div>
   )
