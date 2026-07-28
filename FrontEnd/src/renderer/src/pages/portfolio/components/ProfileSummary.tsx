@@ -1,9 +1,8 @@
-import { useState } from 'react'
-import { UserRound } from 'lucide-react'
 import { Badge } from '@renderer/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@renderer/components/ui/card'
+import Avatar from '@renderer/components/common/Avatar'
 import { cn } from '@renderer/lib/utils'
-import type { PortfolioProfile, PortfolioTag } from '@renderer/types/portfolio'
+import { PLATFORM_LABEL, type PortfolioProfile, type PortfolioTag } from '@renderer/types/portfolio'
 
 /**
  * 프로필·플랫폼·태그 — 전부 읽기 전용이다.
@@ -11,35 +10,6 @@ import type { PortfolioProfile, PortfolioTag } from '@renderer/types/portfolio'
  * 프로필과 플랫폼 계정은 각각 `/streamers/me`, 플랫폼 연동(SC-01b)에서 관리하고,
  * 태그는 `PATCH /portfolio/me` 본문에 없어 이 화면에서 바꿀 수 없다.
  */
-
-const PLATFORM_LABEL: Record<string, string> = {
-  CHZZK: '치지직',
-  SOOP: 'SOOP'
-}
-
-/** 프로필 이미지는 CSP(`img-src 'self' data:`)로 외부 URL이 차단될 수 있어 폴백을 둔다. */
-function Avatar({ src, alt }: { src: string | null; alt: string }): React.JSX.Element {
-  const [failed, setFailed] = useState(false)
-
-  if (src === null || failed) {
-    return (
-      <span
-        className="flex size-12 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground"
-        aria-label={alt}
-      >
-        <UserRound className="size-[22px]" strokeWidth={1.8} aria-hidden />
-      </span>
-    )
-  }
-  return (
-    <img
-      src={src}
-      alt={alt}
-      onError={() => setFailed(true)}
-      className="size-12 shrink-0 rounded-full bg-muted object-cover"
-    />
-  )
-}
 
 interface ProfileSummaryProps {
   profile: PortfolioProfile

@@ -5,7 +5,7 @@ import { Button } from '@renderer/components/ui/button'
 import { Skeleton } from '@renderer/components/ui/skeleton'
 import ClipThumbnail from '@renderer/components/common/ClipThumbnail'
 import { EmptyState, ErrorState } from '@renderer/components/common/StateView'
-import BrowserChrome from './components/BrowserChrome'
+import BrowserChrome from '@renderer/components/common/BrowserChrome'
 import PerformanceSummary from './components/PerformanceSummary'
 import ProfileSummary from './components/ProfileSummary'
 import { fetchPublicPortfolio, PORTFOLIO_NOT_PUBLIC } from '@renderer/api/portfolio'
@@ -29,8 +29,19 @@ export default function PortfolioPublicPage(): React.JSX.Element {
   const loader = useCallback(() => fetchPublicPortfolio(publicSlug), [publicSlug])
   const { data, loading, error } = useAsyncData(loader)
 
+  /**
+   * SC-11 도입 전에는 "내 포트폴리오 편집 → 공개 뷰 보기"만 존재해 `/portfolio`로
+   * 고정해도 맞았다. 이제 `/matching`·`/discover`에서 다른 스트리머를 보러 와도
+   * 같은 화면을 거치므로(design.md §5.2), 고정 경로는 그 경우 자기 편집 화면으로
+   * 잘못 튕긴다. 브라우저 히스토리로 돌아가고, 직접 링크로 들어와 히스토리가 없으면
+   * "탐색"의 자연스러운 시작점인 매칭 화면으로 보낸다.
+   */
   const goBackToApp = (): void => {
-    navigate(PATHS.portfolio)
+    if (window.history.length > 1) {
+      navigate(-1)
+    } else {
+      navigate(PATHS.matching)
+    }
   }
 
   return (
