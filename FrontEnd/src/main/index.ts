@@ -21,11 +21,23 @@ function assertAllowedUrl(url: string, allowed: readonly string[]): void {
 const OPEN_EXTERNAL_PROTOCOLS = ['http:', 'https:', 'mailto:'] as const
 const DOWNLOAD_PROTOCOLS = ['http:', 'https:'] as const
 
+// 창 참조를 모듈 레벨로 둔다 — 미니 창에서 메인 창을 포커스하는 등 창 간 제어에 필요하다.
+let mainWindow: BrowserWindow | null = null
+let miniWindow: BrowserWindow | null = null
+
+/** dev/prod에 맞춰 렌더러 특정 해시 라우트를 창에 로드한다. (HashRouter 기준) */
+function loadRoute(win: BrowserWindow, hashRoute: string): void {
+  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+    win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}#${hashRoute}`)
+  } else {
+    win.loadFile(join(__dirname, '../renderer/index.html'), { hash: hashRoute })
+  }
+}
+
 function createWindow(): void {
-  // Create the browser window.
-  const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
+  const win = new BrowserWindow({
+    width: 1280,
+    height: 800,
     show: false,
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
@@ -34,12 +46,14 @@ function createWindow(): void {
       sandbox: false
     }
   })
+  mainWindow = win
 
-  mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+  win.on('ready-to-show', () => win.show())
+  win.on('closed', () => {
+    if (mainWindow === win) mainWindow = null
   })
 
-  mainWindow.webContents.setWindowOpenHandler((details) => {
+  win.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
@@ -47,10 +61,44 @@ function createWindow(): void {
   // HMR for renderer base on electron-vite cli.
   // Load the remote URL for development or the local html file for production.
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    win.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    win.loadFile(join(__dirname, '../renderer/index.html'))
   }
+}
+
+/**
+ * 방송 콘솔의 미니 모드 창.
+ * 프레임 없는 항상-위 소형 창으로, 방송 화면 위에 두고 쓸 수 있게 한다.
+ * 드래그 이동은 렌더러에서 `-webkit-app-region: drag`로 처리한다.
+ */
+function createMiniWindow(): void {
+  if (miniWindow && !miniWindow.isDestroyed()) {
+    miniWindow.focus()
+    return
+  }
+
+  const win = new BrowserWindow({
+    width: 340,
+    height: 220,
+    show: false,
+    frame: false,
+    resizable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false
+    }
+  })
+  miniWindow = win
+
+  win.on('ready-to-show', () => win.show())
+  win.on('closed', () => {
+    if (miniWindow === win) miniWindow = null
+  })
+
+  loadRoute(win, '/console/mini')
 }
 
 // This method will be called when Electron has finished
@@ -84,6 +132,18 @@ app.whenReady().then(() => {
     if (!window) throw new Error('WINDOW_NOT_FOUND')
     // Electron 기본 다운로드 흐름(저장 다이얼로그)을 탄다.
     window.webContents.downloadURL(url)
+  })
+
+  // ── 미니 모드 창 제어 (SC-03 부속) ──
+  ipcMain.on('mini:open', () => createMiniWindow())
+  ipcMain.on('mini:close', () => {
+    if (miniWindow && !miniWindow.isDestroyed()) miniWindow.close()
+  })
+  ipcMain.on('main:focus', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.focus()
+    }
   })
 
   createWindow()

@@ -41,6 +41,7 @@ distro==1.9.0
     # via
     #   groq
     #   openai
+fakeredis==2.37.0
 fastapi==0.140.0
     # via laive-ai
 filelock==3.32.0
@@ -175,6 +176,10 @@ pyyaml==6.0.3
     #   huggingface-hub
     #   laive-ai
     #   transformers
+redis==8.0.1
+    # via
+    #   fakeredis
+    #   laive-ai
 regex==2026.7.19
     # via transformers
 requests==2.34.2
@@ -192,6 +197,8 @@ sniffio==1.3.1
     # via
     #   groq
     #   openai
+sortedcontainers==2.4.0
+    # via fakeredis
 starlette==1.3.1
     # via fastapi
 sympy==1.14.0

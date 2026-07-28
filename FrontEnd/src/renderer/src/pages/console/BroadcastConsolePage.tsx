@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useLiveSnapshot } from '@renderer/hooks/useLiveSnapshot'
 import { Skeleton } from '@renderer/components/ui/skeleton'
@@ -7,7 +6,6 @@ import ConsoleStatusBar from './components/ConsoleStatusBar'
 import BriefingFeed from './components/BriefingFeed'
 import SentimentPanel from './components/SentimentPanel'
 import RepeatedQuestions from './components/RepeatedQuestions'
-import MiniWidget from './components/MiniWidget'
 
 /** 기본 세션 ID — /console(파라미터 없음) 진입 시 현재 세션 대체용. */
 const DEFAULT_SESSION_ID = 9002
@@ -22,7 +20,6 @@ export default function BroadcastConsolePage(): React.JSX.Element {
   const { sessionId } = useParams()
   const sid = sessionId ? Number(sessionId) : DEFAULT_SESSION_ID
   const { data, isLoading, error } = useLiveSnapshot(sid)
-  const [miniOpen, setMiniOpen] = useState(false)
 
   if (isLoading) {
     return (
@@ -42,28 +39,12 @@ export default function BroadcastConsolePage(): React.JSX.Element {
   }
 
   return (
-    <div className="relative flex h-full flex-col">
+    <div className="flex h-full flex-col">
       <ConsoleStatusBar
         session={data.session}
         services={data.services}
-        miniOpen={miniOpen}
-        onToggleMini={() => setMiniOpen((v) => !v)}
+        onOpenMini={() => window.api.openMiniWindow()}
       />
-
-      {/* 인앱 미니 위젯 (데모용 토글) — 추후 별도 항상-위 창으로 대체 */}
-      {miniOpen && (
-        <div className="absolute right-6 bottom-6 z-50">
-          <button
-            type="button"
-            onClick={() => setMiniOpen(false)}
-            className="absolute -top-2 -right-2 z-10 flex size-6 items-center justify-center rounded-full bg-neutral-700 text-xs text-white"
-            aria-label="미니 모드 닫기"
-          >
-            ✕
-          </button>
-          <MiniWidget data={data} isHigh={false} />
-        </div>
-      )}
 
       <div className="flex flex-1 overflow-hidden">
         {/* 좌: 브리핑 피드 */}
