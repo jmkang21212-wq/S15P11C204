@@ -1,5 +1,5 @@
 import { Button } from '@renderer/components/ui/button'
-import EmptyState from '@renderer/components/common/EmptyState'
+import { EmptyState } from '@renderer/components/common/StateView'
 import { cn } from '@renderer/lib/utils'
 import { formatTime } from '@renderer/lib/format'
 import type { Briefing, BriefingType } from '@renderer/types/console'
@@ -61,7 +61,7 @@ export default function BriefingFeed({ briefings }: { briefings: Briefing[] }): 
           ))}
         </ul>
       ) : (
-        <EmptyState message="아직 도착한 브리핑이 없어요" />
+        <EmptyState title="아직 도착한 브리핑이 없어요" className="rounded-lg bg-muted/40 py-8" />
       )}
     </section>
   )

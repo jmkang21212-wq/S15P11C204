@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Play } from 'lucide-react'
 import { Card } from '@renderer/components/ui/card'
-import EmptyState from '@renderer/components/common/EmptyState'
+import { EmptyState } from '@renderer/components/common/StateView'
 import { PATHS } from '@renderer/routes/paths'
 import { formatMs } from '@renderer/lib/format'
 import type { RecentHighlight } from '@renderer/types/dashboard'
@@ -40,7 +40,7 @@ export default function RecentClipsCard({ highlights }: RecentClipsCardProps): R
           ))}
         </div>
       ) : (
-        <EmptyState message="아직 생성된 클립이 없어요" />
+        <EmptyState title="아직 생성된 클립이 없어요" className="rounded-lg bg-muted/40 py-8" />
       )}
     </Card>
   )

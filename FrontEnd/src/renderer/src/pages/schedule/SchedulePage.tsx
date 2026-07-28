@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useCalendarEvents } from '@renderer/hooks/useCalendarEvents'
 import { buildMockAnnouncement } from '@renderer/api/schedule'
+import { Skeleton } from '@renderer/components/ui/skeleton'
+import { ErrorState } from '@renderer/components/common/StateView'
 import CalendarMonth from './components/CalendarMonth'
 import EventForm from './components/EventForm'
 import AnnouncementDraft from './components/AnnouncementDraft'
@@ -68,9 +70,14 @@ export default function SchedulePage(): React.JSX.Element {
 
   return (
     <div className="flex h-full">
-      {isLoading || !data ? (
-        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-          {error ? '일정을 불러오지 못했어요.' : '불러오는 중…'}
+      {error ? (
+        <div className="flex flex-1 items-center justify-center">
+          <ErrorState message="일정을 불러오지 못했어요." />
+        </div>
+      ) : isLoading || !data ? (
+        <div className="flex flex-1 flex-col gap-3 p-8">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-full w-full rounded-xl" />
         </div>
       ) : (
         <CalendarMonth

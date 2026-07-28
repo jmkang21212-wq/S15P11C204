@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useLiveSnapshot } from '@renderer/hooks/useLiveSnapshot'
+import { Skeleton } from '@renderer/components/ui/skeleton'
+import { ErrorState } from '@renderer/components/common/StateView'
 import ConsoleStatusBar from './components/ConsoleStatusBar'
 import BriefingFeed from './components/BriefingFeed'
 import SentimentPanel from './components/SentimentPanel'
@@ -23,13 +25,18 @@ export default function BroadcastConsolePage(): React.JSX.Element {
   const [miniOpen, setMiniOpen] = useState(false)
 
   if (isLoading) {
-    return <div className="flex h-full items-center justify-center text-sm text-muted-foreground">콘솔 불러오는 중…</div>
+    return (
+      <div className="flex h-full flex-col gap-4 p-5">
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-full w-full rounded-xl" />
+      </div>
+    )
   }
 
   if (error || !data) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-destructive">
-        콘솔 상태를 불러오지 못했어요.
+      <div className="flex h-full items-center justify-center">
+        <ErrorState message="콘솔 상태를 불러오지 못했어요." />
       </div>
     )
   }

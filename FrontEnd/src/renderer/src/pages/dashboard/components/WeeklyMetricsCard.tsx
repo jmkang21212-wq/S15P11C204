@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Card } from '@renderer/components/ui/card'
-import EmptyState from '@renderer/components/common/EmptyState'
+import { EmptyState } from '@renderer/components/common/StateView'
 import { PATHS } from '@renderer/routes/paths'
 import { formatCount, formatPercent, formatMonthDay } from '@renderer/lib/format'
 import { cn } from '@renderer/lib/utils'
@@ -79,7 +79,7 @@ export default function WeeklyMetricsCard({ metrics }: WeeklyMetricsCardProps): 
           </Link>
         </div>
       ) : (
-        <EmptyState message="주간 지표가 아직 없어요" />
+        <EmptyState title="주간 지표가 아직 없어요" className="rounded-lg bg-muted/40 py-8" />
       )}
     </Card>
   )

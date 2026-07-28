@@ -1,4 +1,5 @@
 import { useDashboard } from '@renderer/hooks/useDashboard'
+import { ErrorState } from '@renderer/components/common/StateView'
 import UpcomingBroadcastCard from './components/UpcomingBroadcastCard'
 import RecentSessionCard from './components/RecentSessionCard'
 import PendingPromisesCard from './components/PendingPromisesCard'
@@ -41,9 +42,7 @@ export default function DashboardPage(): React.JSX.Element {
       {isLoading && <DashboardSkeleton />}
 
       {!isLoading && (error || !data) && (
-        <p className="text-sm text-destructive">
-          대시보드를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.
-        </p>
+        <ErrorState message="대시보드를 불러오지 못했어요." />
       )}
 
       {!isLoading && data && (
