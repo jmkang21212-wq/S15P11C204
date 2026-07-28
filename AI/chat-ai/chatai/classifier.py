@@ -18,10 +18,8 @@ import numpy as np
 import onnxruntime as ort
 from transformers import AutoTokenizer
 
+from .labels import LABELS          # 정본은 labels.py — 순서가 모델 출력 인덱스
 from .text_norm import normalize
-
-LABELS = ['웃음/재미', '환호/감탄', '응원/호감', '놀람',
-          '슬픔/아쉬움', '분노/불만', '혼란/질문', '중립']
 
 MAX_LEN = 64          # 학습 때와 동일해야 함
 DEFAULT_BATCH = 32

@@ -26,9 +26,15 @@ dependencies = [
     # 채팅 감정 분류 (chat-ai/) — fastapi·uvicorn·onnxruntime·numpy는 위와 공유
     "transformers>=4.46,<5",  # KcELECTRA 토크나이저
     "requests>=2.31",         # fetch_model.py 모델 다운로드
+    "redis>=5",               # 슬라이딩 윈도우 (팀 Redis의 DB 1 사용)
     # 리플레이 시뮬레이터 (chat-ai/replay/)
     "aiohttp>=3.10",
     "websocket-client>=1.7",
+]
+
+[dependency-groups]
+dev = [
+    "fakeredis>=2.26",        # Redis 없이 윈도우 단위테스트
 ]
 
 [tool.uv]
