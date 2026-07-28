@@ -45,12 +45,22 @@ MIN_SPEECH_MS = 250
 MAX_UTTERANCE_MS = 6000
 PRE_ROLL_MS = 300
 
+# --- 약속 추적 ---
+# 위험 감지와 반대로 LLM이 주력이다. "2주 안으로 공포게임 할게요"는 사전으로 못 잡는다.
+# 대신 모든 발화를 LLM에 보내면 레이트리밋이 터지므로, 값싼 어미 게이트로 후보만 추린다.
+PROMISE_ENABLED = True
+PROMISE_WORKERS = 1        # 실시간성이 덜 중요해 1개면 충분하다
+PROMISE_QUEUE_MAX = 32
+PROMISE_MIN_CONFIDENCE = 0.6   # 이보다 낮으면 버린다
+PROMISE_DEDUP_SEC = 900        # 같은 약속을 15분 내에 반복하면 한 번만 보낸다
+
 # --- Spring 전송 ---
 # 비어 있으면 전송을 아예 하지 않는다. 스펙 합의 전까지는 이대로 두면 된다.
 SPRING_BASE_URL = os.getenv("SPRING_BASE_URL", "").rstrip("/")
 SPRING_TOKEN = os.getenv("SPRING_TOKEN", "")   # 서버간 인증용
 SPRING_TRANSCRIPT_PATH = "/api/ai/transcripts"
 SPRING_ALERT_PATH = "/api/ai/alerts"
+SPRING_PROMISE_PATH = "/api/ai/promises"
 
 # 전사는 양이 많고 지연이 상관없어 묶어 보낸다. 경고는 즉시 개별 전송한다.
 SPRING_BATCH_SIZE = 10    # 이만큼 모이면 보낸다

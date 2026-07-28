@@ -30,13 +30,15 @@
            font-size: 13px; border-left: 3px solid; }
   .alert.dict { background: #d9534f22; border-color: #d9534f; }
   .alert.llm { background: #e8a13322; border-color: #e8a133; }
+  .alert.promise { background: #3aa67c22; border-color: #3aa67c; }
+  .meta2 { color: #999; margin-top: 3px; font-size: 12px; }
   .tag { font-weight: 700; letter-spacing: .3px; }
   .reason { color: #999; margin-top: 3px; }
 </style>
 </head>
 <body>
-<h1>LAIVE 실시간 위험 발언 감지</h1>
-<div class="sub">마이크 → WebSocket → VAD → STT → 사전매칭 / LLM 판정</div>
+<h1>LAIVE 실시간 감지</h1>
+<div class="sub">마이크 → WebSocket → VAD → STT → 위험 발언 감지 · 약속 추적</div>
 
 <div class="bar">
   <input id="sid" value="test-session-1" size="18" placeholder="세션 ID">
@@ -111,6 +113,30 @@ function onAlert(m) {
   logEl.scrollTop = logEl.scrollHeight;
 }
 
+function onPromise(m) {
+  const el = rowFor(m.seq);
+  const div = document.createElement('div');
+  div.className = 'alert promise';
+
+  const bits = [];
+  if (m.deadline_at) {
+    const d = new Date(m.deadline_at * 1000);
+    bits.push(`기한 ${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-`
+              + `${String(d.getDate()).padStart(2,'0')}`
+              + (m.deadline_text ? ` (${m.deadline_text})` : ''));
+  } else if (m.condition) {
+    bits.push(`조건 ${m.condition}`);
+  } else {
+    bits.push('기한 없음');
+  }
+  bits.push(`확신 ${Math.round(m.confidence * 100)}%`);
+
+  div.innerHTML = `<span class="tag">약속</span> · ${m.content}`
+    + `<div class="meta2">${bits.join(' · ')}</div>`;
+  el.appendChild(div);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
 async function start() {
   $('start').disabled = true;
   logEl.innerHTML = ''; rows.clear();
@@ -158,6 +184,8 @@ async function start() {
       onTranscript(m);
     } else if (m.type === 'alert') {
       onAlert(m);
+    } else if (m.type === 'promise') {
+      onPromise(m);
     }
   };
 
