@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@renderer/components/u
 import { Skeleton } from '@renderer/components/ui/skeleton'
 import { ErrorState } from '@renderer/components/common/StateView'
 import ReportHeader from './components/ReportHeader'
-import MetricCard, { MetricCardSkeleton } from './components/MetricCard'
+import MetricCard, { MetricCardSkeleton } from '@renderer/components/common/MetricCard'
 import ViewerTimelineChart from './components/ViewerTimelineChart'
 import SentimentBreakdown from './components/SentimentBreakdown'
 import InsightList from './components/InsightList'
