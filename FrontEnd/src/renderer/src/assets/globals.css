@@ -1,88 +1,16 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
-
-@custom-variant dark (&:is(.dark *));
+@import './theme/palette-studio-light.css';
+@import './theme/semantic.css';
 
 /*
- * LAIVE — Studio Light 디자인 토큰
- * .claude/rules/design.md의 값을 shadcn CSS 변수에 매핑.
+ * LAIVE — 3층: 유틸리티 매핑
+ *
+ * 토큰은 3층 구조다: palette(원시값) → semantic(역할, [data-theme]) → 여기(유틸리티 클래스).
+ * 디자인 시스템을 바꾸려면 위 두 파일만 손대면 되고, 이 파일과 화면 코드는 그대로 둔다.
  */
-:root {
-  --radius: 0.875rem; /* 카드 14px 기준 */
 
-  --background: #f5f6f8; /* 화면 배경 */
-  --foreground: #191c22; /* 본문 텍스트 */
-
-  --card: #ffffff;
-  --card-foreground: #191c22;
-
-  --popover: #ffffff;
-  --popover-foreground: #191c22;
-
-  --primary: #4338ca; /* 인디고 액센트 */
-  --primary-foreground: #ffffff;
-
-  --secondary: #eef0f2;
-  --secondary-foreground: #191c22;
-
-  --muted: #f1f2f5;
-  --muted-foreground: #767c88; /* 보조 텍스트 */
-
-  --accent: #eef0fb; /* Primary Soft — 활성 내비/태그 */
-  --accent-foreground: #4338ca;
-
-  --destructive: #e11d48; /* LIVE / 위험 */
-  --destructive-foreground: #ffffff;
-
-  --success: #16a34a; /* 완료 / 증가 / 연결됨 */
-  --success-foreground: #ffffff;
-
-  --warning: #d97706; /* 주의 / 토큰 만료 */
-  --warning-foreground: #ffffff;
-
-  --border: #e5e7ec;
-  --input: #e5e7ec;
-  --ring: #4338ca;
-
-  /* 데이터 시각화(Tremor 등) 대비 차트 색상 */
-  --chart-1: #4338ca;
-  --chart-2: #16a34a;
-  --chart-3: #d97706;
-  --chart-4: #e11d48;
-  --chart-5: #7c3aed;
-}
-
-.dark {
-  /* Studio Light는 라이트 전용이지만 shadcn 호환을 위해 최소 정의 */
-  --background: #12151d;
-  --foreground: #e6ebf2;
-  --card: #191c22;
-  --card-foreground: #e6ebf2;
-  --popover: #191c22;
-  --popover-foreground: #e6ebf2;
-  --primary: #6d63f0;
-  --primary-foreground: #ffffff;
-  --secondary: #232732;
-  --secondary-foreground: #e6ebf2;
-  --muted: #232732;
-  --muted-foreground: #9aa0ab;
-  --accent: #232a4a;
-  --accent-foreground: #c7cbf0;
-  --destructive: #fb7185;
-  --destructive-foreground: #1a0e12;
-  --success: #4ade80;
-  --success-foreground: #052e16;
-  --warning: #fbbf24;
-  --warning-foreground: #1f1300;
-  --border: #2a2f3a;
-  --input: #2a2f3a;
-  --ring: #6d63f0;
-  --chart-1: #6d63f0;
-  --chart-2: #4ade80;
-  --chart-3: #fbbf24;
-  --chart-4: #fb7185;
-  --chart-5: #c084fc;
-}
+@custom-variant dark (&:is([data-theme='dark'] *));
 
 @theme inline {
   --color-background: var(--background);
@@ -123,6 +51,15 @@
      실제 폰트 파일 self-host는 후속 작업 — 현재는 폴백 스택 사용 */
   --font-sans: 'Wanted Sans', 'Pretendard', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* 타이포 스케일 — design.md §1 (text-title/body/caption/metric로 사용) */
+  --text-title: 1.125rem; /* 18px 화면 제목 */
+  --text-body: 0.8125rem; /* 13px 본문 */
+  --text-caption: 0.6875rem; /* 11px 캡션 */
+  --text-metric: 1.75rem; /* 28px 지표 숫자 */
+
+  /* elevation — design.md §1 카드 그림자 (shadow-card로 사용) */
+  --shadow-card: 0 10px 34px rgba(0, 0, 0, 0.09);
 }
 
 @layer base {

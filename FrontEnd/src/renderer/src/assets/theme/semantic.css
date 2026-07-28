@@ -1,0 +1,105 @@
+/*
+ * LAIVE — 2층: 의미 역할
+ *
+ * 1층(palette-studio-light.css)의 원시값을 "어디에 쓰는가"에 연결한다.
+ * 화면 코드는 이 파일의 이름(--primary, --success …)만 알면 되고,
+ * 1층이 바뀌어도 이 파일과 화면 코드는 그대로 둘 수 있다.
+ *
+ * [data-theme]로 전체 테마를, [data-surface]로 특정 영역만 다른 표면을
+ * 얹을 수 있다(예: 방송 오버레이 — 커밋 5에서 추가 예정).
+ *
+ * 값 출처: 기존 globals.css :root(studio-light)/.dark
+ * (구조만 재편 — 값은 한 글자도 바꾸지 않았다)
+ */
+:root,
+[data-theme='studio-light'] {
+  --radius: 0.875rem; /* 카드 14px 기준 */
+
+  --background: var(--laive-gray-100);
+  --foreground: var(--laive-gray-900);
+
+  --card: var(--laive-white);
+  --card-foreground: var(--laive-gray-900);
+
+  --popover: var(--laive-white);
+  --popover-foreground: var(--laive-gray-900);
+
+  --primary: var(--laive-indigo-600);
+  --primary-foreground: var(--laive-white);
+
+  --secondary: var(--laive-gray-200);
+  --secondary-foreground: var(--laive-gray-900);
+
+  --muted: var(--laive-gray-150);
+  --muted-foreground: var(--laive-gray-500);
+
+  --accent: var(--laive-indigo-100);
+  --accent-foreground: var(--laive-indigo-600);
+
+  --destructive: var(--laive-rose-600);
+  --destructive-foreground: var(--laive-white);
+
+  --success: var(--laive-green-600);
+  --success-foreground: var(--laive-white);
+
+  --warning: var(--laive-amber-600);
+  --warning-foreground: var(--laive-white);
+
+  --border: var(--laive-gray-300);
+  --input: var(--laive-gray-300);
+  --ring: var(--laive-indigo-600);
+
+  /* 데이터 시각화(Tremor 등) 대비 차트 색상 */
+  --chart-1: var(--laive-indigo-600);
+  --chart-2: var(--laive-green-600);
+  --chart-3: var(--laive-amber-600);
+  --chart-4: var(--laive-rose-600);
+  --chart-5: var(--laive-violet-600);
+}
+
+/*
+ * Studio Light는 라이트 전용이지만 shadcn 호환을 위해 최소 정의.
+ * ⚠️ 아래 값은 기존 .dark 블록을 그대로 옮긴 것으로, 실제로 켜서
+ * 검증된 적이 없다 — 후속 과제로 남겨 둔다(계획 문서 "후속" 참고).
+ */
+[data-theme='dark'] {
+  --background: var(--laive-navy-900);
+  --foreground: var(--laive-navy-100);
+
+  --card: var(--laive-gray-900);
+  --card-foreground: var(--laive-navy-100);
+
+  --popover: var(--laive-gray-900);
+  --popover-foreground: var(--laive-navy-100);
+
+  --primary: var(--laive-indigo-400);
+  --primary-foreground: var(--laive-white);
+
+  --secondary: var(--laive-navy-700);
+  --secondary-foreground: var(--laive-navy-100);
+
+  --muted: var(--laive-navy-700);
+  --muted-foreground: var(--laive-navy-400);
+
+  --accent: var(--laive-indigo-900);
+  --accent-foreground: var(--laive-indigo-200);
+
+  --destructive: var(--laive-rose-400);
+  --destructive-foreground: var(--laive-rose-950);
+
+  --success: var(--laive-green-400);
+  --success-foreground: var(--laive-green-950);
+
+  --warning: var(--laive-amber-400);
+  --warning-foreground: var(--laive-amber-950);
+
+  --border: var(--laive-navy-800);
+  --input: var(--laive-navy-800);
+  --ring: var(--laive-indigo-400);
+
+  --chart-1: var(--laive-indigo-400);
+  --chart-2: var(--laive-green-400);
+  --chart-3: var(--laive-amber-400);
+  --chart-4: var(--laive-rose-400);
+  --chart-5: var(--laive-violet-400);
+}
