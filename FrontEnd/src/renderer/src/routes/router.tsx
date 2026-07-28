@@ -6,6 +6,7 @@ import LoginPage from '@renderer/pages/auth/LoginPage'
 import PlatformConnectPage from '@renderer/pages/auth/PlatformConnectPage'
 import SessionReportListPage from '@renderer/pages/report/SessionReportListPage'
 import SessionReportDetailPage from '@renderer/pages/report/SessionReportDetailPage'
+import ClipsPage from '@renderer/pages/clips/ClipsPage'
 
 /**
  * 앱 라우터 정의.
@@ -33,6 +34,7 @@ export const router = createHashRouter([
       // { path: PATHS.schedule,  element: <SchedulePage /> },
       { path: PATHS.sessionReport, element: <SessionReportListPage /> },
       { path: PATHS.sessionReportDetail, element: <SessionReportDetailPage /> },
+      { path: PATHS.clips, element: <ClipsPage /> },
     ],
   },
 

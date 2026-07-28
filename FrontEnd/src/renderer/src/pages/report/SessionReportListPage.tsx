@@ -4,7 +4,7 @@ import { CalendarDays } from 'lucide-react'
 import { Button } from '@renderer/components/ui/button'
 import { EmptyState, ErrorState } from '@renderer/components/common/StateView'
 import SessionCard, { SessionCardSkeleton } from './components/SessionCard'
-import { fetchEndedSessions } from '@renderer/api/sessionReport'
+import { fetchEndedSessions } from '@renderer/api/broadcastSessions'
 import { useAsyncData } from '@renderer/hooks/useAsyncData'
 import { PATHS } from '@renderer/routes/paths'
 

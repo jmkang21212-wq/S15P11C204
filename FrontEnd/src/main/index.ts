@@ -3,6 +3,18 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
+/**
+ * 렌더러가 넘긴 URL이 외부로 내보내도 되는 주소인지 검증한다.
+ * shell.openExternal에 임의 프로토콜(file:, javascript: 등)이 들어가면 위험하므로
+ * http/https만 허용한다.
+ */
+function assertHttpUrl(url: string): void {
+  const parsed = new URL(url)
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('UNSUPPORTED_PROTOCOL')
+  }
+}
+
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
@@ -51,6 +63,22 @@ app.whenReady().then(() => {
 
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
+
+  // ── 렌더러 → 외부 브라우저 / 다운로드 브릿지 ──
+  // SC-07 클립 재생·다운로드와 SC-01b 플랫폼 연동(인증 URL 열기)이 함께 쓴다.
+
+  ipcMain.handle('app:open-external', async (_event, url: string) => {
+    assertHttpUrl(url)
+    await shell.openExternal(url)
+  })
+
+  ipcMain.handle('app:download-file', (event, url: string) => {
+    assertHttpUrl(url)
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window) throw new Error('WINDOW_NOT_FOUND')
+    // Electron 기본 다운로드 흐름(저장 다이얼로그)을 탄다.
+    window.webContents.downloadURL(url)
+  })
 
   createWindow()
 
