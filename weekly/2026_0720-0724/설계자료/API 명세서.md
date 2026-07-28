@@ -106,6 +106,7 @@ ERD의 관계와 API의 단일 리소스 식별 규칙을 실제 DDL에서도 �
 - 실시간 현재값은 DB·Redis에서 스냅샷으로 복구하고, 놓치면 안 되는 브리핑·세션 상태 이벤트만 Redis Streams에서 재생한다.
 - Redis 이벤트 보관 범위를 초과한 경우에는 이벤트 전체 재생 대신 `GET /broadcast-sessions/{sessionId}/live-snapshot`을 다시 호출한다.
 - 내부 AI 변경 요청의 `X-Request-Id` 처리 결과는 Redis에 단기 보관해 재시도에 의한 중복 저장을 방지한다.
+- `SENTIMENT_SNAPSHOTS`는 ERD에 없는 컬럼 두 개를 DDL에서 추가한다. `captured_at`은 스냅샷 시각이 없으면 최신값을 특정할 수 없어서, `message_count`는 13.7의 감정 비율 가중 평균에 윈도우별 채팅량이 필요해서 추가한다.
 
 ---
 
@@ -1561,7 +1562,7 @@ Spring은 후보마다 `PROMISES(streamer_id, session_id, transcript_id, content
 }
 ```
 
-Spring은 `summary`로 `LIVE_BRIEFINGS(CHAT_SUMMARY)`를 생성하고 비율을 `SENTIMENT_SNAPSHOTS`에 저장한다.
+Spring은 `summary`로 `LIVE_BRIEFINGS(CHAT_SUMMARY)`를 생성하고 비율을 `SENTIMENT_SNAPSHOTS`에 저장한다. 이때 요청에 담아 보낸 `messages`의 개수를 `SENTIMENT_SNAPSHOTS.message_count`에 함께 기록한다. 세션 리포트의 감정 비율이 이 값을 가중치로 사용하므로 비율만 저장해서는 안 된다.
 
 반복 질문 분석:
 
@@ -1601,6 +1602,89 @@ Spring은 `summary`로 `LIVE_BRIEFINGS(CHAT_SUMMARY)`를 생성하고 비율을 
 
 대용량 시청자 시계열·채팅·STT 입력은 요청 Body에 직접 넣지 않고 S3 호환 스토리지의 집계 입력 파일로 전달한다. 성공 시 `202 Accepted`와 `analysisJobId`, `PROCESSING` 상태를 반환하며 완료 결과는 `PUT /internal/v1/analysis-results/{reportId}`로 Callback한다.
 
+리포트 입력 JSON (`inputObjectKey` = `sessions/{sessionId}/analysis/report-input.json`):
+
+```json
+{
+  "reportId": 301,
+  "session": {
+    "sessionId": 9001,
+    "title": "심야 수다방 & 롤토체스",
+    "category": "GAME",
+    "language": "ko",
+    "startedAt": "2026-07-20T13:04:00Z",
+    "endedAt": "2026-07-20T16:32:00Z",
+    "durationMs": 12480000
+  },
+  "metrics": {
+    "avgViewers": 2105,
+    "peakViewers": 3842,
+    "totalChat": 48200,
+    "positiveRatio": 0.64,
+    "neutralRatio": 0.27,
+    "negativeRatio": 0.09
+  },
+  "viewerTimeline": [
+    { "offsetMs": 60000, "viewerCount": 1820 }
+  ],
+  "chatCounts": [
+    { "offsetMs": 60000, "messageCount": 214 }
+  ],
+  "sentimentTimeline": [
+    {
+      "offsetMs": 180000,
+      "positiveRatio": 0.71,
+      "neutralRatio": 0.22,
+      "negativeRatio": 0.07,
+      "messageCount": 640
+    }
+  ],
+  "chatSummaries": [
+    { "offsetMs": 180000, "summary": "신규 챔피언 구매에 대한 긍정 반응이 우세합니다." }
+  ],
+  "transcripts": [
+    {
+      "transcriptId": 701,
+      "startMs": 2760000,
+      "endMs": 2775000,
+      "transcript": "자 이제 롤토체스 켜볼게요"
+    }
+  ],
+  "riskEvents": [
+    {
+      "transcriptId": 712,
+      "offsetMs": 3400000,
+      "riskLevel": "MEDIUM",
+      "riskCategory": "PROFANITY"
+    }
+  ],
+  "repeatedQuestions": [
+    { "question": "오늘 몇 시까지 하세요?", "occurrenceCount": 42 }
+  ],
+  "promises": [
+    { "transcriptId": 730, "offsetMs": 7200000, "content": "다음 주에 구독자 이벤트 할게요" }
+  ]
+}
+```
+
+각 필드는 Callback 산출물과 아래처럼 대응한다.
+
+| Callback 산출물 | 근거가 되는 입력 필드 |
+| --- | --- |
+| `summary` | `session`, `metrics`, `transcripts`, `chatSummaries`, `sentimentTimeline` |
+| `segments[].segmentType` = `VIEWER_INFLOW`, `VIEWER_OUTFLOW` | `viewerTimeline` |
+| `segments[].segmentType` = `CHAT_PEAK` | `chatCounts` |
+| `segments[].transcriptId` | `transcripts[].transcriptId` |
+| `insights[]` | 위 전부와 `riskEvents`, `repeatedQuestions`, `promises` |
+
+입력 JSON 생성 규칙:
+
+- 모든 시간축은 `BROADCAST_SESSIONS.started_at`을 0으로 한 밀리초 오프셋으로 변환해 전달한다. `VIEWER_METRICS.measured_at`, `SENTIMENT_SNAPSHOTS.captured_at`, `RISK_EVENTS.detected_at`, 분당 채팅 집계의 Bucket은 절대 시각이므로 Spring이 변환하며, FastAPI에 절대 시각과 오프셋을 섞어 보내지 않는다. Callback의 `startMs`, `endMs`도 같은 기준이다.
+- `transcripts[]`에는 `TRANSCRIPTS.id`를 `transcriptId`로 반드시 포함한다. Callback의 `segments[].transcriptId`는 이 값만 사용할 수 있다.
+- `CHAT_MESSAGES` 원문과 시청자 식별자는 전달하지 않는다. 채팅은 분당 건수(`chatCounts`), 감정 비율(`sentimentTimeline`), 방송 중 생성한 `LIVE_BRIEFINGS(CHAT_SUMMARY)`(`chatSummaries`)로 대체한다.
+- `metrics`는 요약·인사이트의 근거 제시용 참고값이며 Callback으로 되돌려받지 않는다.
+- `segments[].segmentType`의 허용값은 `VIEWER_INFLOW`, `VIEWER_OUTFLOW`, `CHAT_PEAK`, `HIGHLIGHT`이고 `insights[].title`은 200자 이내다. Spring은 Callback 저장 전에 두 제약을 검증하고 위반 항목만 제외한다.
+
 리포트 결과 Callback:
 
 ```json
@@ -1624,7 +1708,18 @@ Spring은 `summary`로 `LIVE_BRIEFINGS(CHAT_SUMMARY)`를 생성하고 비율을 
 }
 ```
 
-Spring은 `REPORTS`, `REPORT_SEGMENTS`, `REPORT_INSIGHTS`를 한 트랜잭션으로 저장한다. 통계 컬럼은 Spring이 원천 데이터에서 계산하며 AI Callback 값을 신뢰해 덮어쓰지 않는다.
+Spring은 `REPORTS`, `REPORT_SEGMENTS`, `REPORT_INSIGHTS`를 한 트랜잭션으로 저장한다. 통계 컬럼은 Spring이 원천 데이터에서 계산하며 AI Callback 값을 신뢰해 덮어쓰지 않는다. Callback은 `summary`, `segments`, `insights`만 반영한다.
+
+| `REPORTS` 통계 컬럼 | 집계 원천 |
+| --- | --- |
+| `avg_viewers`, `peak_viewers` | `VIEWER_METRICS`의 세션 구간 평균·최댓값 |
+| `total_chat` | `CHAT_MESSAGES`의 세션 건수 |
+| `positive_ratio`, `neutral_ratio`, `negative_ratio` | `SENTIMENT_SNAPSHOTS`의 `message_count` 가중 평균 |
+
+- 감정 비율은 리포트 시점에 다시 분석하지 않고 방송 중 `POST /internal/v1/ai/chat-summary` 결과로 쌓인 `SENTIMENT_SNAPSHOTS`를 재집계한다. 윈도우별 채팅량 차이가 크므로 단순 평균이 아니라 `message_count` 가중 평균을 사용한다.
+- 세 비율의 합이 반올림 때문에 1이 되지 않을 수 있으므로 저장 직전에 합으로 정규화하고 잔차는 최댓값에 더한다.
+- `SENTIMENT_SNAPSHOTS`는 보관 기간이 지나면 삭제되지만 `REPORTS`는 영속이므로, 감정 비율은 리포트 생성 시점에 확정 저장하며 이후 재계산하지 않는다.
+- 통계 집계는 AI Callback을 기다리지 않는다. 세션 종료 시 집계를 먼저 커밋하고 `POST /internal/v1/ai/session-reports`를 요청하며, Callback이 최종 실패하면 `PARTIAL` 상태로 집계 지표만 제공한다. 감정 스냅샷이 하나도 없으면 세 비율은 1.5에 따라 `NULL`로 둔다.
 
 하이라이트 탐지:
 
@@ -1782,7 +1877,9 @@ ERD가 스트리머 중심으로 수정되었으므로 `ADVERTISER` 역할과 �
 - [ ]  `X-Request-Id` 멱등 처리 Redis TTL과 동일 요청 판별 범위 확정
 - [ ]  채팅·시청자 지표·STT 배치의 최대 항목 수와 요청 크기 제한
 - [ ]  실시간 STT·위험 발언·채팅 분석의 Timeout, 재시도, Circuit Breaker 정책
-- [ ]  리포트 입력 JSON과 음성 청크의 S3 Object Key 규칙·보관 기간·삭제 작업
+- [ ]  리포트 입력 JSON과 음성 청크의 S3 보관 기간·삭제 작업 (Object Key 규칙과 리포트 입력 스키마는 13.7에서 확정)
+- [ ]  `SENTIMENT_SNAPSHOTS.message_count` 컬럼을 마이그레이션에 반영 (13.6, 13.7 전제)
+- [ ]  3시간 방송의 `transcripts[]` 전량이 리포트 입력 토큰 한도에 들어가는지 확인하고, 초과 시 인접 청크 병합 규칙 확정
 - [ ]  목업에 표시된 하이라이트 점수·탐지 사유가 필요하면 `HIGHLIGHTS` 컬럼 추가
 - [ ]  실제 채팅 닉네임이 필요하면 `VIEWER_PROFILES`에 공개용 표시명 저장 정책과 컬럼 추가 검토
 - [ ]  목업의 후원 채팅 리플레이가 필요하면 후원 이벤트 테이블 추가 검토
