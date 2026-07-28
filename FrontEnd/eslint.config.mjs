@@ -28,5 +28,15 @@ export default defineConfig(
       ...eslintPluginReactRefresh.configs.vite.rules
     }
   },
-  eslintConfigPrettier
+  eslintConfigPrettier,
+  // shadcn/ui CLI가 생성하는 벤더 코드. 손으로 고치지 않고 CLI로 다시 받는 파일이라
+  // 프로젝트 코드 규칙(명시적 반환 타입, 포매팅 등)을 강제하지 않는다.
+  {
+    files: ['src/renderer/src/components/ui/**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/explicit-function-return-type': 'off',
+      'react-refresh/only-export-components': 'off',
+      'prettier/prettier': 'off'
+    }
+  }
 )

@@ -7,7 +7,8 @@ export const PATHS = {
   platformConnect: '/platform-connect',
   dashboard: '/dashboard',
   schedule: '/schedule',
-  sessionReport: '/session-report',
+  sessionReport: '/session-report', // 종료 세션 목록(GNB 메뉴) — 실제 리포트는 sessionReportDetail
+  sessionReportDetail: '/session-report/:sessionId',
   clips: '/clips',
   growth: '/growth',
   portfolio: '/portfolio',
