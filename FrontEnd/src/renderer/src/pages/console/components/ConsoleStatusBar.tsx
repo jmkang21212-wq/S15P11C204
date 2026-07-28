@@ -6,8 +6,7 @@ import type { ConsoleServices, LiveSnapshotSession } from '@renderer/types/conso
 interface ConsoleStatusBarProps {
   session: LiveSnapshotSession
   services: ConsoleServices
-  miniOpen: boolean
-  onToggleMini: () => void
+  onOpenMini: () => void
 }
 
 function ServiceDot({ label, ok }: { label: string; ok: boolean }): React.JSX.Element {
@@ -22,8 +21,7 @@ function ServiceDot({ label, ok }: { label: string; ok: boolean }): React.JSX.El
 export default function ConsoleStatusBar({
   session,
   services,
-  miniOpen,
-  onToggleMini,
+  onOpenMini,
 }: ConsoleStatusBarProps): React.JSX.Element {
   return (
     <div className="flex items-center gap-5 border-b bg-card px-6 py-3">
@@ -48,9 +46,8 @@ export default function ConsoleStatusBar({
         <ServiceDot label="AI" ok={services.ai === 'RUNNING'} />
       </div>
 
-      {/* 인앱 미니 위젯 토글 (데모용).
-          TODO: 실제로는 별도 항상-위 창 띄우기 (src/main + IPC, 창 인프라 단계) */}
-      <Button variant={miniOpen ? 'default' : 'outline'} size="sm" onClick={onToggleMini}>
+      {/* 미니 모드 = 항상-위 별도 창 열기 (IPC → main) */}
+      <Button variant="outline" size="sm" onClick={onOpenMini}>
         미니 모드
       </Button>
       {/* TODO: 방송 종료 = POST /broadcast-sessions/{id}/end */}
