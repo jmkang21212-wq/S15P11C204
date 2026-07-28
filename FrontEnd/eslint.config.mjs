@@ -25,7 +25,13 @@ export default defineConfig(
     },
     rules: {
       ...eslintPluginReactHooks.configs.recommended.rules,
-      ...eslintPluginReactRefresh.configs.vite.rules
+      ...eslintPluginReactRefresh.configs.vite.rules,
+      // 코드베이스가 "쓰지 않는 인자/변수는 _ 접두어"를 관례로 쓰고 있어
+      // (예: api/schedule.ts의 _from/_to) 규칙에도 반영한다.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }
+      ]
     }
   },
   eslintConfigPrettier,

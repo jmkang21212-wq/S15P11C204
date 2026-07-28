@@ -1,5 +1,7 @@
+import { useCallback } from 'react'
 import { useParams } from 'react-router-dom'
-import { useLiveSnapshot } from '@renderer/hooks/useLiveSnapshot'
+import { useAsyncData } from '@renderer/hooks/useAsyncData'
+import { getLiveSnapshot } from '@renderer/api/console'
 import { Skeleton } from '@renderer/components/ui/skeleton'
 import { ErrorState } from '@renderer/components/common/StateView'
 import ConsoleStatusBar from './components/ConsoleStatusBar'
@@ -19,9 +21,10 @@ const DEFAULT_SESSION_ID = 9002
 export default function BroadcastConsolePage(): React.JSX.Element {
   const { sessionId } = useParams()
   const sid = sessionId ? Number(sessionId) : DEFAULT_SESSION_ID
-  const { data, isLoading, error } = useLiveSnapshot(sid)
+  const loader = useCallback(() => getLiveSnapshot(sid), [sid])
+  const { data, loading, error, refetch } = useAsyncData(loader)
 
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="flex h-full flex-col gap-4 p-5">
         <Skeleton className="h-12 w-full" />
@@ -33,7 +36,7 @@ export default function BroadcastConsolePage(): React.JSX.Element {
   if (error || !data) {
     return (
       <div className="flex h-full items-center justify-center">
-        <ErrorState message="콘솔 상태를 불러오지 못했어요." />
+        <ErrorState message="콘솔 상태를 불러오지 못했어요." onRetry={refetch} />
       </div>
     )
   }

@@ -1,4 +1,6 @@
-import { useDashboard } from '@renderer/hooks/useDashboard'
+import { useCallback } from 'react'
+import { useAsyncData } from '@renderer/hooks/useAsyncData'
+import { getDashboard } from '@renderer/api/dashboard'
 import { ErrorState } from '@renderer/components/common/StateView'
 import UpcomingBroadcastCard from './components/UpcomingBroadcastCard'
 import RecentSessionCard from './components/RecentSessionCard'
@@ -19,10 +21,11 @@ function DashboardSkeleton(): React.JSX.Element {
 
 /**
  * SC-02 대시보드 — 방송 전 상태를 한눈에 파악하는 홈 화면.
- * 현재는 mock 데이터(useDashboard → getDashboard)로 렌더한다.
+ * 현재는 mock 데이터(getDashboard)로 렌더한다.
  */
 export default function DashboardPage(): React.JSX.Element {
-  const { data, isLoading, error } = useDashboard()
+  const loader = useCallback(() => getDashboard(), [])
+  const { data, loading, error, refetch } = useAsyncData(loader)
 
   // TODO: 인사말의 이름은 GET /streamers/me 프로필에서 가져오기
   const today = new Date().toLocaleDateString('ko-KR', {
@@ -39,13 +42,13 @@ export default function DashboardPage(): React.JSX.Element {
         <p className="mt-1 text-sm text-muted-foreground">{today}</p>
       </header>
 
-      {isLoading && <DashboardSkeleton />}
+      {loading && <DashboardSkeleton />}
 
-      {!isLoading && (error || !data) && (
-        <ErrorState message="대시보드를 불러오지 못했어요." />
+      {!loading && (error || !data) && (
+        <ErrorState message="대시보드를 불러오지 못했어요." onRetry={refetch} />
       )}
 
-      {!isLoading && data && (
+      {!loading && data && (
         <>
           <div className="grid grid-cols-2 gap-4">
             <UpcomingBroadcastCard broadcast={data.upcomingBroadcast} />

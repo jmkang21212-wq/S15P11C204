@@ -1,4 +1,6 @@
-import { useLiveSnapshot } from '@renderer/hooks/useLiveSnapshot'
+import { useCallback } from 'react'
+import { useAsyncData } from '@renderer/hooks/useAsyncData'
+import { getLiveSnapshot } from '@renderer/api/console'
 
 const DEFAULT_SESSION_ID = 9002
 
@@ -10,7 +12,8 @@ const DEFAULT_SESSION_ID = 9002
  *   호응도 값은 실제로는 WebSocket으로 실시간 갱신.
  */
 export default function OverlayPage(): React.JSX.Element {
-  const { data } = useLiveSnapshot(DEFAULT_SESSION_ID)
+  const loader = useCallback(() => getLiveSnapshot(DEFAULT_SESSION_ID), [])
+  const { data } = useAsyncData(loader)
   const engagement = data?.engagement ?? 0
 
   return (

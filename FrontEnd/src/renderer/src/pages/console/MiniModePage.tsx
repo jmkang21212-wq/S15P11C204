@@ -1,5 +1,7 @@
+import { useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useLiveSnapshot } from '@renderer/hooks/useLiveSnapshot'
+import { useAsyncData } from '@renderer/hooks/useAsyncData'
+import { getLiveSnapshot } from '@renderer/api/console'
 import MiniWidget from './components/MiniWidget'
 
 const DEFAULT_SESSION_ID = 9002
@@ -11,7 +13,8 @@ const DEFAULT_SESSION_ID = 9002
  */
 export default function MiniModePage(): React.JSX.Element | null {
   const [params] = useSearchParams()
-  const { data } = useLiveSnapshot(DEFAULT_SESSION_ID)
+  const loader = useCallback(() => getLiveSnapshot(DEFAULT_SESSION_ID), [])
+  const { data } = useAsyncData(loader)
 
   if (!data) return null
 
