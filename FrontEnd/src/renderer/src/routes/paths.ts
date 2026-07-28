@@ -15,6 +15,8 @@ export const PATHS = {
   matching: '/matching',
   console: '/console', // 방송 콘솔 진입(GNB 메뉴) — 실제 세션은 consoleSession로 라우팅
   consoleSession: '/console/:sessionId',
+  consoleMini: '/console/mini', // 미니 모드 (추후 항상-위 별도 창이 로드)
+  overlay: '/overlay', // OBS 브라우저 소스용 투명 오버레이
 } as const
 
 export type PathKey = keyof typeof PATHS

@@ -7,6 +7,9 @@ import PlatformConnectPage from '@renderer/pages/auth/PlatformConnectPage'
 import DashboardPage from '@renderer/pages/dashboard/DashboardPage'
 import SessionReportListPage from '@renderer/pages/report/SessionReportListPage'
 import SessionReportDetailPage from '@renderer/pages/report/SessionReportDetailPage'
+import BroadcastConsolePage from '@renderer/pages/console/BroadcastConsolePage'
+import MiniModePage from '@renderer/pages/console/MiniModePage'
+import OverlayPage from '@renderer/pages/console/OverlayPage'
 
 /**
  * 앱 라우터 정의.
@@ -25,6 +28,10 @@ export const router = createHashRouter([
   { path: PATHS.login, element: <LoginPage /> },
   { path: PATHS.platformConnect, element: <PlatformConnectPage /> },
 
+  // ── 별도 창(레이아웃 없음): 미니 모드 · OBS 오버레이 ──
+  { path: PATHS.consoleMini, element: <MiniModePage /> },
+  { path: PATHS.overlay, element: <OverlayPage /> },
+
   // ── 앱 화면: GNB 레이아웃 ──
   {
     element: <AppLayout />,
@@ -41,7 +48,8 @@ export const router = createHashRouter([
   {
     element: <ConsoleLayout />,
     children: [
-      // { path: PATHS.consoleSession, element: <ConsolePage /> },
+      { path: PATHS.console, element: <BroadcastConsolePage /> },
+      { path: PATHS.consoleSession, element: <BroadcastConsolePage /> },
     ],
   },
 ])

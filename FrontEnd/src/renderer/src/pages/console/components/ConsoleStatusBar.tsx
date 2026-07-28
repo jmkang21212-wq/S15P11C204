@@ -1,0 +1,62 @@
+import { Button } from '@renderer/components/ui/button'
+import { cn } from '@renderer/lib/utils'
+import { formatMs, formatCount } from '@renderer/lib/format'
+import type { ConsoleServices, LiveSnapshotSession } from '@renderer/types/console'
+
+interface ConsoleStatusBarProps {
+  session: LiveSnapshotSession
+  services: ConsoleServices
+  miniOpen: boolean
+  onToggleMini: () => void
+}
+
+function ServiceDot({ label, ok }: { label: string; ok: boolean }): React.JSX.Element {
+  return (
+    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <span className={cn('size-1.5 rounded-full', ok ? 'bg-success' : 'bg-muted-foreground')} />
+      {label}
+    </span>
+  )
+}
+
+export default function ConsoleStatusBar({
+  session,
+  services,
+  miniOpen,
+  onToggleMini,
+}: ConsoleStatusBarProps): React.JSX.Element {
+  return (
+    <div className="flex items-center gap-5 border-b bg-card px-6 py-3">
+      {/* LIVE + 경과 시간 */}
+      <div className="flex items-center gap-2.5">
+        <span className="rounded bg-destructive px-2 py-0.5 text-[10px] font-bold tracking-wide text-white">
+          ● LIVE
+        </span>
+        <span className="font-mono text-xl font-bold">{formatMs(session.elapsedSeconds * 1000)}</span>
+      </div>
+
+      {/* 현재 시청자 */}
+      <div className="flex flex-col border-l pl-5">
+        <span className="text-[10px] text-muted-foreground">현재 시청자</span>
+        <span className="font-mono text-lg font-bold">{formatCount(session.currentViewers)}</span>
+      </div>
+
+      {/* 서비스 상태 */}
+      <div className="ml-auto flex items-center gap-3 rounded-lg bg-muted px-3 py-1.5">
+        <ServiceDot label="마이크" ok={services.microphone === 'CONNECTED'} />
+        <ServiceDot label="STT" ok={services.stt === 'RUNNING'} />
+        <ServiceDot label="AI" ok={services.ai === 'RUNNING'} />
+      </div>
+
+      {/* 인앱 미니 위젯 토글 (데모용).
+          TODO: 실제로는 별도 항상-위 창 띄우기 (src/main + IPC, 창 인프라 단계) */}
+      <Button variant={miniOpen ? 'default' : 'outline'} size="sm" onClick={onToggleMini}>
+        미니 모드
+      </Button>
+      {/* TODO: 방송 종료 = POST /broadcast-sessions/{id}/end */}
+      <Button variant="destructive" size="sm">
+        방송 종료
+      </Button>
+    </div>
+  )
+}
