@@ -89,8 +89,7 @@ class BroadcastOutboxDispatcherTest {
                         Duration.ofSeconds(30),
                         maxAttempts,
                         Duration.ofMinutes(5)
-                ),
-                new BroadcastSessionProperties.Ai(false, "http://localhost:8000", "")
+                )
         );
         return new BroadcastOutboxDispatcher(
                 repository,

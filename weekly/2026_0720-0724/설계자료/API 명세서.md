@@ -1,4 +1,4 @@
-# API 명세서
+﻿# API 명세서
 
 # 1인 스트리머 AI 매니저 API 명세서
 
@@ -68,6 +68,7 @@ ERD의 관계와 API의 단일 리소스 식별 규칙을 실제 DDL에서도 �
 | `VIEWER_PROFILES` | `(platform_account_id, viewer_hash)` | 동일 플랫폼 시청자 프로필 중복 생성 방지 |
 | `VIEWER_METRICS` | `(session_id, measured_at)` | 지표 배치 재시도 시 동일 시점 중복 방지 |
 | `TRANSCRIPTS` | `(session_id, start_ms, end_ms)` | STT Callback 재시도 시 동일 청크 중복 방지 |
+| `TRIGGERS` | `(session_id, start_ms)` | 리포트 재생성 시 동일 트리거 중복 생성 방지 |
 | `REPORTS` | `session_id` | 세션당 리포트 1개 보장 |
 | `PORTFOLIOS` | `streamer_id` | 스트리머당 포트폴리오 1개 보장 |
 | `PORTFOLIOS` | `public_slug` | 공개 포트폴리오 URL의 단일 식별 |
@@ -93,8 +94,12 @@ ERD의 관계와 API의 단일 리소스 식별 규칙을 실제 DDL에서도 �
 | `BROADCAST_SESSIONS.ended_at` | 진행 중인 방송 |
 | `REPORTS.summary` | `PROCESSING` 또는 AI 요약 실패 상태 |
 | `REPORTS.avg_viewers`, `peak_viewers`, `total_chat` | 집계가 아직 완료되지 않은 `PROCESSING` 상태 |
-| `REPORTS.positive_ratio`, `neutral_ratio`, `negative_ratio` | 감정 분석이 완료되지 않았거나 일부 실패한 상태 |
+| `REPORTS`의 8종 감정 건수와 `analyzed_chat` | 집계가 아직 완료되지 않은 `PROCESSING` 상태 |
 | `REPORTS.generated_at` | 리포트 생성이 완료되지 않은 상태 |
+| `CHAT_MESSAGES.sentiment_label` | 채팅 분류 호출이 실패해 라벨 없이 원본만 저장한 채팅 (13.6) |
+| `TRIGGERS.transcript_id` | 트리거 구간에 겹치는 STT 청크가 없는 경우 |
+| `TRIGGERS.narrative`, `analyzed_at` | 리포트 생성 전이거나 LLM 분석이 실패한 트리거 |
+| `TRIGGERS.screen_context` | 화면 캡처 도입 전. 현재 전 구간 `NULL` |
 | `PROMISES.due_date` | 목업의 “기한 미정” 약속 |
 | `HIGHLIGHTS.clip_url`, `thumbnail_url` | 하이라이트 구간 탐지 후 클립 생성 전 또는 생성 실패 상태 |
 | `PORTFOLIOS.published_at` | 아직 공개하지 않은 포트폴리오 |
@@ -106,7 +111,11 @@ ERD의 관계와 API의 단일 리소스 식별 규칙을 실제 DDL에서도 �
 - 실시간 현재값은 DB·Redis에서 스냅샷으로 복구하고, 놓치면 안 되는 브리핑·세션 상태 이벤트만 Redis Streams에서 재생한다.
 - Redis 이벤트 보관 범위를 초과한 경우에는 이벤트 전체 재생 대신 `GET /broadcast-sessions/{sessionId}/live-snapshot`을 다시 호출한다.
 - 내부 AI 변경 요청의 `X-Request-Id` 처리 결과는 Redis에 단기 보관해 재시도에 의한 중복 저장을 방지한다.
-- `SENTIMENT_SNAPSHOTS`는 ERD에 없는 컬럼 두 개를 DDL에서 추가한다. `captured_at`은 스냅샷 시각이 없으면 최신값을 특정할 수 없어서, `message_count`는 13.7의 감정 비율 가중 평균에 윈도우별 채팅량이 필요해서 추가한다.
+- 채팅 감정은 **8종 라벨을 원본 그대로** 저장하고 화면 표현은 조회 시점에 만든다. 프론트는 건수 상위 3종만 노출하므로 긍정·중립·부정 3분류를 DB에 두지 않는다. 3분류로 눌러 저장하면 `놀람`·`혼란/질문`을 어디에 넣을지가 자의적인 데다, 나중에 분류 기준을 바꿨을 때 과거 리포트와 추이를 비교할 수 없다.
+- 감정은 비율이 아니라 **건수**로 저장한다(13.7). 비율은 조회 시점에 `건수 ÷ analyzed_chat`으로 계산하므로 반올림 잔차가 생기지 않고, 여러 세션을 묶는 성장 리포트에서도 채팅량 가중이 자동으로 걸린다.
+- 8종 라벨은 AI 서버가 한국어 문자열로 주고 DB에는 ASCII 코드로 저장한다. 변환은 13.6의 라벨 코드 표를 따르며 채팅 분류 응답을 저장하는 한 지점에서만 수행한다.
+- ERD의 `SENTIMENT_SNAPSHOTS`는 사용하지 않는다. 세션 단위 분포는 `REPORTS`, 구간 단위 분포는 `TRIGGERS`, 방송 중 현재값은 채팅 AI 응답을 그대로 중계하고 재연결 시 Redis 스냅샷으로 복구한다. 건별 라벨이 `CHAT_MESSAGES`에 있으므로 윈도우 요약본을 따로 보관할 이유가 없다.
+- ERD의 `REPORT_SEGMENTS`는 `TRIGGERS`로 대체한다. 사유는 13.7에 적는다.
 
 ---
 
@@ -135,9 +144,9 @@ ERD의 관계와 API의 단일 리소스 식별 규칙을 실제 DDL에서도 �
 | 플랫폼 연동 | `PLATFORM_ACCOUNTS` |
 | 대시보드 | `CALENDAR_EVENTS`, `BROADCAST_SESSIONS`, `REPORTS`, `PROMISES`, `HIGHLIGHTS` |
 | 일정·공지 | `CALENDAR_EVENTS`, `SCHEDULE_ANNOUNCEMENTS`, `PLATFORM_ACCOUNTS` |
-| 실시간 콘솔 | `BROADCAST_SESSIONS`, `VIEWER_METRICS`, `LIVE_BRIEFINGS`, `RISK_EVENTS`, `SENTIMENT_SNAPSHOTS`, `REPEATED_QUESTIONS`, Redis Streams 이벤트 버퍼 |
+| 실시간 콘솔 | `BROADCAST_SESSIONS`, `VIEWER_METRICS`, `CHAT_MESSAGES`, `LIVE_BRIEFINGS`, `RISK_EVENTS`, `REPEATED_QUESTIONS`, `TRIGGERS`, Redis Streams 이벤트 버퍼 |
 | 약속 | `PROMISES`, `TRANSCRIPTS`, `BROADCAST_SESSIONS` |
-| 세션 분석 | `TRANSCRIPTS`, `REPORTS`, `REPORT_SEGMENTS`, `REPORT_INSIGHTS`, `HIGHLIGHTS` |
+| 세션 분석 | `TRANSCRIPTS`, `CHAT_MESSAGES`, `TRIGGERS`, `REPORTS`, `REPORT_INSIGHTS`, `HIGHLIGHTS` |
 | 성장 지표 | `BROADCAST_SESSIONS`와 `REPORTS` 집계 |
 | 성장 목표 | `GROWTH_GOALS`, `GROWTH_ACTIONS`, `REPORTS`, `BROADCAST_SESSIONS` 집계 |
 | 하이라이트 채팅 리플레이 | `HIGHLIGHTS`, `REPORTS`, `BROADCAST_SESSIONS`, `CHAT_MESSAGES`, `VIEWER_PROFILES` |
@@ -818,7 +827,8 @@ Access Token과 Refresh Token은 `PLATFORM_ACCOUNTS`에 암호화하여 저장�
     "services": {
       "microphone": "CONNECTED",
       "stt": "RUNNING",
-      "ai": "RUNNING"
+      "ai": "RUNNING",
+      "collector": "RUNNING"
     },
     "briefings": [
       {
@@ -829,9 +839,14 @@ Access Token과 Refresh Token은 `PLATFORM_ACCOUNTS`에 암호화하여 저장�
       }
     ],
     "sentiment": {
-      "positiveRatio": 0.64,
-      "neutralRatio": 0.27,
-      "negativeRatio": 0.09
+      "windowSec": 180,
+      "analyzedChat": 6185,
+      "engagement": 0.214,
+      "dominant": "JOY",
+      "distribution": {
+        "JOY": 0.27, "NEUTRAL": 0.25, "SUPPORT": 0.13, "EXCITEMENT": 0.11,
+        "CONFUSION": 0.09, "SURPRISE": 0.06, "SADNESS": 0.05, "ANGER": 0.04
+      }
     },
     "repeatedQuestions": [
       {
@@ -846,6 +861,14 @@ Access Token과 Refresh Token은 `PLATFORM_ACCOUNTS`에 암호화하여 저장�
 ```
 
 `briefings[].createdAt`은 `LIVE_BRIEFINGS.created_at`을 반환한다. `created_at`은 `NOT NULL`이며 브리핑 레코드가 생성된 시각이다.
+
+`services.collector`는 치지직 채팅 수집기의 연결 상태다. 수집기는 자동 재연결이 불가능해 재핸드셰이크 루프로 복구하며, 그 사이의 채팅은 영구 유실된다. 수집이 멈춘 것을 스트리머가 알아야 하므로 화면에 노출한다.
+
+`sentiment`는 13.6 채팅 분류 응답의 최근 윈도우 지표를 그대로 중계한 값이며 별도 테이블에 보관하지 않는다. 재연결 복구를 위해 최신 1건만 Redis에 스냅샷으로 유지한다.
+
+- **8종을 모두 내려보내고 상위 3종 선택은 프론트가 한다.** 표시 규칙이나 정렬 기준이 바뀌어도 서버 배포가 필요 없고, 8개 실수를 더 보내는 비용이 없다.
+- `distribution`의 합은 1.0이다. 프론트가 상위 3종만 그리면 합이 1보다 작아지므로, 나머지를 "기타"로 묶든 상위 3종을 재정규화하든 화면에서 정한다.
+- `analyzedChat`이 0이면 `dominant`와 `distribution`은 `null`이다. 채팅이 없거나 분류 호출이 계속 실패한 상태다.
 
 `lastEventId`는 해당 세션 Redis Stream의 최신 이벤트 ID다. 아직 생성된 이벤트가 없으면 `"0-0"`을 반환한다.
 
@@ -882,7 +905,7 @@ wss://api.example.com/ws/v1/broadcast-sessions/{sessionId}?ticket={wsTicket}&las
 | `SESSION_STATUS_CHANGED` | 방송 상태 변경 |
 | `VIEWER_METRIC_UPDATED` | 현재 시청자 수 갱신 |
 | `BRIEFING_CREATED` | 위험 발언, 채팅 요약, 반복 질문, 약속 브리핑 |
-| `SENTIMENT_UPDATED` | 긍정·중립·부정 비율 갱신 |
+| `SENTIMENT_UPDATED` | 8종 여론 분포 갱신 |
 | `REPEATED_QUESTIONS_UPDATED` | 반복 질문 Top 5 갱신 |
 | `ANALYSIS_STATUS_CHANGED` | 방송 종료 후 리포트 상태 변경 |
 | `ERROR` | 실시간 처리 오류 |
@@ -1001,9 +1024,12 @@ AI가 약속 발언을 감지하면 `PROMISES`에 `DETECTED` 상태로 저장하
       "avgViewers": 2105,
       "peakViewers": 3842,
       "totalChat": 48200,
-      "positiveRatio": 0.64,
-      "neutralRatio": 0.27,
-      "negativeRatio": 0.09
+      "analyzedChat": 46180,
+      "dominant": "JOY",
+      "distribution": {
+        "JOY": 0.27, "NEUTRAL": 0.25, "SUPPORT": 0.13, "EXCITEMENT": 0.11,
+        "CONFUSION": 0.09, "SURPRISE": 0.06, "SADNESS": 0.05, "ANGER": 0.04
+      }
     },
     "viewerTimeline": [
       {
@@ -1011,13 +1037,28 @@ AI가 약속 발언을 감지하면 `PROMISES`에 `DETECTED` 상태로 저장하
         "viewerCount": 1820
       }
     ],
-    "segments": [
+    "triggers": [
       {
-        "reportSegmentId": 401,
-        "transcriptId": 701,
-        "startMs": 2760000,
-        "endMs": 5760000,
-        "segmentType": "VIEWER_INFLOW"
+        "triggerId": 8801,
+        "triggerType": "CHAT_SURGE",
+        "transcriptId": 812,
+        "startMs": 4320000,
+        "endMs": 4590000,
+        "metrics": {
+          "peakZ": 5.2,
+          "peakEngagement": 0.31,
+          "avgViewers": 2480,
+          "chatCount": 1840,
+          "uniqueChatters": 610,
+          "analyzedChat": 1792
+        },
+        "dominant": "EXCITEMENT",
+        "distribution": {
+          "EXCITEMENT": 0.41, "JOY": 0.22, "SURPRISE": 0.14, "SUPPORT": 0.10,
+          "NEUTRAL": 0.06, "CONFUSION": 0.04, "SADNESS": 0.02, "ANGER": 0.01
+        },
+        "narrative": "한타 패배 직후 스트리머의 자책 리액션에 채팅이 몰렸습니다.",
+        "screenContext": null
       }
     ],
     "insights": [
@@ -1030,7 +1071,7 @@ AI가 약속 발언을 감지하면 `PROMISES`에 `DETECTED` 상태로 저장하
     "highlights": [
       {
         "highlightId": 71,
-        "reportSegmentId": 401,
+        "triggerId": 8801,
         "startMs": 5220000,
         "endMs": 5261000,
         "clipUrl": "https://cdn.example.com/clips/71.mp4",
@@ -1043,7 +1084,10 @@ AI가 약속 발언을 감지하면 `PROMISES`에 `DETECTED` 상태로 저장하
 ```
 
 - `PROCESSING`이면 `202 Accepted`와 진행 상태만 반환한다.
-- AI 요약 실패 시에도 집계 지표는 `PARTIAL` 상태로 반환한다.
+- LLM 분석이 실패해도 집계 지표와 트리거 구간은 `PARTIAL` 상태로 반환한다. 트리거는 방송 중에 이미 확정되므로 리포트 생성 실패와 무관하게 남아 있고, `narrative`만 `null`이 된다.
+- `metrics.distribution`과 `triggers[].distribution`은 저장된 8종 건수를 `analyzedChat`으로 나눈 값이다. DB에는 비율이 아니라 건수가 들어 있다(13.7).
+- **프론트는 건수 상위 3종만 노출한다.** 서버는 8종을 모두 내려보내고 선택은 화면에서 한다. 세션 전체 분포와 트리거 구간 분포에 같은 규칙을 쓴다.
+- `screenContext`는 화면 캡처 도입 전까지 항상 `null`이다. 프레임 없이도 전사와 채팅만으로 `narrative`는 생성된다.
 - 목업의 하이라이트 점수와 사유는 현재 ERD에 저장 컬럼이 없으므로 응답에서 제외한다.
 
 ### 11.2 성장 리포트
@@ -1140,7 +1184,7 @@ AI가 약속 발언을 감지하면 `PROMISES`에 `DETECTED` 상태로 저장하
 
 `GET /broadcast-sessions/{sessionId}/highlights`
 
-반환 필드는 `highlightId`, `reportSegmentId`, `startMs`, `endMs`, `clipUrl`, `thumbnailUrl`이다.
+반환 필드는 `highlightId`, `triggerId`, `startMs`, `endMs`, `clipUrl`, `thumbnailUrl`이다.
 
 ### 11.5 하이라이트 채팅 리플레이
 
@@ -1345,13 +1389,16 @@ SC-11의 채널명·태그 검색, 카테고리 필터, 규모 필터를 지원�
 | FastAPI → Spring | POST | `/internal/v1/sessions/{sessionId}/transcripts:batch` | STT 결과 배치 저장 |
 | Spring → FastAPI | POST | `/internal/v1/ai/stt` | 음성 청크 STT 변환 |
 | Spring → FastAPI | POST | `/internal/v1/ai/risk-speech` | 위험 발언 분류와 조언 생성 |
-| Spring → FastAPI | POST | `/internal/v1/ai/chat-summary` | 채팅 요약과 감정 비율 분석 |
+| Spring → 채팅 AI | POST | `/broadcasts/{sessionId}/ingest` | 1초 배치 채팅 분류와 실시간 윈도우 지표 |
+| Spring → 채팅 AI | POST | `/broadcasts/{sessionId}/summary` | LLM 여론 요약 |
+| Spring → 채팅 AI | DELETE | `/broadcasts/{sessionId}` | 방송 종료 시 윈도우·요약 캐시 정리 |
 | Spring → FastAPI | POST | `/internal/v1/ai/repeated-questions` | 반복 질문 추출 |
 | Spring → FastAPI | POST | `/internal/v1/ai/promise-detection` | STT에서 약속 후보 추출 |
-| Spring → FastAPI | POST | `/internal/v1/ai/session-reports` | 세션 리포트 비동기 생성 요청 |
-| Spring → FastAPI | POST | `/internal/v1/ai/highlight-detection` | 하이라이트 구간 탐지 |
 | Spring → FastAPI | POST | `/internal/v1/ai/growth-actions` | 성장 목표의 다음 액션 제안 |
-| FastAPI → Spring | PUT | `/internal/v1/analysis-results/{reportId}` | 리포트·세그먼트·인사이트 Callback 저장 |
+
+세션 리포트 생성은 내부 API가 아니다. Spring이 자기 DB의 트리거·전사·채팅을 읽어 LLM을 직접 호출한다(13.7). 따라서 `session-reports` 요청, `highlight-detection` 요청, `analysis-results` Callback 세 Endpoint는 두지 않는다.
+
+채팅 AI는 별도 서버(기본 포트 8001)이며 요청·응답 규격의 원본은 `AI/CHAT_AI_API.md`다. 이 문서에는 Spring이 저장·중계하는 부분만 적는다.
 
 ### 13.3 원천 데이터 수집과 영속화
 
@@ -1530,39 +1577,65 @@ Spring은 후보마다 `PROMISES(streamer_id, session_id, transcript_id, content
 
 ### 13.6 채팅 분석
 
-채팅 요약과 감정 분석:
+채팅 감정 분류와 실시간 지표:
 
-`POST /internal/v1/ai/chat-summary`
+`POST /broadcasts/{sessionId}/ingest`
+
+**1초마다 호출하며 그 1초 동안 수신한 채팅을 전부 싣는다.** 채팅이 없어도 빈 배열로 호출해야 윈도우가 시간에 따라 미끄러지고 시청자 수가 갱신된다.
 
 ```json
 {
-  "sessionId": 9002,
-  "windowStart": "2026-07-20T14:28:00Z",
-  "windowEnd": "2026-07-20T14:31:00Z",
-  "previousSummary": "신규 챔피언 이야기가 시작됐습니다.",
-  "messages": [
-    {
-      "chatMessageId": 88001,
-      "message": "신규 챔피언 바로 구매 가자",
-      "sentAt": "2026-07-20T14:30:59Z"
-    }
+  "viewers": 2417,
+  "chats": [
+    { "uid": "a1b2c3...", "msg": "신규 챔피언 바로 구매 가자", "ts": 1753690000123 }
   ]
 }
 ```
 
 ```json
 {
-  "success": true,
-  "data": {
-    "summary": "신규 챔피언 구매에 대한 긍정 반응이 우세합니다.",
-    "positiveRatio": 0.64,
-    "neutralRatio": 0.27,
-    "negativeRatio": 0.09
+  "results": [
+    { "label": "응원/호감", "score": 0.91 }
+  ],
+  "window": {
+    "windowSec": 180,
+    "chatCount": 6185,
+    "uniqueChatters": 1168,
+    "viewers": 2417,
+    "engagement": 0.214,
+    "distribution": { "웃음/재미": 0.27, "중립": 0.25, "…": 0.0 },
+    "dominant": "웃음/재미"
   }
 }
 ```
 
-Spring은 `summary`로 `LIVE_BRIEFINGS(CHAT_SUMMARY)`를 생성하고 비율을 `SENTIMENT_SNAPSHOTS`에 저장한다. 이때 요청에 담아 보낸 `messages`의 개수를 `SENTIMENT_SNAPSHOTS.message_count`에 함께 기록한다. 세션 리포트의 감정 비율이 이 값을 가중치로 사용하므로 비율만 저장해서는 안 된다.
+Spring의 처리는 두 갈래다.
+
+- `results`는 요청 `chats`와 **같은 순서**의 건별 라벨이다. 라벨 코드로 변환해 `CHAT_MESSAGES.sentiment_label`에 원본과 함께 저장한다.
+- `window`는 저장하지 않고 10.6의 `sentiment`로 그대로 중계한다. 재연결 복구용으로 최신 1건만 Redis에 남긴다.
+
+**호출이 실패하면 재시도하지 않고 그 배치는 건너뛴다.** 채팅 원본은 라벨 없이 저장하고 `sentiment_label`은 `NULL`로 둔다. AI 서버 장애가 채팅 수집을 멈추게 해서는 안 되며, 라벨은 저장된 원본으로 나중에 재분류할 수 있지만 원본 유실은 복구할 수 없다. 타임아웃은 2초를 권장한다.
+
+라벨 코드 표. AI 서버는 한국어 문자열을 주고 DB와 API는 ASCII 코드를 쓴다. 변환은 이 응답을 저장하는 지점 한 곳에서만 한다.
+
+| AI 서버 라벨 | 저장·API 코드 |
+| --- | --- |
+| `웃음/재미` | `JOY` |
+| `환호/감탄` | `EXCITEMENT` |
+| `응원/호감` | `SUPPORT` |
+| `놀람` | `SURPRISE` |
+| `슬픔/아쉬움` | `SADNESS` |
+| `분노/불만` | `ANGER` |
+| `혼란/질문` | `CONFUSION` |
+| `중립` | `NEUTRAL` |
+
+라벨 집합은 채팅 분류 모델 버전에 묶여 있다. 모델을 교체해 라벨이 바뀌면 이 표와 `CHAT_MESSAGES`·`REPORTS`·`TRIGGERS`의 컬럼을 함께 마이그레이션해야 한다.
+
+LLM 여론 요약:
+
+`POST /broadcasts/{sessionId}/summary`
+
+3분 주기 스케줄러는 `{"mode":"AUTO"}`, 프론트 버튼은 `{"mode":"MANUAL"}`로 호출한다. Spring은 성공 응답의 `summary`로 `LIVE_BRIEFINGS(CHAT_SUMMARY)`를 생성한다. 윈도우 채팅 부족(`422`)과 쿨다운·중복 호출(`409`)은 정상 거절이므로 오류로 기록하지 않는다.
 
 반복 질문 분석:
 
@@ -1588,175 +1661,80 @@ Spring은 `summary`로 `LIVE_BRIEFINGS(CHAT_SUMMARY)`를 생성하고 비율을 
 
 ### 13.7 방송 후 분석과 성장 액션
 
-세션 리포트 생성:
+세션 리포트는 **Spring 내부에서 생성한다.** 전용 AI Endpoint도 Callback도 두지 않고, 대용량 입력을 위한 S3 집계 파일도 만들지 않는다.
 
-`POST /internal/v1/ai/session-reports`
+프로세스 경계를 없앤 이유는 세 가지다.
 
-```json
-{
-  "reportId": 301,
-  "sessionId": 9001,
-  "inputObjectKey": "sessions/9001/analysis/report-input.json"
-}
-```
+- 방송 종료 이벤트를 실어 나르는 Transactional Outbox가 이미 있다. 선점 임대와 재시도 간격, 최대 시도 후 `DEAD` 전이를 갖춘 잡 큐라, 별도 워커 큐를 붙이면 재시도와 멱등 로직이 두 군데로 갈라진다.
+- 리포트 입력이 전부 Spring의 DB에 있다. 프로세스를 건너려면 세션 전체 전사·채팅을 직렬화해 스토리지에 올리고 반대편에서 다시 읽어야 하는데, 같은 프로세스 안에서는 조회 쿼리 하나다.
+- 화면 캡처를 후순위로 미루면서 리포트 생성이 텍스트 입력·텍스트 출력이 되었다. Python이어야 했던 이유인 Vision이 빠졌다.
 
-대용량 시청자 시계열·채팅·STT 입력은 요청 Body에 직접 넣지 않고 S3 호환 스토리지의 집계 입력 파일로 전달한다. 성공 시 `202 Accepted`와 `analysisJobId`, `PROCESSING` 상태를 반환하며 완료 결과는 `PUT /internal/v1/analysis-results/{reportId}`로 Callback한다.
+LLM은 OpenAI 호환 Endpoint로 호출한다. 프롬프트는 Java 문자열이 아니라 리소스 파일로 분리해 AI 담당자가 텍스트만 고칠 수 있게 한다.
 
-리포트 입력 JSON (`inputObjectKey` = `sessions/{sessionId}/analysis/report-input.json`):
+#### 트리거 앵커
 
-```json
-{
-  "reportId": 301,
-  "session": {
-    "sessionId": 9001,
-    "title": "심야 수다방 & 롤토체스",
-    "category": "GAME",
-    "language": "ko",
-    "startedAt": "2026-07-20T13:04:00Z",
-    "endedAt": "2026-07-20T16:32:00Z",
-    "durationMs": 12480000
-  },
-  "metrics": {
-    "avgViewers": 2105,
-    "peakViewers": 3842,
-    "totalChat": 48200,
-    "positiveRatio": 0.64,
-    "neutralRatio": 0.27,
-    "negativeRatio": 0.09
-  },
-  "viewerTimeline": [
-    { "offsetMs": 60000, "viewerCount": 1820 }
-  ],
-  "chatCounts": [
-    { "offsetMs": 60000, "messageCount": 214 }
-  ],
-  "sentimentTimeline": [
-    {
-      "offsetMs": 180000,
-      "positiveRatio": 0.71,
-      "neutralRatio": 0.22,
-      "negativeRatio": 0.07,
-      "messageCount": 640
-    }
-  ],
-  "chatSummaries": [
-    { "offsetMs": 180000, "summary": "신규 챔피언 구매에 대한 긍정 반응이 우세합니다." }
-  ],
-  "transcripts": [
-    {
-      "transcriptId": 701,
-      "startMs": 2760000,
-      "endMs": 2775000,
-      "transcript": "자 이제 롤토체스 켜볼게요"
-    }
-  ],
-  "riskEvents": [
-    {
-      "transcriptId": 712,
-      "offsetMs": 3400000,
-      "riskLevel": "MEDIUM",
-      "riskCategory": "PROFANITY"
-    }
-  ],
-  "repeatedQuestions": [
-    { "question": "오늘 몇 시까지 하세요?", "occurrenceCount": 42 }
-  ],
-  "promises": [
-    { "transcriptId": 730, "offsetMs": 7200000, "content": "다음 주에 구독자 이벤트 할게요" }
-  ]
-}
-```
+리포트의 기준점은 방송 중 확정된 트리거다. 하이라이트 판정은 Spring이 자체 수행하며(알고리즘 명세는 `AI/chat-ai/HIGHLIGHT_SPEC.md`), 구간이 확정될 때마다 `TRIGGERS`에 한 행을 남긴다.
 
-각 필드는 Callback 산출물과 아래처럼 대응한다.
-
-| Callback 산출물 | 근거가 되는 입력 필드 |
+| 컬럼 | 내용 |
 | --- | --- |
-| `summary` | `session`, `metrics`, `transcripts`, `chatSummaries`, `sentimentTimeline` |
-| `segments[].segmentType` = `VIEWER_INFLOW`, `VIEWER_OUTFLOW` | `viewerTimeline` |
-| `segments[].segmentType` = `CHAT_PEAK` | `chatCounts` |
-| `segments[].transcriptId` | `transcripts[].transcriptId` |
-| `insights[]` | 위 전부와 `riskEvents`, `repeatedQuestions`, `promises` |
+| `session_id` | 소유 세션. `BROADCAST_SESSIONS` 참조 |
+| `trigger_type` | 발생 사유. 현재 채팅 급증(`CHAT_SURGE`) 하나다 |
+| `start_ms`, `end_ms` | 세션 시작 기준 오프셋 |
+| `started_at`, `ended_at` | 같은 구간의 절대 시각 |
+| `transcript_id` | 구간 시작에 겹치는 STT 청크 |
+| `peak_z`, `peak_engagement` | 판정 지표의 구간 최댓값 |
+| `avg_viewers`, `chat_count`, `unique_chatters` | 구간 규모 |
+| 8종 감정 건수, `analyzed_chat` | 구간 채팅의 라벨별 건수 |
+| `narrative` | 급증 원인 설명. LLM이 채운다 |
+| `screen_context` | 화면 맥락. 캡처 도입 전까지 `NULL` |
 
-입력 JSON 생성 규칙:
+`TRIGGERS`는 ERD의 `REPORT_SEGMENTS`를 대체한다. 트리거는 방송 **중** 확정되는데 `REPORTS` 행은 방송 종료 시 생성되므로, `report_id`를 필수로 요구하는 구조에는 저장할 수 없다. 방송 시작 시점에 리포트를 미리 만들어 우회하면 대시보드의 `reportStatus`가 방송 내내 `PROCESSING`으로 표시된다. 세션에 매다는 편이 자연스럽고, 리포트 생성이 실패해도 앵커가 남아 재시도할 수 있다.
 
-- 모든 시간축은 `BROADCAST_SESSIONS.started_at`을 0으로 한 밀리초 오프셋으로 변환해 전달한다. `VIEWER_METRICS.measured_at`, `SENTIMENT_SNAPSHOTS.captured_at`, `RISK_EVENTS.detected_at`, 분당 채팅 집계의 Bucket은 절대 시각이므로 Spring이 변환하며, FastAPI에 절대 시각과 오프셋을 섞어 보내지 않는다. Callback의 `startMs`, `endMs`도 같은 기준이다.
-- `transcripts[]`에는 `TRANSCRIPTS.id`를 `transcriptId`로 반드시 포함한다. Callback의 `segments[].transcriptId`는 이 값만 사용할 수 있다.
-- `CHAT_MESSAGES` 원문과 시청자 식별자는 전달하지 않는다. 채팅은 분당 건수(`chatCounts`), 감정 비율(`sentimentTimeline`), 방송 중 생성한 `LIVE_BRIEFINGS(CHAT_SUMMARY)`(`chatSummaries`)로 대체한다.
-- `metrics`는 요약·인사이트의 근거 제시용 참고값이며 Callback으로 되돌려받지 않는다.
-- `segments[].segmentType`의 허용값은 `VIEWER_INFLOW`, `VIEWER_OUTFLOW`, `CHAT_PEAK`, `HIGHLIGHT`이고 `insights[].title`은 200자 이내다. Spring은 Callback 저장 전에 두 제약을 검증하고 위반 항목만 제외한다.
+시각은 오프셋과 절대 시각을 **둘 다** 저장한다. 소비자마다 필요한 형태가 다르기 때문이다 — `TRANSCRIPTS`는 오프셋으로, `CHAT_MESSAGES`는 절대 시각으로 조회한다. 확정 시점의 Spring은 둘 다 알고 있고 행 수가 세션당 수십 개라, 조회할 때마다 세션 시작 시각과 조인해 변환하는 것보다 안전하다.
 
-리포트 결과 Callback:
+보관 정책은 걸지 않는다. 트리거는 원본이 아니라 구간 요약이고, 채팅 원본이 보관 기간으로 삭제된 뒤에 남겨야 할 것이 바로 그 요약이다. `VIEWER_METRICS`에 적용한 것과 같은 판단이다.
 
-```json
-{
-  "status": "COMPLETED",
-  "summary": "롤토체스 구간에서 시청자 유입이 집중되었습니다.",
-  "segments": [
-    {
-      "transcriptId": 701,
-      "startMs": 2760000,
-      "endMs": 5760000,
-      "segmentType": "VIEWER_INFLOW"
-    }
-  ],
-  "insights": [
-    {
-      "title": "게임 전환을 미리 예고하기",
-      "content": "전환 시점에 시청자 이탈이 발생했습니다."
-    }
-  ]
-}
-```
+트리거가 확정되지 않은 세션도 리포트를 만든다. 이때 `triggers`는 빈 배열이고 요약과 인사이트는 세션 전체 지표만으로 생성한다.
 
-Spring은 `REPORTS`, `REPORT_SEGMENTS`, `REPORT_INSIGHTS`를 한 트랜잭션으로 저장한다. 통계 컬럼은 Spring이 원천 데이터에서 계산하며 AI Callback 값을 신뢰해 덮어쓰지 않는다. Callback은 `summary`, `segments`, `insights`만 반영한다.
+#### 생성 흐름
 
-| `REPORTS` 통계 컬럼 | 집계 원천 |
+1. 세션 종료 시 통계를 집계해 `REPORTS`에 커밋한다. LLM을 기다리지 않는다.
+2. Outbox가 트리거마다 분석 작업을 발행한다. 한 이벤트에서 트리거 전부를 순차 처리하면 LLM 지연이 쌓여 선점 임대 시간을 넘기고 다른 워커가 같은 작업을 중복 선점한다. 트리거 하나가 실패했을 때 그것만 재시도하기 위해서이기도 하다.
+3. 워커가 트리거별로 LLM을 호출해 `TRIGGERS.narrative`를 채운다. 재생성 시 새 행을 만들지 않고 갱신한다.
+4. 모든 트리거 분석이 끝나면 세션 요약과 `REPORT_INSIGHTS`를 생성하고 `COMPLETED`로 전이한다.
+
+LLM 호출은 DB 트랜잭션 밖에서, 앱 공용 스케줄러와 분리한 실행기에서 수행한다. 그러지 않으면 LLM 지연이 다른 스케줄 작업을 밀어낸다.
+
+#### 트리거별 LLM 입력
+
+트리거 한 건마다 아래를 모아 한 번 호출한다.
+
+- 방송 메타데이터 — 제목, 카테고리, 언어, 총 길이
+- 트리거 지표 — 종류, 구간, `peak_z`, `peak_engagement`, `chat_count`, `unique_chatters`, 8종 감정 분포
+- 구간 전사 — `TRANSCRIPTS`에서 `start_ms`~`end_ms`와 겹치는 청크
+- 구간 채팅 — `CHAT_MESSAGES`에서 `started_at`~`ended_at` 사이, 라벨 포함
+
+지표를 함께 넘기는 것이 핵심이다. "이 구간에서 z가 5.2까지 튀었다"를 아는 상태로 전사와 채팅을 읽어야 급증의 원인을 지목할 수 있다. 지표 없이 넘기면 구간 요약에 그친다.
+
+채팅은 구간 원문을 그대로 넘긴다. 트리거 구간은 정의상 채팅이 몰린 곳이라 양이 많으므로, 프롬프트 한도를 넘기면 반복 표현을 건수로 접거나 표본을 뽑는 압축을 호출 직전 단계에서 수행한다.
+
+#### 통계 컬럼
+
+| `REPORTS` 컬럼 | 집계 원천 |
 | --- | --- |
 | `avg_viewers`, `peak_viewers` | `VIEWER_METRICS`의 세션 구간 평균·최댓값 |
 | `total_chat` | `CHAT_MESSAGES`의 세션 건수 |
-| `positive_ratio`, `neutral_ratio`, `negative_ratio` | `SENTIMENT_SNAPSHOTS`의 `message_count` 가중 평균 |
+| `analyzed_chat` | `CHAT_MESSAGES` 중 `sentiment_label`이 있는 건수 |
+| `joy_count` … `neutral_count` | `CHAT_MESSAGES`를 `sentiment_label`로 묶은 건수 |
 
-- 감정 비율은 리포트 시점에 다시 분석하지 않고 방송 중 `POST /internal/v1/ai/chat-summary` 결과로 쌓인 `SENTIMENT_SNAPSHOTS`를 재집계한다. 윈도우별 채팅량 차이가 크므로 단순 평균이 아니라 `message_count` 가중 평균을 사용한다.
-- 세 비율의 합이 반올림 때문에 1이 되지 않을 수 있으므로 저장 직전에 합으로 정규화하고 잔차는 최댓값에 더한다.
-- `SENTIMENT_SNAPSHOTS`는 보관 기간이 지나면 삭제되지만 `REPORTS`는 영속이므로, 감정 비율은 리포트 생성 시점에 확정 저장하며 이후 재계산하지 않는다.
-- 통계 집계는 AI Callback을 기다리지 않는다. 세션 종료 시 집계를 먼저 커밋하고 `POST /internal/v1/ai/session-reports`를 요청하며, Callback이 최종 실패하면 `PARTIAL` 상태로 집계 지표만 제공한다. 감정 스냅샷이 하나도 없으면 세 비율은 1.5에 따라 `NULL`로 둔다.
+- 8종 건수의 합은 `analyzed_chat`과 같다. **비율은 저장하지 않고 조회 시점에 나눈다.** 비율을 반올림해 저장하면 8개의 합이 1에서 벌어지고, 여러 세션을 묶는 성장 리포트에서 방송 규모와 무관하게 세션당 같은 비중이 되어 버린다.
+- `analyzed_chat / total_chat`이 분류 커버리지다. 방송 중 분류 호출이 자주 실패하면 이 값이 낮아지므로 `PARTIAL` 판정 근거로 쓴다.
+- `CHAT_MESSAGES`는 보관 기간이 지나면 삭제되지만 `REPORTS`는 영속이다. 감정 건수는 리포트 생성 시점에 확정 저장하며 이후 재계산하지 않는다.
+- 통계 집계는 LLM 분석을 기다리지 않는다. 세션 종료 시 먼저 커밋하고, LLM 분석이 최종 실패하면 `PARTIAL`로 집계 지표와 트리거 구간만 제공한다.
 
-하이라이트 탐지:
+#### 하이라이트
 
-`POST /internal/v1/ai/highlight-detection`
-
-```json
-{
-  "reportId": 301,
-  "sessionId": 9001,
-  "segments": [
-    {
-      "reportSegmentId": 401,
-      "startMs": 2760000,
-      "endMs": 5760000
-    }
-  ],
-  "viewerMetricsObjectKey": "sessions/9001/analysis/viewer-metrics.json",
-  "chatCountsObjectKey": "sessions/9001/analysis/chat-counts.json"
-}
-```
-
-```json
-{
-  "success": true,
-  "data": {
-    "items": [
-      {
-        "reportSegmentId": 401,
-        "startMs": 5220000,
-        "endMs": 5261000
-      }
-    ]
-  }
-}
-```
-
-Spring은 결과를 `HIGHLIGHTS(report_id, report_segment_id, start_ms, end_ms)`에 저장하고 클립 생성 후 `clip_url`, `thumbnail_url`을 갱신한다. 현재 ERD에 없는 점수·탐지 사유는 저장 결과에 포함하지 않는다.
+트리거가 곧 하이라이트 후보이므로 별도 탐지 요청을 두지 않는다. 클립으로 만들 트리거를 골라 `HIGHLIGHTS(report_id, trigger_id, start_ms, end_ms)`에 저장하고, 클립 생성 후 `clip_url`과 `thumbnail_url`을 갱신한다. 모든 트리거가 클립이 되지는 않으므로 두 테이블은 분리해 둔다.
 
 성장 다음 액션 생성:
 
@@ -1795,10 +1773,13 @@ Spring은 기존 활성 제안을 교체하고 `GROWTH_ACTIONS(growth_goal_id, t
 | STT 전문 | `TRANSCRIPTS` |
 | 위험 발언 | `RISK_EVENTS`, `LIVE_BRIEFINGS` |
 | 채팅 요약 | `LIVE_BRIEFINGS` |
-| 감정 비율 | `SENTIMENT_SNAPSHOTS` |
+| 채팅 건별 감정 라벨 | `CHAT_MESSAGES.sentiment_label` |
+| 실시간 여론 분포 | 저장하지 않고 중계. 재연결 복구용 최신 1건만 Redis |
+| 하이라이트 트리거와 구간 감정 | `TRIGGERS` |
 | 반복 질문 | `REPEATED_QUESTIONS` |
 | 약속 후보 | `PROMISES`, `LIVE_BRIEFINGS` |
-| 세션 요약·구간·개선안 | `REPORTS`, `REPORT_SEGMENTS`, `REPORT_INSIGHTS` |
+| 세션 요약·통계·개선안 | `REPORTS`, `REPORT_INSIGHTS` |
+| 트리거 원인 설명 | `TRIGGERS.narrative`, `screen_context` |
 | 하이라이트 구간 | `HIGHLIGHTS` |
 | 성장 다음 액션 | `GROWTH_ACTIONS` |
 
@@ -1877,9 +1858,27 @@ ERD가 스트리머 중심으로 수정되었으므로 `ADVERTISER` 역할과 �
 - [ ]  `X-Request-Id` 멱등 처리 Redis TTL과 동일 요청 판별 범위 확정
 - [ ]  채팅·시청자 지표·STT 배치의 최대 항목 수와 요청 크기 제한
 - [ ]  실시간 STT·위험 발언·채팅 분석의 Timeout, 재시도, Circuit Breaker 정책
-- [ ]  리포트 입력 JSON과 음성 청크의 S3 보관 기간·삭제 작업 (Object Key 규칙과 리포트 입력 스키마는 13.7에서 확정)
-- [ ]  `SENTIMENT_SNAPSHOTS.message_count` 컬럼을 마이그레이션에 반영 (13.6, 13.7 전제)
-- [ ]  3시간 방송의 `transcripts[]` 전량이 리포트 입력 토큰 한도에 들어가는지 확인하고, 초과 시 인접 청크 병합 규칙 확정
+- [ ]  음성 청크의 S3 보관 기간과 삭제 작업 (리포트 입력 파일은 13.7에서 폐지)
+- [x]  스키마 변경 마이그레이션: `CHAT_MESSAGES.sentiment_label` 추가, `TRIGGERS` 신설, `REPORTS`의 3분류 비율 컬럼을 8종 건수와 `analyzed_chat`으로 교체, `REPORT_SEGMENTS`·`SENTIMENT_SNAPSHOTS` 폐기, `HIGHLIGHTS.report_segment_id` → `trigger_id` (V8)
+- [ ]  **트리거 판정 구현 시 함께 처리할 것**
+    - `chat_message_counts_1m` 연속 집계 폐기. V3가 적은 세 용도(하이라이트 z-score 입력, `reports.total_chat` 집계, 성장 리포트 누적 채팅)가 모두 다른 경로로 바뀌어 소비처가 없다. 판정은 Spring이 인메모리 60초 윈도우로 수행하고, 세션 총량은 `REPORTS.total_chat`, 구간 채팅량은 `TRIGGERS.chat_count`에 영구 저장된다. 방송 중 채팅량 그래프를 리포트에 넣기로 하면 이 결정을 뒤집고 유지해야 한다 — 원본 90일 보존을 넘긴 이력은 재생성할 수 없다.
+    - `BroadcastOutboxEventType` 자바 Enum에 `TRIGGER_ANALYSIS_REQUESTED`, `REPORT_FINALIZATION_REQUESTED` 추가. V8이 DB CHECK는 먼저 열어뒀고, 핸들러 없이 Enum에 값을 넣으면 디스패처가 처리기를 찾지 못하는 값이 생기므로 핸들러와 함께 추가한다.
+    - `BroadcastSessionFinalizationService`가 통계 확정 후 `PARTIAL`로 끝내는 자리에 트리거별 분석 작업 발행을 넣는다.
+    - **수집 공백 가드.** `HIGHLIGHT_SPEC.md`의 가드 8개에 수집 중단이 빠져 있다. 치지직 socket.io는 자동 재연결이 되지 않아 재핸드셰이크 동안 채팅이 유실되는데, 그 구간에 `uniq`가 0으로 떨어지면 15분 baseline에 인위적으로 낮은 값이 채워지고 **복구 직후의 정상 채팅이 급증으로 오탐**된다. median·MAD가 극단값에 강건하다는 전제는 공백이 없다는 가정에 기대고 있다. 공백 구간의 틱은 판정에서 제외하고 baseline에도 넣지 않는다.
+    - 위 가드의 입력이 되는 **수집 공백 구간 저장 위치**를 이 마이그레이션에서 함께 만든다. 현재 스키마에 자리가 없다.
+- [ ]  Outbox 선점 임대 시간 재산정 (LLM 지연 반영)
+- [ ]  **치지직 채팅 수집기.** 2026-07-28 스파이크로 수집 가능은 확인했으나 구현이 없다. 확정할 것:
+    - 자동 재연결을 끄고 재핸드셰이크 루프를 직접 돈다. 세션 인증 URL의 쿼리스트링 인증값이 재사용되지 않아 같은 URL로 재연결하면 `auth fail`로 끊긴다. 전체 핸드셰이크(auth → connect → `SYSTEM` sessionKey → subscribe)를 다시 해야 하며, 세션 종료까지 유지되는 전용 스레드·프로세스가 필요하다. Spring `@Scheduled`로는 부족하다.
+    - `sent_at`은 `messageTime`(epoch ms)을 쓴다. `eventSentAt`은 타임존 없는 KST 로컬 문자열이라 UTC로 파싱하면 9시간 틀어진다.
+    - 시청자 수 폴링 주기와 실패 시 마지막 정상값 유지 범위 (`HIGHLIGHT_SPEC.md` 가드 4와 맞춘다)
+- [ ]  수집 엔드포인트 2개 구현 (`chat-messages:batch`, `viewer-metrics:batch`). 명세는 13.3에 있으나 Spring에 아직 없어 수집기가 보낼 곳이 없다
+- [ ]  Spring의 LLM 클라이언트 선택 — Spring AI의 Spring Boot 4 지원 버전 확인, 미지원 시 GMS OpenAI 호환 Endpoint 직접 호출
+- [ ]  트리거 구간 채팅 원문이 프롬프트 한도를 넘길 때의 압축 규칙 (반복 표현 접기, 표본 추출) 확정
+- [ ]  `TRIGGERS.trigger_type` Enum 확정. 현재 채팅 급증 하나이며 시청자 급변 트리거는 판정 로직이 없다
+- [ ]  8종 라벨 집합이 채팅 분류 모델 버전에 묶여 있으므로 모델 교체 시 컬럼 마이그레이션 절차 합의
+- [ ]  화면 캡처 도입 시점과 방식. 트리거는 사후 판정이라 발생 시점에 캡처할 수 없으므로 상시 링버퍼 캡처 또는 VOD 사후 추출 중 선택
+- [ ]  `AI/BACKEND_API.md`의 STT·위험 발언·약속 전송 방향과 13.4·13.5의 불일치 정리 (AI가 Spring을 호출하는 실제 구현과 반대로 적혀 있다)
+- [ ]  성장 액션 생성(`/internal/v1/ai/growth-actions`)도 Spring 내부 LLM 호출로 옮길지 결정. 현재 리포트만 옮겨 두 방식이 공존한다
 - [ ]  목업에 표시된 하이라이트 점수·탐지 사유가 필요하면 `HIGHLIGHTS` 컬럼 추가
 - [ ]  실제 채팅 닉네임이 필요하면 `VIEWER_PROFILES`에 공개용 표시명 저장 정책과 컬럼 추가 검토
 - [ ]  목업의 후원 채팅 리플레이가 필요하면 후원 이벤트 테이블 추가 검토
