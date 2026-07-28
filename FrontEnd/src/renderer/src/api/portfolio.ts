@@ -1,5 +1,11 @@
 import { MOCK_PORTFOLIO } from '@renderer/mocks/portfolio.mock'
-import type { Portfolio, PortfolioUpdate, PublicPortfolio } from '@renderer/types/portfolio'
+import { MOCK_PORTFOLIO_DIRECTORY } from '@renderer/mocks/portfolioSearch.mock'
+import type {
+  Portfolio,
+  PortfolioTag,
+  PortfolioUpdate,
+  PublicPortfolio
+} from '@renderer/types/portfolio'
 
 /**
  * SC-10 포트폴리오 데이터 소스.
@@ -99,16 +105,66 @@ export async function updateMyPortfolio(patch: PortfolioUpdate): Promise<Portfol
 }
 
 /**
+ * SC-11 검색 결과(`mocks/portfolioSearch.mock.ts`)는 카드에 필요한 요약 필드만 가진
+ * `PortfolioSearchItem`이라, 공개 뷰가 요구하는 소개글·연락처·상세 실적이 없다.
+ * 실제 백엔드라면 같은 테이블에서 조회하니 문제가 없지만, 목 데이터가 두 화면(SC-10/SC-11)
+ * 걸쳐 분리돼 있어 검색에서 클릭한 스트리머가 전부 "비공개"로 보이는 걸 막으려고
+ * 검색 카드 정보로 최소한의 공개 뷰를 구성한다. 실연동 후에는 이 함수 자체가 필요 없어진다.
+ */
+function toPublicFromSearchItem(publicSlug: string): PublicPortfolio | null {
+  const item = MOCK_PORTFOLIO_DIRECTORY.find((entry) => entry.publicSlug === publicSlug)
+  if (!item) return null
+
+  const tags: PortfolioTag[] = item.categoryTags.map((name, index) => ({
+    tagId: item.portfolioId * 100 + index,
+    name,
+    tagType: 'CONTENT'
+  }))
+
+  return {
+    portfolioId: item.portfolioId,
+    publicSlug: item.publicSlug,
+    title: item.nickname,
+    introduction: `${item.categoryTags.join(' · ') || '다양한 콘텐츠'} 방송을 진행합니다.`,
+    contactEmail: null,
+    contactUrl: null,
+    profile: {
+      nickname: item.nickname,
+      profileImageUrl: item.profileImageUrl,
+      platformAccounts: item.platformAccounts
+    },
+    tags,
+    performance: {
+      avgViewers: item.avgViewers,
+      // 검색 응답엔 없는 지표라 평균 시청자 기준으로 그럴듯하게 추정한다.
+      peakViewers: Math.round(item.avgViewers * 1.8),
+      broadcastsPerWeek: item.broadcastsPerWeek,
+      totalBroadcastCount: item.broadcastsPerWeek * 26,
+      totalChat: Math.round(item.avgViewers * 230),
+      primaryTimeRange: '21:00-01:00'
+    },
+    // 검색 결과엔 하이라이트가 없어 빈 배열로 둔다 — "아직 등록된 클립이 없어요" 빈 상태로 자연스럽게 이어진다.
+    featuredHighlights: []
+  }
+}
+
+/**
  * 공개 포트폴리오 조회. 인증이 필요 없고, 비공개면 404다.
  * 편집용 상태(isPublic·publishedAt)는 응답에서 제외된다 (명세서 §12.4).
  */
 export async function fetchPublicPortfolio(publicSlug: string): Promise<PublicPortfolio> {
   if (USE_MOCK) {
     await delay(MOCK_DELAY_MS)
-    if (publicSlug !== mockPortfolio.publicSlug || !mockPortfolio.isPublic) {
-      throw new Error(PORTFOLIO_NOT_PUBLIC)
+
+    if (publicSlug === mockPortfolio.publicSlug) {
+      if (!mockPortfolio.isPublic) throw new Error(PORTFOLIO_NOT_PUBLIC)
+      return toPublic(mockPortfolio)
     }
-    return toPublic(mockPortfolio)
+
+    const fromSearch = toPublicFromSearchItem(publicSlug)
+    if (fromSearch) return fromSearch
+
+    throw new Error(PORTFOLIO_NOT_PUBLIC)
   }
 
   // const res = await fetch(`${BASE_URL}/portfolios/${publicSlug}`)

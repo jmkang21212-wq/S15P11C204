@@ -9,6 +9,12 @@
 
 export type Platform = 'CHZZK' | 'SOOP'
 
+/** SC-10 포트폴리오와 SC-11 검색 카드가 함께 쓰는 플랫폼 표기. */
+export const PLATFORM_LABEL: Record<Platform, string> = {
+  CHZZK: '치지직',
+  SOOP: 'SOOP'
+}
+
 export interface PlatformAccount {
   platformAccountId: number
   platform: Platform
