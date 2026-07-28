@@ -1,6 +1,8 @@
 package com.example.laive.platform.exception;
 
-import com.example.laive.auth.api.ApiErrorResponse;
+import com.example.laive.common.api.ApiErrorResponse;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -11,6 +13,7 @@ import org.springframework.web.util.UriComponentsBuilder;
  * 플랫폼 연동 도메인 예외를 API 명세의 공통 오류 Envelope로 변환한다.
  */
 @RestControllerAdvice
+@Order(Ordered.HIGHEST_PRECEDENCE)
 public class PlatformExceptionHandler {
 
     /** 예외에 담긴 HTTP 상태와 오류 코드를 그대로 응답한다. */

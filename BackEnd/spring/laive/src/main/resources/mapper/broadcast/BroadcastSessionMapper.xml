@@ -1,0 +1,265 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.laive.broadcast.session.repository.mybatis.BroadcastSessionMapper">
+
+    <select id="findOwnedPlatformAccount"
+            resultType="com.example.laive.broadcast.session.repository.PlatformAccountReference">
+        SELECT id AS platform_account_id,
+               streamer_id,
+               platform,
+               CASE
+                   WHEN connection_status = 'CONNECTED'
+                        AND refresh_token_expires_at IS NOT NULL
+                        AND refresh_token_expires_at &lt;= now()
+                   THEN 'REAUTH_REQUIRED'
+                   ELSE connection_status
+               END AS connection_status
+          FROM platform_accounts
+         WHERE id = #{platformAccountId}
+           AND streamer_id = #{streamerId}
+    </select>
+
+    <select id="findOwnedCalendarEvent"
+            resultType="com.example.laive.broadcast.session.repository.CalendarEventReference">
+        SELECT id AS calendar_event_id,
+               streamer_id,
+               platform_account_id,
+               event_type,
+               status
+          FROM calendar_events
+         WHERE id = #{calendarEventId}
+           AND streamer_id = #{streamerId}
+    </select>
+
+    <select id="existsActive" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1
+              FROM broadcast_sessions
+             WHERE streamer_id = #{streamerId}
+               AND status IN ('PREPARING', 'LIVE')
+        )
+    </select>
+
+    <select id="insertSession" resultType="long" affectData="true" flushCache="true">
+        INSERT INTO broadcast_sessions (
+            streamer_id,
+            platform_account_id,
+            calendar_event_id,
+            title,
+            category,
+            language,
+            status,
+            started_at
+        ) VALUES (
+            #{session.streamerId},
+            #{session.platformAccountId},
+            #{session.calendarEventId},
+            #{session.title},
+            #{session.category},
+            #{session.language},
+            'PREPARING',
+            #{session.startedAt}
+        )
+        RETURNING id
+    </select>
+
+    <sql id="sessionColumns">
+        id,
+        streamer_id,
+        platform_account_id,
+        calendar_event_id,
+        title,
+        category,
+        language,
+        thumbnail_url,
+        vod_url,
+        status,
+        started_at,
+        ended_at,
+        created_at,
+        updated_at
+    </sql>
+
+    <select id="findByIdForUpdate"
+            resultType="com.example.laive.broadcast.session.repository.mybatis.BroadcastSessionRow">
+        SELECT <include refid="sessionColumns"/>
+          FROM broadcast_sessions
+         WHERE id = #{sessionId}
+           AND streamer_id = #{streamerId}
+         FOR UPDATE
+    </select>
+
+    <select id="findById"
+            resultType="com.example.laive.broadcast.session.repository.mybatis.BroadcastSessionRow">
+        SELECT <include refid="sessionColumns"/>
+          FROM broadcast_sessions
+         WHERE id = #{sessionId}
+    </select>
+
+    <update id="markLive">
+        UPDATE broadcast_sessions
+           SET status = 'LIVE'
+         WHERE id = #{sessionId}
+           AND status = 'PREPARING'
+    </update>
+
+    <update id="markEnded">
+        UPDATE broadcast_sessions
+           SET status = 'ENDED',
+               ended_at = #{endedAt}
+         WHERE id = #{sessionId}
+           AND status IN ('PREPARING', 'LIVE')
+    </update>
+
+    <update id="markFailed">
+        UPDATE broadcast_sessions
+           SET status = 'FAILED',
+               ended_at = #{failedAt}
+         WHERE id = #{sessionId}
+           AND status IN ('PREPARING', 'LIVE')
+    </update>
+
+    <update id="completeCalendarEvent">
+        UPDATE calendar_events
+           SET status = 'COMPLETED'
+         WHERE id = #{calendarEventId}
+           AND streamer_id = #{streamerId}
+           AND event_type = 'BROADCAST'
+           AND status = 'SCHEDULED'
+    </update>
+
+    <select id="createProcessingReport" resultType="long" affectData="true" flushCache="true">
+        INSERT INTO reports (session_id, status)
+        VALUES (#{sessionId}, 'PROCESSING')
+        ON CONFLICT (session_id) DO UPDATE
+            SET session_id = EXCLUDED.session_id
+        RETURNING id
+    </select>
+
+    <sql id="detailColumns">
+        s.id AS session_id,
+        s.platform_account_id,
+        s.calendar_event_id,
+        s.title,
+        s.category,
+        s.language,
+        s.thumbnail_url,
+        s.vod_url,
+        s.status,
+        s.started_at,
+        s.ended_at
+    </sql>
+
+    <select id="findCurrent"
+            resultType="com.example.laive.broadcast.session.domain.BroadcastSessionDetail">
+        SELECT <include refid="detailColumns"/>
+          FROM broadcast_sessions s
+         WHERE s.streamer_id = #{streamerId}
+           AND s.status IN ('PREPARING', 'LIVE')
+         ORDER BY s.started_at DESC, s.id DESC
+         LIMIT 1
+    </select>
+
+    <select id="findDetail"
+            resultType="com.example.laive.broadcast.session.domain.BroadcastSessionDetail">
+        SELECT <include refid="detailColumns"/>
+          FROM broadcast_sessions s
+         WHERE s.id = #{sessionId}
+           AND s.streamer_id = #{streamerId}
+    </select>
+
+    <select id="findPage"
+            resultType="com.example.laive.broadcast.session.domain.BroadcastSessionListItem">
+        SELECT s.id AS session_id,
+               s.title,
+               s.category,
+               s.thumbnail_url,
+               s.status,
+               s.started_at,
+               s.ended_at,
+               r.status AS report_status
+          FROM broadcast_sessions s
+          LEFT JOIN reports r ON r.session_id = s.id
+         WHERE s.streamer_id = #{streamerId}
+        <if test="status != null">
+           AND s.status = #{status}
+        </if>
+         ORDER BY s.started_at DESC, s.id DESC
+         LIMIT #{limit}
+        OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT count(*)
+          FROM broadcast_sessions
+         WHERE streamer_id = #{streamerId}
+        <if test="status != null">
+           AND status = #{status}
+        </if>
+    </select>
+
+    <select id="calculateStatistics"
+            resultType="com.example.laive.broadcast.session.domain.SessionStatistics">
+        SELECT (
+                   SELECT round(avg(viewer_count))::int
+                     FROM viewer_metrics
+                    WHERE session_id = #{sessionId}
+               ) AS average_viewers,
+               (
+                   SELECT max(viewer_count)
+                     FROM viewer_metrics
+                    WHERE session_id = #{sessionId}
+               ) AS peak_viewers,
+               (
+                   SELECT count(*)
+                     FROM chat_messages
+                    WHERE session_id = #{sessionId}
+               ) AS total_chat,
+               (
+                   SELECT round(avg(positive_ratio), 3)
+                     FROM sentiment_snapshots
+                    WHERE session_id = #{sessionId}
+               ) AS positive_ratio,
+               (
+                   SELECT round(avg(neutral_ratio), 3)
+                     FROM sentiment_snapshots
+                    WHERE session_id = #{sessionId}
+               ) AS neutral_ratio,
+               (
+                   SELECT round(avg(negative_ratio), 3)
+                     FROM sentiment_snapshots
+                    WHERE session_id = #{sessionId}
+               ) AS negative_ratio
+    </select>
+
+    <update id="updateReportStatistics">
+        UPDATE reports
+           SET avg_viewers = #{statistics.averageViewers},
+               peak_viewers = #{statistics.peakViewers},
+               total_chat = #{statistics.totalChat},
+               positive_ratio = #{statistics.positiveRatio},
+               neutral_ratio = #{statistics.neutralRatio},
+               negative_ratio = #{statistics.negativeRatio}
+         WHERE id = #{reportId}
+           AND status = 'PROCESSING'
+    </update>
+
+    <update id="markReportPartial">
+        UPDATE reports
+           SET status = 'PARTIAL',
+               generated_at = #{generatedAt}
+         WHERE id = #{reportId}
+           AND status = 'PROCESSING'
+    </update>
+
+    <update id="markReportFailed">
+        UPDATE reports
+           SET status = 'FAILED'
+         WHERE id = #{reportId}
+           AND status = 'PROCESSING'
+    </update>
+
+</mapper>
+

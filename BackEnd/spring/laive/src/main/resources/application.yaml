@@ -66,3 +66,22 @@ laive:
     token-encryption-key: "${PLATFORM_TOKEN_KEY:}"
     link-state-ttl: 5m
     access-token-refresh-threshold: 5m
+
+  broadcast-session:
+    # Redis Lock은 짧은 DB 트랜잭션만 감싸며 DB 제약이 최종 정합성을 보장한다.
+    lifecycle-lock-ttl: 10s
+    # 실제 수집기 Adapter는 종료 시각 이전의 지연 Batch를 이 기간 동안 Flush한다.
+    finalization-grace-period: 30s
+    # 종료된 실시간 콘솔 Stream은 재연결을 위해 잠시 유지한다.
+    stream-ttl-after-end: 30m
+    outbox:
+      poll-delay-ms: 500
+      batch-size: 50
+      lease: 30s
+      max-attempts: 8
+      max-backoff: 5m
+    ai:
+      # FastAPI와 Object Storage 준비 전에는 로컬 통계까지만 확정해 PARTIAL로 저장한다.
+      report-enabled: "${AI_REPORT_ENABLED:false}"
+      base-url: "${AI_BASE_URL:http://localhost:8000}"
+      service-token: "${AI_SERVICE_TOKEN:}"

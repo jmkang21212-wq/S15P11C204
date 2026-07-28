@@ -1,7 +1,7 @@
-package com.example.laive.auth.api;
+package com.example.laive.common.api;
 
 /**
- * 성공한 API 응답을 success/data 구조로 감싸는 공통 Envelope다.
+ * 모든 성공 응답을 API 명세의 success/data 구조로 감싼다.
  */
 public record ApiResponse<T>(boolean success, T data) {
 
@@ -9,3 +9,4 @@ public record ApiResponse<T>(boolean success, T data) {
         return new ApiResponse<>(true, data);
     }
 }
+
