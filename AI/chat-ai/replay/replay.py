@@ -20,12 +20,15 @@
 """
 import argparse
 import asyncio
+import bisect
 import datetime
 import glob
 import json
 import os
 import sys
 import time
+import traceback
+from collections import Counter
 
 # 이 PC의 Windows 인증서 저장소에 손상된 항목이 있어 ssl 기본 컨텍스트 생성이
 # 실패한다 (aiohttp가 import 시점에 생성). localhost 전용 서버라 TLS가 필요
@@ -77,9 +80,13 @@ def list_vods():
         first = None
         with open(path, encoding='utf-8') as f:
             for line in f:
-                if line.strip():
+                if not line.strip():
+                    continue
+                try:
                     first = json.loads(line)
                     break
+                except json.JSONDecodeError:
+                    continue     # 한 줄 깨졌다고 목록 전체가 죽으면 안 된다
         if first is None:
             continue
         rows.append({
@@ -109,7 +116,10 @@ def load_vod(video_no):
             line = line.strip()
             if not line:
                 continue
-            r = json.loads(line)
+            try:
+                r = json.loads(line)
+            except json.JSONDecodeError:
+                continue         # 잘린 줄 하나로 적재 전체가 실패하면 안 된다
             if meta is None:
                 meta = {
                     'streamer_id'    : r.get('_streamer_id', ''),
@@ -127,6 +137,11 @@ def load_vod(video_no):
                 r.get('messageTypeCode') or 1,
                 r.get('messageStatusType') or 'NORMAL',
             ))
+    # 이 가드 하나가 messages[0](ReplayState) · msgs[-1](replay_loop) ·
+    # meta["title"] 세 곳의 IndexError/TypeError를 한 번에 막는다.
+    if not messages:
+        raise SystemExit(f'videoNo {video_no}: 재생 가능한 메시지가 없습니다 ({path})')
+
     messages.sort(key=lambda m: m[0])
     log(f'적재: {len(messages):,}건 | {meta["title"][:40]}')
     return meta, messages
@@ -174,21 +189,50 @@ class ReplayState:
         first_pt, first_abs = messages[0][0], messages[0][1]
         self.session_start_ms = first_abs - first_pt
 
+        # current_viewers()용 단조 커서.
+        # messages는 적재 후 불변이고 pos_ms는 단조 증가하므로, 매번 전체를 훑지 않고
+        # 창의 양 끝만 앞으로 밀면 된다. 재생 전체에서 메시지당 진입 1회·이탈 1회다.
+        self._win_lo   = 0            # 창 시작 인덱스
+        self._win_hi   = 0            # 창 끝 인덱스 (exclusive)
+        self._win_uids = Counter()    # 창 안의 uid → 등장 횟수
+        self._vs_idx   = 0            # viewer_series 커서
+        self._last_pos = -1           # 되감기 감지용
+
     def current_viewers(self):
-        """현재 재생 위치의 시청자 수. (값, 합성여부)"""
+        """현재 재생 위치의 시청자 수. (값, 합성여부)
+
+        재생 프레임마다(100ms) 불리므로 전체 스캔을 하면 안 된다. 12만 건짜리
+        VOD에서는 그것만으로 재생이 사실상 진행되지 않는다.
+        pos_ms가 단조 증가한다는 성질을 이용해 커서만 앞으로 민다.
+        내부에 await가 없어 이벤트 루프 기준 원자적이므로 락은 필요 없다.
+        """
+        pos = self.pos_ms
+        if pos < self._last_pos:      # 되감기(현재 경로엔 없음) 대비
+            self._win_lo = self._win_hi = self._vs_idx = 0
+            self._win_uids.clear()
+        self._last_pos = pos
+
         if self.viewer_series:
-            target = self.session_start_ms + self.pos_ms
-            value = self.viewer_series[0][1]
-            for ts, v in self.viewer_series:
-                if ts <= target:
-                    value = v
-                else:
-                    break
-            return value, False
+            target = self.session_start_ms + pos
+            vs = self.viewer_series
+            while self._vs_idx + 1 < len(vs) and vs[self._vs_idx + 1][0] <= target:
+                self._vs_idx += 1
+            return vs[self._vs_idx][1], False
+
         # 합성: 최근 5분 유니크 채터 × 배수
-        lo = self.pos_ms - 5 * 60 * 1000
-        uids = {m[2] for m in self.messages if lo <= m[0] <= self.pos_ms}
-        return max(10, len(uids) * SYNTH_FACTOR), True
+        lo = pos - 5 * 60 * 1000
+        msgs = self.messages
+        while self._win_hi < len(msgs) and msgs[self._win_hi][0] <= pos:
+            self._win_uids[msgs[self._win_hi][2]] += 1
+            self._win_hi += 1
+        while self._win_lo < self._win_hi and msgs[self._win_lo][0] < lo:
+            uid = msgs[self._win_lo][2]
+            if self._win_uids[uid] <= 1:
+                del self._win_uids[uid]
+            else:
+                self._win_uids[uid] -= 1
+            self._win_lo += 1
+        return max(10, len(self._win_uids) * SYNTH_FACTOR), True
 
 
 # ---------------------------------------------------------------- 프레임 생성
@@ -248,8 +292,10 @@ def make_frame(state, cmd, body):
 # ---------------------------------------------------------------- 재생 루프
 
 async def broadcast(state, text):
+    # send_str에서 await하는 사이 다른 태스크가 접속/해제하며 clients를 건드린다.
+    # 원본을 그대로 순회하면 "Set changed size during iteration"으로 서버가 죽는다.
     dead = []
-    for ws in state.clients:
+    for ws in list(state.clients):
         try:
             await ws.send_str(text)
         except Exception:
@@ -280,6 +326,11 @@ async def replay_loop(state):
             delay = target - time.monotonic()
             if delay > 0:
                 await asyncio.sleep(delay)
+        else:
+            # 최대속에는 sleep이 없다. 클라이언트가 없으면 broadcast의 루프 본문도
+            # 안 돌아 await가 한 번도 발생하지 않고, 이벤트 루프가 굶어서
+            # HTTP 폴링과 신규 접속이 재생 내내 멈춘다.
+            await asyncio.sleep(0)
         state.pos_ms = pt
 
         # 같은 100ms 창의 메시지를 채팅/후원으로 나눠 배칭
@@ -316,6 +367,21 @@ async def ping_loop(state):
         await broadcast(state, json.dumps({'ver': '2', 'cmd': CHZZK_CHAT_CMD['ping']}))
 
 
+async def _supervise(name, coro):
+    """루프 하나가 죽어도 서버 전체는 내리지 않는다.
+
+    replay_loop의 예외가 run_server를 타고 올라가면 프로세스가 종료되고
+    접속 중인 백엔드가 전부 끊긴다. 실제로 그렇게 죽은 적이 있다.
+    """
+    try:
+        await coro
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        log(f'{name} 중단 — 서버는 유지합니다')
+        traceback.print_exc()
+
+
 # ---------------------------------------------------------------- 핸들러
 
 async def ws_handler(request):
@@ -330,8 +396,10 @@ async def ws_handler(request):
                 continue
             try:
                 data = json.loads(msg.data)
-            except json.JSONDecodeError:
+            except ValueError:        # JSONDecodeError 포함
                 continue
+            if not isinstance(data, dict):
+                continue              # json.loads('123')은 성공하지만 dict가 아니다
             cmd = data.get('cmd')
 
             if cmd == CHZZK_CHAT_CMD['connect']:
@@ -346,7 +414,12 @@ async def ws_handler(request):
                 state.started.set()          # 첫 클라이언트 접속 시 재생 시작
 
             elif cmd == CHZZK_CHAT_CMD['request_recent_chat']:
-                recent = [m for m in state.messages if m[0] <= state.pos_ms][-50:]
+                # 전체를 훑어 뒤 50개만 쓰면 요청마다 수십만 건을 복사한다.
+                # messages는 m[0] 기준 정렬돼 있으니 경계만 이분 탐색한다.
+                # (inf는 m[0]이 같을 때 뒤쪽 경계를 잡기 위한 보초값)
+                end = bisect.bisect_right(state.messages,
+                                          (state.pos_ms, float('inf')))
+                recent = state.messages[max(0, end - 50):end]
                 await ws.send_str(json.dumps({
                     'svcid': 'game', 'ver': '2',
                     'cmd': 15101, 'tid': data.get('tid', 2),
@@ -418,8 +491,10 @@ async def run_server(args):
     else:
         log('첫 클라이언트 접속을 기다리는 중... (--autostart 로 즉시 시작 가능)')
 
-    asyncio.create_task(ping_loop(state))
-    await replay_loop(state)
+    # 태스크 참조를 붙들어 둔다. 버리면 GC 대상이 될 수 있다(asyncio 알려진 함정).
+    ping_task = asyncio.create_task(_supervise('ping_loop', ping_loop(state)))
+    await _supervise('replay_loop', replay_loop(state))
+    del ping_task
 
     # 재생이 끝나도 CLOSE 상태 응답을 위해 서버 유지
     while True:
