@@ -32,7 +32,15 @@ Authorization: Bearer <CHATAI_TOKEN>
 Content-Type: application/json
 ```
 
-음성 쪽과 같은 고정 토큰 방식. 값은 협의해서 정하고 양쪽 환경변수로 주입한다.
+음성 쪽과 같은 고정 토큰(사전 공유) 방식. 값은 협의해서 정하고 양쪽 환경변수로
+주입한다 (`openssl rand -hex 32` 등으로 생성, git 커밋 금지).
+
+- **GET /health를 제외한 모든 엔드포인트**(/classify, /aggregate, /ingest, /summary,
+  DELETE)에 적용된다. 불일치·누락 시 401
+- AI 서버의 `CHATAI_TOKEN`이 **비어 있으면 검사하지 않는다** — 로컬 개발용.
+  배포 서버에는 반드시 설정할 것
+- Spring은 HTTP 클라이언트에 기본 헤더로 한 번만 등록하면 된다:
+  `.defaultHeader("Authorization", "Bearer " + token)`
 
 ---
 

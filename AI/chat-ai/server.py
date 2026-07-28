@@ -97,7 +97,7 @@ def health():
             'quantized': USE_INT8, 'labels': LABELS, 'redis': redis_ok}
 
 
-@app.post('/classify')
+@app.post('/classify', dependencies=[Depends(require_token)])
 def classify(req: ClassifyRequest):
     """
     개별 분류. 입력 순서를 그대로 유지해 반환한다.
@@ -111,7 +111,7 @@ def classify(req: ClassifyRequest):
     return {'count': len(res), 'results': res}
 
 
-@app.post('/aggregate')
+@app.post('/aggregate', dependencies=[Depends(require_token)])
 def aggregate(req: AggregateRequest):
     """
     여론 분포 집계 (단발성 — 임의 텍스트 묶음의 분포가 필요할 때).
