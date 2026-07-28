@@ -11,7 +11,9 @@ export const PATHS = {
   sessionReportDetail: '/session-report/:sessionId',
   clips: '/clips',
   growth: '/growth',
-  portfolio: '/portfolio',
+  portfolio: '/portfolio', // 편집 화면(GNB 메뉴) — 공개 뷰는 publicPortfolio
+  /** 인증 없이 보는 공개 포트폴리오. SC-11 비즈니스 매칭에서도 이 경로로 넘어온다. */
+  publicPortfolio: '/p/:publicSlug',
   matching: '/matching',
   console: '/console', // 방송 콘솔 진입(GNB 메뉴) — 실제 세션은 consoleSession로 라우팅
   consoleSession: '/console/:sessionId',

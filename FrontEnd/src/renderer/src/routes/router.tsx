@@ -13,6 +13,8 @@ import OverlayPage from '@renderer/pages/console/OverlayPage'
 import ClipsPage from '@renderer/pages/clips/ClipsPage'
 import GrowthReportPage from '@renderer/pages/growth/GrowthReportPage'
 import SchedulePage from '@renderer/pages/schedule/SchedulePage'
+import PortfolioEditPage from '@renderer/pages/portfolio/PortfolioEditPage'
+import PortfolioPublicPage from '@renderer/pages/portfolio/PortfolioPublicPage'
 import NotFoundPage from '@renderer/pages/NotFoundPage'
 
 /**
@@ -35,6 +37,8 @@ export const router = createHashRouter([
   // ── 별도 창(레이아웃 없음): 미니 모드 · OBS 오버레이 ──
   { path: PATHS.consoleMini, element: <MiniModePage /> },
   { path: PATHS.overlay, element: <OverlayPage /> },
+  // ── 공개 뷰: 인증도 GNB도 없다 (design.md §5.2). 브라우저 크롬은 페이지가 직접 씌운다 ──
+  { path: PATHS.publicPortfolio, element: <PortfolioPublicPage /> },
 
   // ── 앱 화면: GNB 레이아웃 ──
   {
@@ -45,7 +49,13 @@ export const router = createHashRouter([
       { path: PATHS.sessionReportDetail, element: <SessionReportDetailPage /> },
       { path: PATHS.clips, element: <ClipsPage /> },
       { path: PATHS.growth, element: <GrowthReportPage /> },
+<<<<<<< FrontEnd/src/renderer/src/routes/router.tsx
       { path: PATHS.schedule, element: <SchedulePage /> },
+=======
+      { path: PATHS.portfolio, element: <PortfolioEditPage /> },
+      // 각 담당자가 자기 화면을 여기에 한 줄씩 추가:
+      // { path: PATHS.schedule, element: <SchedulePage /> },
+>>>>>>> FrontEnd/src/renderer/src/routes/router.tsx
 
       // 아직 구현되지 않은 GNB 메뉴를 받는다. GNB는 남겨 두고 본문만 안내로 채운다.
       // 담당자가 위에 라우트를 추가하면 자연히 대체된다.
