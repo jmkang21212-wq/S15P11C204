@@ -186,11 +186,16 @@ AI 서버가 느리거나 죽었을 때 **채팅 파이프라인이 같이 멈�
 프론트 버튼은 성공 응답의 `nextAvailableAt`으로 **비활성화 + 카운트다운**을
 구현하면 사용자가 거절을 볼 일 자체가 없다.
 
-### 4. AI 서버 재시작 직후 3분은 지표가 작다
+### 4. 윈도우는 팀 Redis(DB 1)에 있다 — 재시작해도 지표가 이어진다
 
-윈도우가 인메모리라 재시작하면 비어 있고, **3분에 걸쳐 자연 회복**된다.
-이 구간의 `engagement`·`distribution`은 실제보다 작게 나온다. 하이라이트 판정
-등에 쓸 때 급락으로 오인하지 말 것 (`chatCount`가 평소보다 갑자기 작으면 회복 중).
+윈도우 저장소는 `BackEnd/spring/laive/compose.yaml`의 **팀 Redis를 공유**한다.
+Spring이 DB 0을 쓰고 chat-ai는 **DB 1**을 쓰므로 키가 섞이지 않는다
+(RedisInsight :5540에서 확인 가능, 키 접두사 `chat:`).
+
+- AI 서버를 재배포/재시작해도 방송 중 지표가 끊기지 않는다
+- 단, **Redis 자체가 내려가면** ingest가 503을 반환한다 → '반드시 볼 것 1'대로
+  그 배치는 건너뛰면 된다 (원본은 Spring에 있으므로 유실 없음)
+- 방송별 키는 TTL(5~10분)이 있어 DELETE를 못 받아도 스스로 사라진다
 
 ### 5. 응답 코드 의미
 
@@ -208,6 +213,7 @@ AI 서버가 느리거나 죽었을 때 **채팅 파이프라인이 같이 멈�
 ```
 CHATAI_TOKEN=<협의한 토큰>          # 비우면 인증 검사 안 함 (로컬 개발용)
 CHATAI_MODEL_DIR=models/kcelectra-chat-8emo-onnx
+CHATAI_REDIS_URL=redis://127.0.0.1:6379/1   # 팀 Redis의 DB 1 (기본값)
 GMS_KEY=<SSAFY GMS 키>              # /summary 용
 ```
 
@@ -215,8 +221,11 @@ GMS_KEY=<SSAFY GMS 키>              # /summary 용
 
 ```
 GET /health
-{ "status": "ok", "model": "...", "labels": [...8종...] }
+{ "status": "ok", "model": "...", "labels": [...8종...], "redis": true }
 ```
+
+`redis: false`면 /ingest가 503을 낸다 — Redis 컨테이너부터 확인할 것
+(`cd BackEnd/spring/laive && docker compose up -d redis`).
 
 ## 파라미터 기본값 (협의로 변경 가능)
 
