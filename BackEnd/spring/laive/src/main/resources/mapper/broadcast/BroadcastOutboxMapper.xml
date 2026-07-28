@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.laive.broadcast.session.event.mybatis.BroadcastOutboxMapper">
+
+    <insert id="insert">
+        INSERT INTO broadcast_session_outbox (
+            event_id,
+            aggregate_id,
+            event_type,
+            schema_version,
+            deduplication_key,
+            payload,
+            status,
+            attempts,
+            available_at
+        ) VALUES (
+            #{eventId},
+            #{aggregateId},
+            #{eventType},
+            1,
+            #{deduplicationKey},
+            CAST(#{payload} AS jsonb),
+            'PENDING',
+            0,
+            #{availableAt}
+        )
+        ON CONFLICT (deduplication_key) DO NOTHING
+    </insert>
+
+    <select id="claim"
+            resultType="com.example.laive.broadcast.session.event.BroadcastOutboxEvent"
+            affectData="true"
+            flushCache="true">
+        WITH candidates AS (
+            SELECT event_id
+              FROM broadcast_session_outbox
+             WHERE (
+                       status = 'PENDING'
+                       AND available_at &lt;= #{now}
+                   )
+                OR (
+                       status = 'PROCESSING'
+                       AND locked_until &lt;= #{now}
+                   )
+             ORDER BY created_at
+             FOR UPDATE SKIP LOCKED
+             LIMIT #{limit}
+        )
+        UPDATE broadcast_session_outbox event
+           SET status = 'PROCESSING',
+               locked_by = #{workerId},
+               locked_until = #{lockedUntil}
+          FROM candidates
+         WHERE event.event_id = candidates.event_id
+        RETURNING event.event_id,
+                  event.aggregate_id,
+                  event.event_type,
+                  event.schema_version,
+                  event.deduplication_key,
+                  event.payload::text AS payload,
+                  event.attempts,
+                  event.created_at
+    </select>
+
+    <update id="markPublished">
+        UPDATE broadcast_session_outbox
+           SET status = 'PUBLISHED',
+               published_at = #{publishedAt},
+               locked_until = NULL,
+               locked_by = NULL,
+               last_error = NULL
+         WHERE event_id = #{eventId}
+           AND status = 'PROCESSING'
+    </update>
+
+    <update id="scheduleRetry">
+        UPDATE broadcast_session_outbox
+           SET status = 'PENDING',
+               attempts = #{attempts},
+               available_at = #{availableAt},
+               locked_until = NULL,
+               locked_by = NULL,
+               last_error = #{lastError}
+         WHERE event_id = #{eventId}
+    </update>
+
+    <update id="markDead">
+        UPDATE broadcast_session_outbox
+           SET status = 'DEAD',
+               attempts = #{attempts},
+               locked_until = NULL,
+               locked_by = NULL,
+               last_error = #{lastError}
+         WHERE event_id = #{eventId}
+    </update>
+
+</mapper>
+
