@@ -236,6 +236,7 @@ ERD의 관계와 API의 단일 리소스 식별 규칙을 실제 DDL에서도 �
 | Platform | GET | `/platform-accounts` | 플랫폼 연동 목록 |
 | Platform | GET | `/platform-accounts/{platform}/authorize` | 플랫폼 OAuth 시작 |
 | Platform | GET | `/platform-accounts/{platform}/callback` | 플랫폼 OAuth Callback |
+| Platform | DELETE | `/platform-accounts/{platformAccountId}` | 플랫폼 연동 해제 |
 | Calendar | GET | `/calendar-events` | 기간별 일정 목록 |
 | Calendar | POST | `/calendar-events` | 일정 생성 |
 | Calendar | GET | `/calendar-events/{calendarEventId}` | 일정 상세 |
@@ -487,12 +488,32 @@ Refresh Token은 `HttpOnly` 쿠키로 전달한다.
 
 | Method | Endpoint | 설명 |
 | --- | --- | --- |
-| GET | `/platform-accounts/{platform}/authorize?returnUri={returnUri}` | 플랫폼 OAuth 화면으로 Redirect |
+| GET | `/platform-accounts/{platform}/authorize?returnUri={returnUri}` | 플랫폼 인증 URL 반환 |
 | GET | `/platform-accounts/{platform}/callback` | 토큰 저장 후 앱으로 Redirect |
+| DELETE | `/platform-accounts/{platformAccountId}` | 연동 해제 (`204`) |
 
 `platform`은 `CHZZK` 또는 `SOOP`이다.
 
-Access Token과 Refresh Token은 `PLATFORM_ACCOUNTS`에 암호화하여 저장하며 외부 API 응답에 포함하지 않는다. 토큰 만료 시 동일 authorize API로 재연동한다.
+authorize는 Redirect가 아니라 인증 URL을 본문으로 반환한다. 플랫폼 연동은 로그인한 회원에 계정을 붙이는 동작이라 Access Token이 필요한데, 브라우저 Redirect에는 인증 헤더를 실을 수 없기 때문이다. 클라이언트는 받은 URL을 외부 브라우저로 연다.
+
+```json
+{
+  "success": true,
+  "data": {
+    "authorizeUrl": "https://chzzk.naver.com/account-interlock?clientId=...&redirectUri=...&state=..."
+  }
+}
+```
+
+callback은 인증 없이 열려 있으며, 연동 주체는 요청 파라미터가 아니라 authorize 단계에서 발급한 일회용 `state`에 묶인 회원으로만 결정한다. 처리 후에는 `returnUri`로 Redirect한다.
+
+- 성공: `{returnUri}?platform=CHZZK&status=connected`
+- 실패: `{returnUri}?error={오류 코드}` (예: `PLATFORM_ALREADY_LINKED`)
+- `state`가 만료·위조되어 복귀 주소를 알 수 없으면 공통 오류 Envelope로 `400`을 반환한다.
+
+Access Token과 Refresh Token은 `PLATFORM_ACCOUNTS`에 암호화하여 저장하며 외부 API 응답에 포함하지 않는다. 동일 채널을 다른 회원이 이미 연동했다면 `409 PLATFORM_ALREADY_LINKED`이며, 같은 회원의 재연동은 기존 행의 토큰을 갱신한다.
+
+치지직 Access Token은 1일, Refresh Token은 30일 유효하고 Refresh Token은 1회용이다. 갱신에 성공하는 즉시 이전 토큰이 무효화되므로 서버는 만료 임박 시점에만 갱신한다. 갱신이 불가능하면 연동 상태를 `REAUTH_REQUIRED`로 바꾸고 `409 PLATFORM_REAUTH_REQUIRED`를 반환하며, 사용자는 동일 authorize API로 재연동한다.
 
 ---
 
