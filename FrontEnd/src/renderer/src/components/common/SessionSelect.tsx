@@ -6,27 +6,36 @@ import {
   SelectValue
 } from '@renderer/components/ui/select'
 import { formatDateTime } from '@renderer/lib/format'
+import { cn } from '@renderer/lib/utils'
 import type { EndedSessionSummary } from '@renderer/types/report'
+
+/**
+ * 종료된 방송 세션 선택기 — SC-07 클립과 SC-10 포트폴리오가 공유한다.
+ *
+ * 하이라이트는 세션별로만 조회할 수 있어(명세서 §11.4), 클립 후보를 고르려면
+ * 두 화면 모두 먼저 세션을 골라야 한다.
+ */
 
 interface SessionSelectProps {
   sessions: EndedSessionSummary[]
   /** 목록에 없는 세션(예: URL에 잘못된 sessionId)이면 null을 넘겨 placeholder를 띄운다. */
   value: number | null
   onChange: (sessionId: number) => void
+  className?: string
 }
 
-/** 클립을 볼 방송 세션을 고른다. 종료된 세션만 들어온다. */
 export default function SessionSelect({
   sessions,
   value,
-  onChange
+  onChange,
+  className
 }: SessionSelectProps): React.JSX.Element {
   return (
     <Select
       value={value === null ? undefined : String(value)}
       onValueChange={(next) => onChange(Number(next))}
     >
-      <SelectTrigger className="w-[320px]" aria-label="방송 세션 선택">
+      <SelectTrigger className={cn('w-[320px]', className)} aria-label="방송 세션 선택">
         <SelectValue placeholder="방송을 선택하세요" />
       </SelectTrigger>
       <SelectContent>
