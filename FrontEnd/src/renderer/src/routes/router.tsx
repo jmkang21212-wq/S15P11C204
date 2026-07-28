@@ -49,13 +49,8 @@ export const router = createHashRouter([
       { path: PATHS.sessionReportDetail, element: <SessionReportDetailPage /> },
       { path: PATHS.clips, element: <ClipsPage /> },
       { path: PATHS.growth, element: <GrowthReportPage /> },
-<<<<<<< FrontEnd/src/renderer/src/routes/router.tsx
       { path: PATHS.schedule, element: <SchedulePage /> },
-=======
       { path: PATHS.portfolio, element: <PortfolioEditPage /> },
-      // 각 담당자가 자기 화면을 여기에 한 줄씩 추가:
-      // { path: PATHS.schedule, element: <SchedulePage /> },
->>>>>>> FrontEnd/src/renderer/src/routes/router.tsx
 
       // 아직 구현되지 않은 GNB 메뉴를 받는다. GNB는 남겨 두고 본문만 안내로 채운다.
       // 담당자가 위에 라우트를 추가하면 자연히 대체된다.
