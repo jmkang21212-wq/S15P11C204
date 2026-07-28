@@ -16,8 +16,10 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@SpringBootTest(properties =
-        "laive.auth.jwt.secret=test-only-secret-key-with-at-least-32-bytes")
+@SpringBootTest(properties = {
+        "laive.auth.jwt.secret=test-only-secret-key-with-at-least-32-bytes",
+        "laive.platform.token-encryption-key=dGVzdC1rZXktMzItYnl0ZXMtZm9yLXVuaXQtdGVzdCE="
+})
 @Transactional
 class AuthInfrastructureIntegrationTest {
 

@@ -7,6 +7,7 @@ import com.example.laive.auth.oauth.NaverProfile;
 import com.example.laive.auth.service.AuthService;
 import com.example.laive.auth.service.OAuthStateService;
 import com.example.laive.auth.service.RefreshTokenService;
+import com.example.laive.common.api.ApiResponse;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;

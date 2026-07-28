@@ -1,7 +1,7 @@
-package com.example.laive.auth.api;
+package com.example.laive.common.api;
 
 /**
- * 실패한 API 응답을 success/error 구조로 감싸는 공통 Envelope다.
+ * 모든 실패 응답을 API 명세의 success/error 구조로 감싼다.
  */
 public record ApiErrorResponse(boolean success, ErrorBody error) {
 
@@ -12,3 +12,4 @@ public record ApiErrorResponse(boolean success, ErrorBody error) {
     public record ErrorBody(String code, String message) {
     }
 }
+

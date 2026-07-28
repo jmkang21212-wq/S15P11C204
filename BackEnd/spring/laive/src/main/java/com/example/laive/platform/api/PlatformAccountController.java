@@ -1,6 +1,6 @@
 package com.example.laive.platform.api;
 
-import com.example.laive.auth.api.ApiResponse;
+import com.example.laive.common.api.ApiResponse;
 import com.example.laive.platform.service.PlatformAccountService;
 import com.example.laive.platform.service.PlatformAccountService.CompletedLink;
 import org.springframework.http.HttpStatus;
