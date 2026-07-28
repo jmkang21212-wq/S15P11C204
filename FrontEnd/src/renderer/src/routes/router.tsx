@@ -7,6 +7,7 @@ import PlatformConnectPage from '@renderer/pages/auth/PlatformConnectPage'
 import DashboardPage from '@renderer/pages/dashboard/DashboardPage'
 import SessionReportListPage from '@renderer/pages/report/SessionReportListPage'
 import SessionReportDetailPage from '@renderer/pages/report/SessionReportDetailPage'
+import ClipsPage from '@renderer/pages/clips/ClipsPage'
 import NotFoundPage from '@renderer/pages/NotFoundPage'
 
 /**
@@ -33,6 +34,7 @@ export const router = createHashRouter([
       { path: PATHS.dashboard, element: <DashboardPage /> },
       { path: PATHS.sessionReport, element: <SessionReportListPage /> },
       { path: PATHS.sessionReportDetail, element: <SessionReportDetailPage /> },
+      { path: PATHS.clips, element: <ClipsPage /> },
       // 각 담당자가 자기 화면을 여기에 한 줄씩 추가:
       // { path: PATHS.schedule, element: <SchedulePage /> },
 
