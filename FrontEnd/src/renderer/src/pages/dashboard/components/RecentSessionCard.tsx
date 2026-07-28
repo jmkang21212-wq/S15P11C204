@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { Card } from '@renderer/components/ui/card'
 import EmptyState from '@renderer/components/common/EmptyState'
 import { PATHS } from '@renderer/routes/paths'
-import { formatNumber, formatMonthDay } from '@renderer/lib/format'
+import { formatCount, formatMonthDay } from '@renderer/lib/format'
 import type { RecentSession } from '@renderer/types/dashboard'
 
 interface RecentSessionCardProps {
@@ -27,13 +27,13 @@ export default function RecentSessionCard({ session }: RecentSessionCardProps): 
           <div className="mt-3 flex gap-6">
             <div>
               <div className="font-mono text-2xl font-extrabold text-primary">
-                {formatNumber(session.peakViewers)}
+                {formatCount(session.peakViewers)}
               </div>
               <div className="text-xs text-muted-foreground">피크 시청자</div>
             </div>
             <div>
               <div className="font-mono text-2xl font-extrabold">
-                {formatNumber(session.avgViewers)}
+                {formatCount(session.avgViewers)}
               </div>
               <div className="text-xs text-muted-foreground">평균 시청자</div>
             </div>

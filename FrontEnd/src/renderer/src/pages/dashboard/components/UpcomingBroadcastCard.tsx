@@ -4,7 +4,7 @@ import { Card } from '@renderer/components/ui/card'
 import { Button } from '@renderer/components/ui/button'
 import EmptyState from '@renderer/components/common/EmptyState'
 import { PATHS } from '@renderer/routes/paths'
-import { formatClock } from '@renderer/lib/format'
+import { formatTime } from '@renderer/lib/format'
 import type { UpcomingBroadcast } from '@renderer/types/dashboard'
 
 interface UpcomingBroadcastCardProps {
@@ -20,7 +20,7 @@ export default function UpcomingBroadcastCard({
         <span className="text-xs font-semibold text-muted-foreground">다음 방송</span>
         {broadcast && (
           <span className="font-mono text-xs text-muted-foreground">
-            {formatClock(broadcast.startAt)}
+            {formatTime(broadcast.startAt)}
           </span>
         )}
       </div>

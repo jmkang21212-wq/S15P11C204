@@ -1,0 +1,12 @@
+# 모델은 레포에 넣지 않는다 (fp32 511MB / int8 129MB)
+# python fetch_model.py 로 받을 것
+models/
+
+# 리플레이용 채팅 데이터 — uid·닉네임이 든 개인정보. 절대 커밋 금지
+data/
+*.jsonl
+*.duckdb
+
+__pycache__/
+*.pyc
+.env

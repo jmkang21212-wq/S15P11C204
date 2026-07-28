@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { Card } from '@renderer/components/ui/card'
 import EmptyState from '@renderer/components/common/EmptyState'
 import { PATHS } from '@renderer/routes/paths'
-import { formatNumber, formatPercent, formatMonthDay } from '@renderer/lib/format'
+import { formatCount, formatPercent, formatMonthDay } from '@renderer/lib/format'
 import { cn } from '@renderer/lib/utils'
 import type { WeeklyMetrics } from '@renderer/types/dashboard'
 
@@ -38,7 +38,7 @@ export default function WeeklyMetricsCard({ metrics }: WeeklyMetricsCardProps): 
               <div className="text-xs text-muted-foreground">평균 시청자</div>
               <div className="flex items-baseline gap-1.5">
                 <span className="font-mono text-xl font-extrabold">
-                  {formatNumber(metrics.avgViewers)}
+                  {formatCount(metrics.avgViewers)}
                 </span>
                 <ChangeBadge rate={metrics.avgViewersChangeRate} />
               </div>
@@ -47,7 +47,7 @@ export default function WeeklyMetricsCard({ metrics }: WeeklyMetricsCardProps): 
               <div className="text-xs text-muted-foreground">채팅 수</div>
               <div className="flex items-baseline gap-1.5">
                 <span className="font-mono text-xl font-extrabold">
-                  {formatNumber(metrics.totalChat)}
+                  {formatCount(metrics.totalChat)}
                 </span>
                 <ChangeBadge rate={metrics.totalChatChangeRate} />
               </div>

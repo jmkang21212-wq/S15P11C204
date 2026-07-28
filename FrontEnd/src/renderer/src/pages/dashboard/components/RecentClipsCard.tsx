@@ -3,7 +3,7 @@ import { Play } from 'lucide-react'
 import { Card } from '@renderer/components/ui/card'
 import EmptyState from '@renderer/components/common/EmptyState'
 import { PATHS } from '@renderer/routes/paths'
-import { formatDuration } from '@renderer/lib/format'
+import { formatMs } from '@renderer/lib/format'
 import type { RecentHighlight } from '@renderer/types/dashboard'
 
 interface RecentClipsCardProps {
@@ -33,7 +33,7 @@ export default function RecentClipsCard({ highlights }: RecentClipsCardProps): R
                   <Play className="size-3.5" aria-hidden />
                 </span>
                 <span className="absolute right-1.5 bottom-1.5 rounded bg-black/65 px-1.5 py-0.5 font-mono text-[10px] text-white">
-                  {formatDuration(clip.durationMs)}
+                  {formatMs(clip.durationMs)}
                 </span>
               </div>
             </div>
