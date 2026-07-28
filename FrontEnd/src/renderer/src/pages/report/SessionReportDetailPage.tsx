@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@renderer/components/u
 import { Skeleton } from '@renderer/components/ui/skeleton'
 import { ErrorState } from '@renderer/components/common/StateView'
 import ReportHeader from './components/ReportHeader'
-import MetricCard, { MetricCardSkeleton } from './components/MetricCard'
+import MetricCard, { MetricCardSkeleton } from '@renderer/components/common/MetricCard'
 import ViewerTimelineChart from './components/ViewerTimelineChart'
 import SentimentBreakdown from './components/SentimentBreakdown'
 import InsightList from './components/InsightList'
@@ -13,6 +13,7 @@ import HighlightList from './components/HighlightList'
 import { PartialSummaryNotice, ReportProcessingCard } from './components/ReportStatusNotice'
 import { fetchSessionReport, REPORT_NOT_FOUND } from '@renderer/api/sessionReport'
 import { useAsyncData } from '@renderer/hooks/useAsyncData'
+import { openExternal } from '@renderer/lib/desktopBridge'
 import { formatCount, formatPercent } from '@renderer/lib/format'
 import { PATHS } from '@renderer/routes/paths'
 import { isProcessing } from '@renderer/types/report'
@@ -54,9 +55,12 @@ export default function SessionReportDetailPage(): React.JSX.Element {
   const goBack = (): void => {
     navigate(PATHS.sessionReport)
   }
+  /** SC-07 클립 화면으로. 보고 있던 세션을 그대로 물고 간다. */
   const goClips = (): void => {
-    navigate(PATHS.clips)
+    navigate(`${PATHS.clips}?sessionId=${numericSessionId}`)
   }
+  /** 클립을 기본 브라우저로 연다. */
+  const playClip = (clipUrl: string): void => openExternal(clipUrl)
 
   if (loading) {
     return (
@@ -192,7 +196,7 @@ export default function SessionReportDetailPage(): React.JSX.Element {
 
         <aside className="flex flex-col gap-6">
           <SentimentBreakdown metrics={metrics} />
-          <HighlightList highlights={highlights} onOpenClip={goClips} />
+          <HighlightList highlights={highlights} onPlayClip={playClip} />
         </aside>
       </div>
     </div>

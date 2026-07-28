@@ -11,9 +11,10 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 
 from app.audio.segmenter import VadSegmenter
-from app.config import CHUNK, SAMPLE_RATE
+from app.config import CHUNK, PROMISE_ENABLED, SAMPLE_RATE
 from app.detect.dictionary import DictionaryMatcher
 from app.detect.llm_judge import LLMJudge, RollingContext
+from app.detect.promise import PromiseExtractor
 from app.sink.spring import SpringSink
 from app.stt.groq_stt import GroqSTT
 
@@ -22,6 +23,7 @@ log = logging.getLogger(__name__)
 _matcher = DictionaryMatcher()
 _stt: Optional[GroqSTT] = None
 _judge: Optional[LLMJudge] = None
+_promise: Optional[PromiseExtractor] = None
 _spring: Optional[SpringSink] = None
 _registry: "SessionRegistry"
 _loop: Optional[asyncio.AbstractEventLoop] = None
@@ -148,6 +150,11 @@ def _dispatch_transcripts() -> None:
             # 세션이 없으면 문맥을 만들 수 없어 판정을 건너뛴다.
             _judge.submit(tr, context=session.context.snapshot(before_ts=tr.start_ts))
 
+        # 약속 추적은 위험 판정과 독립이다. 욕설이 섞인 발화에도 약속이 있을 수 있고,
+        # 반대로 멀쩡한 발화 대부분은 약속이 아니다. 게이트가 안에서 걸러낸다.
+        if _promise is not None and session is not None:
+            _promise.submit(tr, context=session.context.snapshot(before_ts=tr.start_ts))
+
 
 def _dispatch_verdicts() -> None:
     for v in _judge.results():
@@ -174,9 +181,30 @@ def _dispatch_verdicts() -> None:
         })
 
 
+def _dispatch_promises() -> None:
+    for p in _promise.results():
+        if _spring is not None:
+            _spring.send_promise(p)
+
+        session = _registry.get(p.session_id)
+        if session is None:
+            continue
+        session.push({
+            "type": "promise",
+            "seq": p.seq,
+            "content": p.content,
+            "text": p.raw_text,
+            "deadline_text": p.deadline_text,
+            "deadline_at": p.deadline_at,
+            "condition": p.condition,
+            "confidence": round(p.confidence, 3),
+            "spoken_at": p.spoken_at,
+        })
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _stt, _judge, _loop, _spring
+    global _stt, _judge, _promise, _loop, _spring
     _loop = asyncio.get_running_loop()
     _spring = SpringSink().start()
     _stt = GroqSTT().start()
@@ -188,12 +216,21 @@ async def lifespan(app: FastAPI):
                          name="dispatch-llm").start()
     except RuntimeError as e:
         log.warning("LLM 판정 비활성화: %s", e)
+    if PROMISE_ENABLED:
+        try:
+            _promise = PromiseExtractor().start()
+            threading.Thread(target=_dispatch_promises, daemon=True,
+                             name="dispatch-promise").start()
+        except RuntimeError as e:
+            log.warning("약속 추적 비활성화: %s", e)
     log.info("준비 완료 (사전 %d개 표기)", _matcher.size)
     yield
     if _stt is not None:
         _stt.stop()
     if _judge is not None:
         _judge.stop()
+    if _promise is not None:
+        _promise.stop()
     if _spring is not None:
         _spring.stop()  # 배치에 남은 전사까지 마저 보낸다
 
@@ -205,6 +242,7 @@ app = FastAPI(title="LAIVE 실시간 위험 발언 감지", lifespan=lifespan)
 async def health() -> dict:
     return {"status": "ok", "dictionary": _matcher.size,
             "llm": _judge is not None,
+            "promise": _promise is not None,
             "spring": _spring is not None and _spring.enabled}
 
 
@@ -255,6 +293,8 @@ async def ws_audio(websocket: WebSocket) -> None:
             _stt.submit(last)
         sender.cancel()
         _registry.remove(session_id)
+        if _promise is not None:
+            _promise.forget(session_id)
         log.info("세션 종료 %s", session_id)
 
 

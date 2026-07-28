@@ -56,8 +56,13 @@ export interface ReportHighlight {
   reportSegmentId: number
   startMs: number
   endMs: number
-  clipUrl: string
-  thumbnailUrl: string
+  /**
+   * 클립 생성 전이거나 생성에 실패하면 null (명세서 §1.5 nullable 표).
+   * 응답에 둘을 구분할 상태 필드가 없어 UI는 "생성 중"으로만 표시한다.
+   * TODO: 백엔드에 clipStatus 같은 상태 필드 추가 협의
+   */
+  clipUrl: string | null
+  thumbnailUrl: string | null
 }
 
 export interface SessionReport {

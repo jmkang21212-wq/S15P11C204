@@ -1,10 +1,14 @@
+- 제목 : feat(지라 코드): 기능명
+  ex) feat(지라 코드): login
+  (확인 후 지워주세요)
+
 ## Part
 
 - [ ] FE
 
 - [ ] BE
 
-- [ ] Other
+- [ ] AI
 
   <br/>
 
