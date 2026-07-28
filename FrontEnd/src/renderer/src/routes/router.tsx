@@ -8,6 +8,7 @@ import DashboardPage from '@renderer/pages/dashboard/DashboardPage'
 import SessionReportListPage from '@renderer/pages/report/SessionReportListPage'
 import SessionReportDetailPage from '@renderer/pages/report/SessionReportDetailPage'
 import ClipsPage from '@renderer/pages/clips/ClipsPage'
+import NotFoundPage from '@renderer/pages/NotFoundPage'
 
 /**
  * 앱 라우터 정의.
@@ -36,6 +37,10 @@ export const router = createHashRouter([
       { path: PATHS.clips, element: <ClipsPage /> },
       // 각 담당자가 자기 화면을 여기에 한 줄씩 추가:
       // { path: PATHS.schedule, element: <SchedulePage /> },
+
+      // 아직 구현되지 않은 GNB 메뉴를 받는다. GNB는 남겨 두고 본문만 안내로 채운다.
+      // 담당자가 위에 라우트를 추가하면 자연히 대체된다.
+      { path: '*', element: <NotFoundPage /> },
     ],
   },
 
