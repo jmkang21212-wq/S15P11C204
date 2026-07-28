@@ -5,15 +5,14 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import java.time.Duration;
 
 /**
- * 방송 세션 Lock, Outbox, 종료 정리와 FastAPI 연동 설정이다.
+ * 방송 세션 Lock, Outbox, 종료 정리 설정이다.
  */
 @ConfigurationProperties(prefix = "laive.broadcast-session")
 public record BroadcastSessionProperties(
         Duration lifecycleLockTtl,
         Duration finalizationGracePeriod,
         Duration streamTtlAfterEnd,
-        Outbox outbox,
-        Ai ai
+        Outbox outbox
 ) {
     public record Outbox(
             long pollDelayMs,
@@ -21,13 +20,6 @@ public record BroadcastSessionProperties(
             Duration lease,
             int maxAttempts,
             Duration maxBackoff
-    ) {
-    }
-
-    public record Ai(
-            boolean reportEnabled,
-            String baseUrl,
-            String serviceToken
     ) {
     }
 }

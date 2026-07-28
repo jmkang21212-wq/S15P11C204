@@ -16,7 +16,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
@@ -105,61 +104,82 @@ class BroadcastSessionIntegrationTest {
         assertThat(outboxCount(started.sessionId())).isEqualTo(3);
     }
 
-    /**
-     * 리포트 감정 비율은 윈도우별 채팅량 가중 평균이다.
-     * 단순 평균이면 긍정 0.500이 되는 데이터로 가중치가 실제로 걸리는지 확인한다.
-     */
+    /** 리포트 감정 통계는 chat_messages의 건별 라벨을 세어 확정한다. */
     @Test
-    void weightsSentimentRatiosByWindowChatVolume() {
+    void aggregatesSentimentCountsByLabel() {
         long streamerId = createStreamer();
-        long sessionId = createPreparingSession(streamerId);
+        long platformAccountId = createPlatformAccount(streamerId);
+        long sessionId = createPreparingSession(streamerId, platformAccountId);
+        long viewerId = createViewer(platformAccountId);
 
         insertViewerMetric(sessionId, 1000);
         insertViewerMetric(sessionId, 3000);
-        // 한산한 윈도우 10건, 피크 윈도우 990건
-        insertSentimentSnapshot(sessionId, "0.900", "0.100", "0.000", 10);
-        insertSentimentSnapshot(sessionId, "0.100", "0.200", "0.700", 990);
+        insertChat(sessionId, viewerId, "JOY");
+        insertChat(sessionId, viewerId, "JOY");
+        insertChat(sessionId, viewerId, "EXCITEMENT");
+        insertChat(sessionId, viewerId, "ANGER");
 
         SessionStatistics statistics = repository.calculateStatistics(sessionId);
 
         assertThat(statistics.averageViewers()).isEqualTo(2000);
         assertThat(statistics.peakViewers()).isEqualTo(3000);
-        assertThat(statistics.totalChat()).isZero();
-        assertThat(statistics.positiveRatio()).isEqualByComparingTo("0.108");
-        assertThat(statistics.neutralRatio()).isEqualByComparingTo("0.199");
-        assertThat(statistics.negativeRatio()).isEqualByComparingTo("0.693");
+        assertThat(statistics.totalChat()).isEqualTo(4);
+        assertThat(statistics.analyzedChat()).isEqualTo(4);
+        assertThat(statistics.joyCount()).isEqualTo(2);
+        assertThat(statistics.excitementCount()).isEqualTo(1);
+        assertThat(statistics.angerCount()).isEqualTo(1);
+        assertThat(statistics.neutralCount()).isZero();
     }
 
-    /** message_count가 없는 과거 스냅샷만 있으면 단순 평균으로 되돌아간다. */
+    /**
+     * 분류 호출이 실패한 채팅은 라벨 없이 저장된다.
+     * total_chat에는 들어가고 analyzed_chat에서는 빠져야 분류 커버리지를 알 수 있다.
+     */
     @Test
-    void fallsBackToSimpleAverageWhenWindowChatVolumeIsUnknown() {
+    void excludesUnlabeledChatsFromAnalyzedChat() {
         long streamerId = createStreamer();
-        long sessionId = createPreparingSession(streamerId);
+        long platformAccountId = createPlatformAccount(streamerId);
+        long sessionId = createPreparingSession(streamerId, platformAccountId);
+        long viewerId = createViewer(platformAccountId);
 
-        insertSentimentSnapshot(sessionId, "0.900", "0.100", "0.000", null);
-        insertSentimentSnapshot(sessionId, "0.100", "0.200", "0.700", null);
+        insertChat(sessionId, viewerId, "JOY");
+        insertChat(sessionId, viewerId, null);
+        insertChat(sessionId, viewerId, null);
 
         SessionStatistics statistics = repository.calculateStatistics(sessionId);
 
-        assertThat(statistics.positiveRatio()).isEqualByComparingTo("0.500");
-        assertThat(statistics.neutralRatio()).isEqualByComparingTo("0.150");
-        assertThat(statistics.negativeRatio()).isEqualByComparingTo("0.350");
+        assertThat(statistics.totalChat()).isEqualTo(3);
+        assertThat(statistics.analyzedChat()).isEqualTo(1);
+        assertThat(statistics.joyCount()).isEqualTo(1);
     }
 
-    /** 감정 분석 결과가 없으면 세 비율은 NULL로 남는다 (명세 1.5). */
+    /** 채팅이 없는 세션은 건수가 모두 0이고 시청자 지표만 NULL이다 (명세 1.5). */
     @Test
-    void leavesSentimentRatiosNullWhenNoSnapshotExists() {
+    void returnsZeroSentimentCountsWhenSessionHasNoChat() {
         long streamerId = createStreamer();
-        long sessionId = createPreparingSession(streamerId);
+        long sessionId = createPreparingSession(streamerId, createPlatformAccount(streamerId));
 
         insertViewerMetric(sessionId, 1500);
 
         SessionStatistics statistics = repository.calculateStatistics(sessionId);
 
         assertThat(statistics.averageViewers()).isEqualTo(1500);
-        assertThat(statistics.positiveRatio()).isNull();
-        assertThat(statistics.neutralRatio()).isNull();
-        assertThat(statistics.negativeRatio()).isNull();
+        assertThat(statistics.totalChat()).isZero();
+        assertThat(statistics.analyzedChat()).isZero();
+        assertThat(statistics.joyCount()).isZero();
+    }
+
+    /** 시청자 지표가 한 건도 없으면 평균·최대만 NULL이다. */
+    @Test
+    void leavesViewerMetricsNullWhenSessionHasNoMetric() {
+        long streamerId = createStreamer();
+        long sessionId = createPreparingSession(streamerId, createPlatformAccount(streamerId));
+
+        SessionStatistics statistics = repository.calculateStatistics(sessionId);
+
+        assertThat(statistics.averageViewers()).isNull();
+        assertThat(statistics.peakViewers()).isNull();
+        assertThat(statistics.totalChat()).isZero();
     }
 
     private long createStreamer() {
@@ -206,17 +226,31 @@ class BroadcastSessionIntegrationTest {
     }
 
     /** 통계 집계는 세션 상태와 무관하게 원천 테이블만 읽으므로 PREPARING 세션으로 충분하다. */
-    private long createPreparingSession(long streamerId) {
+    private long createPreparingSession(long streamerId, long platformAccountId) {
         return transactionService.start(
                 streamerId,
                 new StartBroadcastSessionCommand(
-                        createPlatformAccount(streamerId),
+                        platformAccountId,
                         null,
                         "통계 집계 테스트 방송",
                         null,
                         "ko"
                 )
         ).sessionId();
+    }
+
+    private long createViewer(long platformAccountId) {
+        Long viewerId = jdbcTemplate.queryForObject(
+                """
+                INSERT INTO viewer_profiles (platform_account_id, viewer_hash)
+                VALUES (?, ?)
+                RETURNING id
+                """,
+                Long.class,
+                platformAccountId,
+                "sha256:" + UUID.randomUUID()
+        );
+        return viewerId;
     }
 
     private void insertViewerMetric(long sessionId, int viewerCount) {
@@ -230,25 +264,18 @@ class BroadcastSessionIntegrationTest {
         );
     }
 
-    private void insertSentimentSnapshot(
-            long sessionId,
-            String positiveRatio,
-            String neutralRatio,
-            String negativeRatio,
-            Integer messageCount
-    ) {
+    /** sentimentLabel이 null이면 분류 호출이 실패해 라벨 없이 저장된 채팅이다. */
+    private void insertChat(long sessionId, long viewerId, String sentimentLabel) {
         jdbcTemplate.update(
                 """
-                INSERT INTO sentiment_snapshots (
-                    session_id, positive_ratio, neutral_ratio, negative_ratio,
-                    message_count, captured_at
-                ) VALUES (?, ?, ?, ?, ?::int, clock_timestamp())
+                INSERT INTO chat_messages (
+                    session_id, viewer_id, message, sent_at, sentiment_label
+                ) VALUES (?, ?, ?, clock_timestamp(), ?::varchar)
                 """,
                 sessionId,
-                new BigDecimal(positiveRatio),
-                new BigDecimal(neutralRatio),
-                new BigDecimal(negativeRatio),
-                messageCount
+                viewerId,
+                "통계 집계 테스트 채팅",
+                sentimentLabel
         );
     }
 }
