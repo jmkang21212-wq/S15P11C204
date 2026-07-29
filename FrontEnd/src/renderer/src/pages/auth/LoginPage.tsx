@@ -6,6 +6,7 @@ import { Input } from '@renderer/components/ui/input'
 import { Label } from '@renderer/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@renderer/components/ui/card'
 import { NAVER_GREEN } from '@renderer/lib/brand'
+import { loginWithNaver } from '@renderer/api/auth'
 
 /**
  * SC-01a 로그인 화면.
@@ -16,11 +17,22 @@ export default function LoginPage(): React.JSX.Element {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [naverLoading, setNaverLoading] = useState(false)
 
   const handleSubmit = (e: React.FormEvent): void => {
     e.preventDefault()
-    // TODO: POST /auth/login 연동 (현재는 성공 가정)
-    navigate(PATHS.platformConnect)
+    // 이메일 로그인은 백엔드 미구현 — 현재는 동작하지 않음 (네이버 OAuth만 연동)
+  }
+
+  const handleNaverLogin = async (): Promise<void> => {
+    setNaverLoading(true)
+    try {
+      const ok = await loginWithNaver()
+      // 로그인 성공 → 온보딩(플랫폼 연동)으로 (design.md SC-01a → SC-01b)
+      if (ok) navigate(PATHS.platformConnect)
+    } finally {
+      setNaverLoading(false)
+    }
   }
 
   return (
@@ -78,8 +90,10 @@ export default function LoginPage(): React.JSX.Element {
               size="lg"
               className="w-full text-white transition-opacity hover:opacity-90"
               style={{ backgroundColor: NAVER_GREEN }}
+              disabled={naverLoading}
+              onClick={() => void handleNaverLogin()}
             >
-              네이버로 계속하기
+              {naverLoading ? '네이버 인증 중…' : '네이버로 계속하기'}
             </Button>
             <Button type="button" variant="outline" size="lg" className="w-full">
               Google로 계속하기

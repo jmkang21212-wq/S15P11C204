@@ -29,6 +29,11 @@ const api = {
       ipcRenderer.on('obs:state', listener)
       return () => ipcRenderer.removeListener('obs:state', listener)
     }
+  },
+  /** OAuth 인앱 창을 열고 returnUri로 복귀하면 그 URL을, 취소 시 null을 돌려준다. */
+  oauth: {
+    open: (startUrl: string, returnUriPrefix: string): Promise<string | null> =>
+      ipcRenderer.invoke('oauth:open', { startUrl, returnUriPrefix })
   }
 }
 

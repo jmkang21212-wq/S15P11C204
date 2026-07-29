@@ -33,6 +33,13 @@ export interface LaiveApi {
   focusMainWindow: () => void
   /** OBS(obs-websocket) 연결·제어. */
   obs: ObsBridge
+  /** OAuth 인앱 창 (네이버 로그인·플랫폼 연동 공용). */
+  oauth: OAuthBridge
+}
+
+export interface OAuthBridge {
+  /** OAuth 인앱 창. returnUri 복귀 시 그 URL, 취소 시 null. */
+  open: (startUrl: string, returnUriPrefix: string) => Promise<string | null>
 }
 
 declare global {
