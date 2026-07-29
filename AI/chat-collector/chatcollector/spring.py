@@ -128,7 +128,11 @@ class SpringClient:
         if request_id:
             headers['X-Request-Id'] = request_id
 
-        for attempt in range(SPRING_MAX_RETRIES + 1):
+        # 최초 시도 1회 + 재시도 SPRING_MAX_RETRIES회. 로그에는 총 횟수를 찍는다 —
+        # 분모에 재시도 수만 넣으면 마지막 시도가 "4/3"으로 보인다.
+        total_attempts = SPRING_MAX_RETRIES + 1
+
+        for attempt in range(total_attempts):
             try:
                 response = self._client.request(method, path, json=json, headers=headers)
                 if response.status_code < 300:
@@ -137,17 +141,17 @@ class SpringClient:
                     # 같은 X-Request-Id가 처리 중이다. 잠시 뒤 재시도하면
                     # 완료된 응답을 그대로 돌려받는다.
                     log.debug('Spring 처리 중 %s (%d/%d)',
-                              path, attempt + 1, SPRING_MAX_RETRIES)
+                              path, attempt + 1, total_attempts)
                 elif 400 <= response.status_code < 500:
                     raise SpringRejected(
                         f'{response.status_code} {path}: {response.text[:200]}')
                 else:
                     log.warning('Spring %s 응답 %s (%d/%d)',
                                 path, response.status_code,
-                                attempt + 1, SPRING_MAX_RETRIES)
+                                attempt + 1, total_attempts)
             except httpx.HTTPError as exception:
                 log.warning('Spring 요청 실패 %s: %s (%d/%d)',
-                            path, exception, attempt + 1, SPRING_MAX_RETRIES)
+                            path, exception, attempt + 1, total_attempts)
 
             if attempt < SPRING_MAX_RETRIES:
                 time.sleep(0.5 * (2 ** attempt))  # 0.5 -> 1 -> 2초

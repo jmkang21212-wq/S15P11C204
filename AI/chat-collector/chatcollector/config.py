@@ -1,5 +1,17 @@
-"""치지직 채팅 수집기 설정 — 전부 환경변수로 덮어쓸 수 있다."""
+"""치지직 채팅 수집기 설정 — 전부 환경변수로 덮어쓸 수 있다.
+
+값은 `AI/.env`에 둔다(app/config.py와 같은 방식). `.env.example`을 복사해 채운다.
+
+shell의 export로만 넘기면 터미널을 닫는 순간 사라진다. VIEWER_HASH_SALT는 한번
+정하면 바뀌어서는 안 되는 값이라 반드시 파일에 있어야 한다.
+"""
 import os
+
+from dotenv import load_dotenv
+
+# 인자 없이 부르면 호출한 파일 위치에서 상위로 올라가며 .env를 찾는다.
+# chat-collector/ 에서 실행해도 AI/.env가 잡힌다.
+load_dotenv()
 
 # --- 제어 서버 ---
 

@@ -1,7 +1,20 @@
 """시청자 가명화 검증. 원본 식별자가 Spring으로 새어 나가지 않는 것이 요점이다."""
 import hashlib
 
+import pytest
+
 from chatcollector import hashing
+
+
+@pytest.fixture(autouse=True)
+def fixed_salt(monkeypatch):
+    """소금을 빈 값으로 고정한다.
+
+    config가 load_dotenv로 AI/.env를 읽으므로 소금을 설정한 개발자의 환경에서는
+    실제 값이 들어온다. 그대로 두면 기대 해시를 손으로 적은 테스트가 그 사람
+    로컬에서만 깨진다 — 코드가 아니라 환경 때문에 실패하는 테스트가 된다.
+    """
+    monkeypatch.setattr(hashing, 'VIEWER_HASH_SALT', '')
 
 
 def test_같은_시청자는_항상_같은_해시다():
