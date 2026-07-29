@@ -1,5 +1,7 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+
+type ObsState = { status: 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED'; streaming: boolean }
 
 // Custom APIs for renderer
 const api = {
@@ -12,7 +14,22 @@ const api = {
   /** 미니 모드 창을 닫는다. */
   closeMiniWindow: (): void => ipcRenderer.send('mini:close'),
   /** 메인 창을 앞으로 가져온다 (미니 창의 "콘솔로"에서 사용). */
-  focusMainWindow: (): void => ipcRenderer.send('main:focus')
+  focusMainWindow: (): void => ipcRenderer.send('main:focus'),
+  /** OBS(obs-websocket) 연결·제어 — 실제 소켓은 main이 소유한다. */
+  obs: {
+    connect: (url: string, password?: string): Promise<ObsState> =>
+      ipcRenderer.invoke('obs:connect', { url, password }),
+    disconnect: (): Promise<void> => ipcRenderer.invoke('obs:disconnect'),
+    getState: (): Promise<ObsState> => ipcRenderer.invoke('obs:get-state'),
+    startStream: (): Promise<void> => ipcRenderer.invoke('obs:start-stream'),
+    stopStream: (): Promise<void> => ipcRenderer.invoke('obs:stop-stream'),
+    /** 상태 변경 구독. 반환 함수를 호출하면 구독 해제. */
+    onState: (callback: (state: ObsState) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, state: ObsState): void => callback(state)
+      ipcRenderer.on('obs:state', listener)
+      return () => ipcRenderer.removeListener('obs:state', listener)
+    }
+  }
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to
