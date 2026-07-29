@@ -97,7 +97,7 @@ export default function ObsControl(): React.JSX.Element {
           <Button size="sm" onClick={handleConnect} disabled={busy}>
             {busy ? '연결 중…' : '연결'}
           </Button>
-          <p className="text-[10.5px] leading-relaxed text-muted-foreground">
+          <p className="text-micro leading-relaxed text-muted-foreground">
             OBS · 도구 → WebSocket 서버 설정에서 서버를 활성화해야 해요.
           </p>
         </div>
