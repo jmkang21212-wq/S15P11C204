@@ -80,3 +80,24 @@ laive:
       lease: 30s
       max-attempts: 8
       max-backoff: 5m
+
+  # 수집기·AI 서버가 호출하는 /internal/** 수신 설정 (API 명세 13.1)
+  internal:
+    # 비어 있으면 /internal/**를 전부 401로 막는다. 설정 누락이 내부 API를
+    # 여는 방향으로 실패하지 않게 한 의도적 선택이다.
+    service-token: "${INTERNAL_SERVICE_TOKEN:}"
+    # X-Request-Id 멱등 기록 보관 기간. 수집기 재시도 백오프(최대 수십 초)보다
+    # 충분히 길고, 키가 무한정 쌓이지 않을 만큼 짧게 잡는다.
+    request-id-ttl: 10m
+    # 채팅 1초 배치가 이 수를 넘는 일은 없다. 사고성 대량 요청의 상한이다.
+    max-batch-items: 1000
+
+  # Spring이 치지직 채팅 수집기 제어 서비스를 호출할 때 쓰는 설정
+  collector:
+    # 비어 있으면 수집기를 연결하지 않는다(no-op). 로컬에서 나머지 API만 돌릴 때 쓴다.
+    base-url: "${COLLECTOR_BASE_URL:}"
+    control-token: "${COLLECTOR_CONTROL_TOKEN:}"
+    request-timeout: 5s
+    # 수집기 상태 보고가 이 시간 넘게 끊기면 STOPPED로 간주한다.
+    # 수집기 하트비트 주기(기본 10초)의 3배로 두어 한두 번의 유실로는 흔들리지 않게 한다.
+    heartbeat-timeout: 30s

@@ -30,10 +30,14 @@ dependencies = [
     # 리플레이 시뮬레이터 (chat-ai/replay/)
     "aiohttp>=3.10",
     "websocket-client>=1.7",
+
+    # 치지직 채팅 수집기 (chat-collector/) — httpx·fastapi·uvicorn은 위와 공유
+    "python-socketio[client]>=5.11",  # 치지직 채팅 socket.io 연결
 ]
 
 [dependency-groups]
 dev = [
+    "pytest>=8.3",            # chat-ai/tests, chat-collector/tests 실행기
     "fakeredis>=2.26",        # Redis 없이 윈도우 단위테스트
 ]
 

@@ -1416,6 +1416,11 @@ SC-11의 채널명·태그 검색, 카테고리 필터, 규모 필터를 지원�
 | --- | --- | --- | --- |
 | 수집기 → Spring | POST | `/internal/v1/sessions/{sessionId}/chat-messages:batch` | 채팅 메시지 배치 저장 |
 | 수집기 → Spring | POST | `/internal/v1/sessions/{sessionId}/viewer-metrics:batch` | 시청자 수 지표 배치 저장 |
+| 수집기 → Spring | GET | `/internal/v1/sessions/{sessionId}/collector-credentials` | 치지직 핸드셰이크용 Access Token·채널 ID 발급 |
+| 수집기 → Spring | POST | `/internal/v1/sessions/{sessionId}/collector-status` | 수집기 연결 상태 보고(하트비트 겸용) |
+| 수집기 → Spring | POST | `/internal/v1/sessions/{sessionId}/collection-gaps` | 수집 공백 구간 보고 |
+| Spring → 수집기 | POST | `/collectors/{sessionId}` | 세션 수집 시작 |
+| Spring → 수집기 | DELETE | `/collectors/{sessionId}` | 세션 수집 종료와 잔여 Flush |
 | 음성 중계 → Spring | POST | `/internal/v1/sessions/{sessionId}/audio-chunks` | 음성 청크 저장·STT 작업 등록 |
 | FastAPI → Spring | POST | `/internal/v1/sessions/{sessionId}/transcripts:batch` | STT 결과 배치 저장 |
 | Spring → FastAPI | POST | `/internal/v1/ai/stt` | 음성 청크 STT 변환 |
@@ -1476,7 +1481,60 @@ Spring은 `viewerHash`로 `VIEWER_PROFILES`를 조회하거나 생성한 뒤 `CH
 }
 ```
 
-각 항목은 `VIEWER_METRICS(session_id, measured_at, viewer_count)`에 저장한다.
+각 항목은 `VIEWER_METRICS(session_id, measured_at, viewer_count)`에 저장한다. `(session_id, measured_at)` Unique가 재시도 중복을 흡수하며, `duplicateCount`는 이미 저장돼 있어 건너뛴 건수다.
+
+폴링에 실패한 시점은 아무것도 보내지 않는다. 마지막 정상값을 새 측정치로 다시 써서 보내면 진짜와 구분되지 않는 합성 행이 쌓여 리포트의 `viewerTimeline`과 평균·최고 시청자가 왜곡된다. `HIGHLIGHT_SPEC.md` 가드 4의 "마지막 정상값 최대 5분"은 저장 계층이 아니라 판정 계층의 규칙이다.
+
+#### 13.3.2-1 수집기 자격 정보
+
+`GET /internal/v1/sessions/{sessionId}/collector-credentials`
+
+```json
+{
+  "success": true,
+  "data": {
+    "accessToken": "chzzk-access-token",
+    "channelId": "abc123"
+  }
+}
+```
+
+플랫폼 토큰은 암호화되어 저장되고 복호화 키는 Spring만 갖는다(NFR-S-03). 수집기가 DB와 키를 직접 보지 않게 하는 경로다. 만료가 임박했으면 Spring이 갱신해서 돌려준다.
+
+수집기는 시작 시점에 한 번 받아 들고 있는 것이 아니라 **핸드셰이크마다 새로 받는다.** 들고 있던 토큰이 만료되면 이후 재핸드셰이크가 전부 401로 실패해 남은 방송 내내 수집이 죽는다. 조회 요청이라 `X-Request-Id` 대상이 아니다.
+
+#### 13.3.2-2 수집기 상태 보고
+
+`POST /internal/v1/sessions/{sessionId}/collector-status`
+
+```json
+{
+  "status": "RUNNING",
+  "occurredAt": "2026-07-20T14:31:00Z"
+}
+```
+
+`status`는 `RUNNING`, `RECONNECTING`, `STOPPED`다. 10.6의 `services.collector`가 이 값을 읽는다. 하트비트를 겸하므로 상태가 바뀌지 않아도 주기적으로 온다. 보고가 `laive.collector.heartbeat-timeout`(기본 30초)을 넘게 끊기면 Spring이 `STOPPED`로 내린다 — 수집기 프로세스가 죽으면 마지막 상태를 갱신할 주체가 사라져, 저장값을 그대로 믿으면 화면이 영원히 "정상 수집 중"을 보여준다.
+
+최신값 하나만 남기는 덮어쓰기라 재시도가 같은 결과로 수렴하므로 `X-Request-Id`를 받지 않는다.
+
+#### 13.3.2-3 수집 공백 구간 보고
+
+`POST /internal/v1/sessions/{sessionId}/collection-gaps`
+
+```json
+{
+  "startedAt": "2026-07-20T14:31:00Z",
+  "endedAt": null,
+  "reason": "DISCONNECTED"
+}
+```
+
+`COLLECTION_GAPS(session_id, started_at, ended_at, reason)`에 저장한다(V9). `reason`은 `DISCONNECTED`, `AUTH_FAILED`, `SUBSCRIBE_FAILED`, `COLLECTOR_STOPPED`다.
+
+끊긴 시점에 `endedAt` 없이 먼저 열고, 재핸드셰이크로 복구한 뒤 같은 `startedAt`으로 다시 보내 닫는다. 처음부터 닫힌 구간으로 받지 않는 이유는 수집기가 공백 도중에 죽으면 그 공백이 영원히 보고되지 않기 때문이다. 끝내 닫히지 않은 구간은 세션 종료 시 Spring이 종료 시각으로 닫는다.
+
+`(session_id, started_at)` Upsert라 같은 보고를 몇 번 보내도 행이 늘지 않으므로 `X-Request-Id`를 받지 않는다.
 
 #### 13.3.3 음성 청크 수집
 
@@ -1889,8 +1947,8 @@ ERD가 스트리머 중심으로 수정되었으므로 `ADVERTISER` 역할과 �
 - [ ]  비밀번호 재설정 메일 발송 서비스와 Redis TTL 설정
 - [ ]  Electron 앱의 음성 수집 방식과 권한
 - [ ]  Spring·FastAPI 서비스 토큰 회전, 네트워크 접근 제한 또는 mTLS 적용
-- [ ]  `X-Request-Id` 멱등 처리 Redis TTL과 동일 요청 판별 범위 확정
-- [ ]  채팅·시청자 지표·STT 배치의 최대 항목 수와 요청 크기 제한
+- [x]  `X-Request-Id` 멱등 처리 Redis TTL과 동일 요청 판별 범위 확정. TTL 10분, 키는 `internal:request-id:{id}`, 판별 범위는 요청 하나(배치 하나)다. 완료된 요청은 응답 본문까지 보관해 재시도에 같은 응답을 돌려주고, 처리 중인 요청과 겹치면 409를 준다. 처리에 실패하면 표식을 지운다 — 남겨두면 그 ID가 TTL이 끝날 때까지 409로 막혀 일시적 실패가 영구 실패가 된다
+- [ ]  채팅·시청자 지표·STT 배치의 최대 항목 수와 요청 크기 제한. 채팅·시청자 지표는 `laive.internal.max-batch-items`(기본 1000)로 걸었고 초과 시 413이다. STT 배치와 바이트 단위 크기 제한은 아직 없다
 - [ ]  실시간 STT·위험 발언·채팅 분석의 Timeout, 재시도, Circuit Breaker 정책
 - [ ]  음성 청크의 S3 보관 기간과 삭제 작업 (리포트 입력 파일은 13.7에서 폐지)
 - [x]  스키마 변경 마이그레이션: `CHAT_MESSAGES.sentiment_label` 추가, `TRIGGERS` 신설, `REPORTS`의 3분류 비율 컬럼을 8종 건수와 `analyzed_chat`으로 교체, `REPORT_SEGMENTS`·`SENTIMENT_SNAPSHOTS` 폐기, `HIGHLIGHTS.report_segment_id` → `trigger_id` (V8)
@@ -1898,14 +1956,17 @@ ERD가 스트리머 중심으로 수정되었으므로 `ADVERTISER` 역할과 �
     - `chat_message_counts_1m` 연속 집계 폐기. V3가 적은 세 용도(하이라이트 z-score 입력, `reports.total_chat` 집계, 성장 리포트 누적 채팅)가 모두 다른 경로로 바뀌어 소비처가 없다. 판정은 Spring이 인메모리 60초 윈도우로 수행하고, 세션 총량은 `REPORTS.total_chat`, 구간 채팅량은 `TRIGGERS.chat_count`에 영구 저장된다. 방송 중 채팅량 그래프를 리포트에 넣기로 하면 이 결정을 뒤집고 유지해야 한다 — 원본 90일 보존을 넘긴 이력은 재생성할 수 없다.
     - `BroadcastOutboxEventType` 자바 Enum에 `TRIGGER_ANALYSIS_REQUESTED`, `REPORT_FINALIZATION_REQUESTED` 추가. V8이 DB CHECK는 먼저 열어뒀고, 핸들러 없이 Enum에 값을 넣으면 디스패처가 처리기를 찾지 못하는 값이 생기므로 핸들러와 함께 추가한다.
     - `BroadcastSessionFinalizationService`가 통계 확정 후 `PARTIAL`로 끝내는 자리에 트리거별 분석 작업 발행을 넣는다.
-    - **수집 공백 가드.** `HIGHLIGHT_SPEC.md`의 가드 8개에 수집 중단이 빠져 있다. 치지직 socket.io는 자동 재연결이 되지 않아 재핸드셰이크 동안 채팅이 유실되는데, 그 구간에 `uniq`가 0으로 떨어지면 15분 baseline에 인위적으로 낮은 값이 채워지고 **복구 직후의 정상 채팅이 급증으로 오탐**된다. median·MAD가 극단값에 강건하다는 전제는 공백이 없다는 가정에 기대고 있다. 공백 구간의 틱은 판정에서 제외하고 baseline에도 넣지 않는다.
-    - 위 가드의 입력이 되는 **수집 공백 구간 저장 위치**를 이 마이그레이션에서 함께 만든다. 현재 스키마에 자리가 없다.
+    - **수집 공백 가드.** `HIGHLIGHT_SPEC.md`에 가드 9로 추가했다. 치지직 socket.io는 자동 재연결이 되지 않아 재핸드셰이크 동안 채팅이 유실되는데, 그 구간에 `uniq`가 0으로 떨어지면 15분 baseline에 인위적으로 낮은 값이 채워지고 **복구 직후의 정상 채팅이 급증으로 오탐**된다. median·MAD가 극단값에 강건하다는 전제는 공백이 없다는 가정에 기대고 있다. 공백 구간의 틱은 판정에서 제외하고 baseline에도 넣지 않는다.
+    - ~~위 가드의 입력이 되는 **수집 공백 구간 저장 위치**를 이 마이그레이션에서 함께 만든다.~~ **완료 — V9 `COLLECTION_GAPS`.** 트리거 마이그레이션을 기다리지 않고 먼저 만들었다. 수집기가 지금 공백을 만들고 있어 저장할 곳이 그때까지 없으면 그 사이의 유실 구간이 영영 기록되지 않기 때문이다. 판정이 붙을 때 이 테이블을 읽어 해당 구간의 틱을 제외하고 baseline에도 넣지 않으면 된다.
 - [ ]  Outbox 선점 임대 시간 재산정 (LLM 지연 반영)
-- [ ]  **치지직 채팅 수집기.** 2026-07-28 스파이크로 수집 가능은 확인했으나 구현이 없다. 확정할 것:
-    - 자동 재연결을 끄고 재핸드셰이크 루프를 직접 돈다. 세션 인증 URL의 쿼리스트링 인증값이 재사용되지 않아 같은 URL로 재연결하면 `auth fail`로 끊긴다. 전체 핸드셰이크(auth → connect → `SYSTEM` sessionKey → subscribe)를 다시 해야 하며, 세션 종료까지 유지되는 전용 스레드·프로세스가 필요하다. Spring `@Scheduled`로는 부족하다.
-    - `sent_at`은 `messageTime`(epoch ms)을 쓴다. `eventSentAt`은 타임존 없는 KST 로컬 문자열이라 UTC로 파싱하면 9시간 틀어진다.
-    - 시청자 수 폴링 주기와 실패 시 마지막 정상값 유지 범위 (`HIGHLIGHT_SPEC.md` 가드 4와 맞춘다)
-- [ ]  수집 엔드포인트 2개 구현 (`chat-messages:batch`, `viewer-metrics:batch`). 명세는 13.3에 있으나 Spring에 아직 없어 수집기가 보낼 곳이 없다
+- [x]  **치지직 채팅 수집기.** `AI/chat-collector/`에 FastAPI 제어 서버와 세션별 전용 스레드로 구현했다. Spring의 `ChatCollectorGateway`가 `POST/DELETE /collectors/{sessionId}`로 제어한다. 확정된 것:
+    - 자동 재연결을 끄고(`reconnection=False`) 재핸드셰이크 루프를 직접 돈다. 세션 인증 URL의 쿼리스트링 인증값이 재사용되지 않아 같은 URL로 재연결하면 `auth fail`로 끊긴다. 전체 핸드셰이크(자격 조회 → auth → connect → `SYSTEM` sessionKey → subscribe)를 다시 밟는다. 백오프는 1초에서 시작해 최대 30초.
+    - 자격 정보는 핸드셰이크마다 새로 받는다(13.3.2-1). 들고 있던 Access Token이 만료되면 이후 재핸드셰이크가 전부 401로 실패해 남은 방송 내내 수집이 죽는다.
+    - `sent_at`은 `messageTime`(epoch ms)을 쓴다. `eventSentAt`은 타임존 없는 KST 로컬 문자열이라 UTC로 파싱하면 9시간 틀어진다. 다만 `messageTime`은 클라이언트 시계라(가드 8) 서버 수신 시각과 5분 넘게 벌어지면 수신 시각으로 대체한다 — 어긋난 시계 하나가 `chat_messages`의 먼 과거·미래 청크에 행을 만들고 리플레이 정렬을 깬다.
+    - 시청자 수 폴링은 10초 주기. **실패한 틱은 아무것도 보내지 않는다** — 가드 4의 "마지막 정상값 최대 5분"은 저장이 아니라 판정 계층의 규칙이라, 수집기는 마지막 정상값과 그 나이(`viewerStale`)를 상태로 노출해 판정이 같은 기준을 쓰게 한다.
+    - `senderChannelId`는 `sha256:{hex}`로 해시해 `viewerHash`로만 보낸다. 소금(`COLLECTOR_VIEWER_HASH_SALT`)을 운영 전에 정하고 이후 바꾸지 않는다 — 바꾸면 같은 시청자가 다른 해시가 되어 `VIEWER_PROFILES`에 중복 인격이 생긴다.
+- [ ]  `profile.userRoleCode`와 `emojis`를 저장할 자리. 수집기가 읽고는 있으나 13.3.1 요청과 `CHAT_MESSAGES` 모두 컬럼이 없어 전달하지 못한다. 스트리머 본인 채팅을 여론 집계에서 제외하려면, 이모티콘 밀도를 쓰려면 요청 스키마와 테이블을 함께 늘려야 한다
+- [x]  수집 엔드포인트 2개 구현 (`chat-messages:batch`, `viewer-metrics:batch`). 서비스 토큰 필터 체인(`/internal/**`)과 `X-Request-Id` 멱등 가드를 함께 넣었다. 수집기 자격 발급·상태 보고·공백 보고 Endpoint 3개가 13.3에 추가됐다
 - [ ]  Spring의 LLM 클라이언트 선택 — Spring AI의 Spring Boot 4 지원 버전 확인, 미지원 시 GMS OpenAI 호환 Endpoint 직접 호출
 - [ ]  트리거 구간 채팅 원문이 프롬프트 한도를 넘길 때의 압축 규칙 (반복 표현 접기, 표본 추출) 확정
 - [ ]  `TRIGGERS.trigger_type` Enum 확정. 현재 채팅 급증 하나이며 시청자 급변 트리거는 판정 로직이 없다
