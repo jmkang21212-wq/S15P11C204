@@ -47,10 +47,11 @@
         같은 배치의 재전송은 X-Request-Id 멱등 가드가 막는다(명세 13.1).
     -->
     <insert id="insertChatMessages">
-        INSERT INTO chat_messages (session_id, viewer_id, message, sent_at)
+        INSERT INTO chat_messages (session_id, viewer_id, message, sent_at, sentiment_label)
         VALUES
         <foreach collection="items" item="item" separator=",">
-            (#{sessionId}, #{item.viewerId}, #{item.message}, #{item.sentAt})
+            (#{sessionId}, #{item.viewerId}, #{item.message}, #{item.sentAt},
+             #{item.sentimentLabel,jdbcType=VARCHAR})
         </foreach>
     </insert>
 

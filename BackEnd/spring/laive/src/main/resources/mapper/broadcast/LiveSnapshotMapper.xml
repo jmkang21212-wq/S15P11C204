@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.laive.broadcast.live.repository.mybatis.LiveSnapshotMapper">
+
+    <select id="findLatestViewerCount" resultType="java.lang.Integer">
+        SELECT viewer_count
+          FROM viewer_metrics
+         WHERE session_id = #{sessionId}
+         ORDER BY measured_at DESC
+         LIMIT 1
+    </select>
+
+</mapper>

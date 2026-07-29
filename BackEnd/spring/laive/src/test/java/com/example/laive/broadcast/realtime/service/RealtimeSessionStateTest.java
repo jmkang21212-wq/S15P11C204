@@ -1,0 +1,162 @@
+package com.example.laive.broadcast.realtime.service;
+
+import com.example.laive.broadcast.realtime.domain.highlight.HighlightCandidate;
+import com.example.laive.broadcast.realtime.domain.highlight.HighlightParams;
+import org.junit.jupiter.api.Test;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * HIGHLIGHT_SPEC의 가드(워밍업·저활동·시청자 결측·수집 공백)를 시나리오로 검증한다.
+ *
+ * <p>판정 파라미터를 작게 줄인 이유: 실제 값(워밍업 3분, 윈도우 60초)으로는
+ * 시나리오마다 수백 틱을 돌려야 해 테스트의 의도가 묻힌다. 전이 규칙 자체는
+ * {@code HighlightStateMachineTest}가 실제 파라미터로 검증한다.
+ */
+class RealtimeSessionStateTest {
+
+    private static final Instant START = Instant.parse("2026-07-21T12:00:00Z");
+    private static final int VIEWERS = 100;
+
+    private static HighlightParams params(int minWindowChats) {
+        return new HighlightParams(
+                Duration.ofSeconds(10), 60,
+                3.0, 2,
+                1.5, 3,
+                Duration.ofSeconds(5),
+                Duration.ofSeconds(120),
+                Duration.ofSeconds(10),
+                Duration.ofSeconds(10),   // 워밍업 10초
+                minWindowChats,
+                0.001
+        );
+    }
+
+    @Test
+    void confirmsSurgeAfterWarmupBaseline() {
+        RealtimeSessionState state = new RealtimeSessionState(1L, START, params(3));
+
+        // 워밍업 동안 같은 3명이 매초 채팅 → baseline이 engagement 0.03으로 찬다.
+        int t = warmUpWithSteadyChat(state);
+
+        // 급증: 매초 새 uid 3명이 가세 → 유니크가 쌓여 z가 뛴다.
+        Optional<HighlightCandidate> confirmed = Optional.empty();
+        int surgeStart = t;
+        while (confirmed.isEmpty() && t < surgeStart + 10) {
+            feedSteady(state, t);
+            feedNewcomers(state, t, 3);
+            confirmed = state.tick(at(t), VIEWERS);
+            t++;
+        }
+        // enterTicks=2 뒤 ACTIVE. 확정은 종료 강제로 확인한다.
+        assertThat(state.forceFinalize(at(t))).isPresent();
+    }
+
+    @Test
+    void warmupSuppressesJudgment() {
+        RealtimeSessionState state = new RealtimeSessionState(1L, START, params(3));
+
+        // 워밍업 안에서는 아무리 급증해도 ACTIVE가 되지 않는다(가드 1).
+        for (int t = 0; t < 10; t++) {
+            feedNewcomers(state, t, 10);
+            assertThat(state.tick(at(t), VIEWERS)).isEmpty();
+        }
+        assertThat(state.forceFinalize(at(10))).isEmpty();
+    }
+
+    @Test
+    void missingViewersSuppressesJudgment() {
+        RealtimeSessionState state = new RealtimeSessionState(1L, START, params(3));
+        int t = warmUpWithSteadyChat(state);
+
+        // 시청자 수를 모르면 engagement를 계산할 수 없다(가드 4).
+        for (int i = 0; i < 5; i++, t++) {
+            feedSteady(state, t);
+            feedNewcomers(state, t, 10);
+            assertThat(state.tick(at(t), null)).isEmpty();
+        }
+        assertThat(state.forceFinalize(at(t))).isEmpty();
+    }
+
+    @Test
+    void lowActivityTickIsNotJudged() {
+        // 윈도우 채팅 하한을 높게 잡아 급증 uid 수가 하한에 못 미치게 한다(가드 3).
+        RealtimeSessionState state = new RealtimeSessionState(1L, START, params(200));
+        int t = warmUpWithSteadyChat(state);
+
+        for (int i = 0; i < 5; i++, t++) {
+            feedSteady(state, t);
+            feedNewcomers(state, t, 10);
+            assertThat(state.tick(at(t), VIEWERS)).isEmpty();
+        }
+        assertThat(state.forceFinalize(at(t))).isEmpty();
+    }
+
+    @Test
+    void gapSuppressesJudgmentUntilWindowClearsIt() {
+        RealtimeSessionState state = new RealtimeSessionState(1L, START, params(3));
+        int t = warmUpWithSteadyChat(state);
+
+        // 공백 진행 중: 판정 정지(가드 9).
+        state.onGap(null);
+        for (int i = 0; i < 3; i++, t++) {
+            feedSteady(state, t);
+            feedNewcomers(state, t, 10);
+            assertThat(state.tick(at(t), VIEWERS)).isEmpty();
+        }
+        assertThat(state.forceFinalize(at(t))).isEmpty();
+
+        // 공백이 닫혀도 윈도우(10초)가 공백에 걸치는 동안은 계속 쉰다.
+        RealtimeSessionState reopened = new RealtimeSessionState(1L, START, params(3));
+        int u = warmUpWithSteadyChat(reopened);
+        reopened.onGap(null);
+        u += 2;
+        reopened.onGap(at(u)); // 공백 종료
+        for (int i = 0; i < 9; i++, u++) {
+            feedSteady(reopened, u);
+            feedNewcomers(reopened, u, 10);
+            assertThat(reopened.tick(at(u), VIEWERS)).isEmpty();
+        }
+        // 공백 종료 + 10초가 지나면 판정이 재개된다.
+        u += 2;
+        Optional<HighlightCandidate> confirmed = Optional.empty();
+        for (int i = 0; confirmed.isEmpty() && i < 10; i++, u++) {
+            feedSteady(reopened, u);
+            feedNewcomers(reopened, u, 10);
+            confirmed = reopened.tick(at(u), VIEWERS);
+            if (reopened.forceFinalize(at(u)).isPresent()) {
+                return; // ACTIVE 진입 확인으로 충분
+            }
+        }
+        assertThat(confirmed).isPresent();
+    }
+
+    /** 워밍업(10초) 동안 같은 3명이 매초 채팅해 baseline을 0.03으로 채운다. */
+    private int warmUpWithSteadyChat(RealtimeSessionState state) {
+        int t = 0;
+        for (; t < 11; t++) {
+            feedSteady(state, t);
+            assertThat(state.tick(at(t), VIEWERS)).isEmpty();
+        }
+        return t;
+    }
+
+    private void feedSteady(RealtimeSessionState state, int t) {
+        state.feedChats(at(t), List.of("u1", "u2", "u3"));
+    }
+
+    private void feedNewcomers(RealtimeSessionState state, int t, int count) {
+        state.feedChats(at(t), java.util.stream.IntStream.range(0, count)
+                .mapToObj(i -> "new-" + t + "-" + i)
+                .toList());
+    }
+
+    private static Instant at(int seconds) {
+        return START.plusSeconds(seconds);
+    }
+}
