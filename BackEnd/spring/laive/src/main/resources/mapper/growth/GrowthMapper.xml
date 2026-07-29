@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.laive.growth.repository.mybatis.GrowthMapper">
+
+    <resultMap id="growthGoalMap" type="com.example.laive.growth.domain.GrowthGoal">
+        <constructor>
+            <idArg column="id" javaType="long"/>
+            <arg column="streamer_id" javaType="long"/>
+            <arg column="metric_type" javaType="com.example.laive.growth.domain.GrowthMetricType"/>
+            <arg column="target_value" javaType="java.math.BigDecimal"/>
+            <arg column="unit" javaType="com.example.laive.growth.domain.GrowthMetricUnit"/>
+            <arg column="period_start" javaType="java.time.LocalDate"/>
+            <arg column="period_end" javaType="java.time.LocalDate"/>
+            <arg column="status" javaType="com.example.laive.growth.domain.GrowthGoalStatus"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findSeries" resultType="com.example.laive.growth.domain.GrowthSeriesPoint">
+        WITH buckets AS (
+            SELECT gs::date AS period_start,
+                   LEAST(
+                   <choose>
+                       <when test="periodType.name() == 'WEEKLY'">
+                           gs + interval '7 days'
+                       </when>
+                       <otherwise>
+                           gs + interval '1 month'
+                       </otherwise>
+                   </choose>,
+                   cast(#{to} as date) + interval '1 day'
+                   ) AS period_end_exclusive
+              FROM generate_series(
+                    cast(#{from} as date),
+                    cast(#{to} as date),
+                    <choose>
+                        <when test="periodType.name() == 'WEEKLY'">interval '7 days'</when>
+                        <otherwise>interval '1 month'</otherwise>
+                    </choose>
+              ) gs
+        ),
+        eligible AS (
+            SELECT s.started_at,
+                   s.ended_at,
+                   r.avg_viewers,
+                   r.total_chat
+              FROM broadcast_sessions s
+              JOIN reports r ON r.session_id = s.id
+             WHERE s.streamer_id = #{streamerId}
+               AND s.status = 'ENDED'
+               AND r.status IN ('COMPLETED', 'PARTIAL')
+               AND s.ended_at &gt; cast(#{from} as date)::timestamptz
+               AND s.started_at &lt; (cast(#{to} as date) + 1)::timestamptz
+        ),
+        overlaps AS (
+            SELECT b.period_start,
+                   b.period_end_exclusive,
+                   e.started_at,
+                   e.avg_viewers,
+                   e.total_chat,
+                   GREATEST(
+                       extract(epoch FROM
+                           LEAST(e.ended_at, b.period_end_exclusive)
+                           - GREATEST(e.started_at, b.period_start::timestamptz)
+                       ),
+                       0
+                   ) AS overlap_seconds
+              FROM buckets b
+              LEFT JOIN eligible e
+                ON e.started_at &lt; b.period_end_exclusive
+               AND e.ended_at &gt; b.period_start::timestamptz
+        )
+        SELECT period_start,
+               (period_end_exclusive::date - 1) AS period_end,
+               round(
+                   sum(avg_viewers * overlap_seconds)
+                       FILTER (WHERE avg_viewers IS NOT NULL)
+                   / nullif(
+                       sum(overlap_seconds) FILTER (WHERE avg_viewers IS NOT NULL),
+                       0
+                   )
+               )::int AS average_viewers,
+               coalesce(sum(total_chat) FILTER (
+                   WHERE started_at &gt;= period_start::timestamptz
+                     AND started_at &lt; period_end_exclusive
+               ), 0)::bigint AS total_chat,
+               round(coalesce(sum(overlap_seconds), 0) / 60.0)::bigint AS broadcast_minutes
+          FROM overlaps
+         GROUP BY period_start, period_end_exclusive
+         ORDER BY period_start
+    </select>
+
+    <sql id="goalColumns">
+        id, streamer_id, metric_type, target_value, unit, period_start, period_end, status
+    </sql>
+
+    <select id="findGoals" resultMap="growthGoalMap">
+        SELECT <include refid="goalColumns"/>
+          FROM growth_goals
+         WHERE streamer_id = #{streamerId}
+        <if test="status != null">
+           AND status = #{status}
+        </if>
+         ORDER BY period_end, id
+    </select>
+
+    <select id="findOwned" resultMap="growthGoalMap">
+        SELECT <include refid="goalColumns"/>
+          FROM growth_goals
+         WHERE streamer_id = #{streamerId}
+           AND id = #{goalId}
+    </select>
+
+    <select id="findOwnedForUpdate" resultMap="growthGoalMap">
+        SELECT <include refid="goalColumns"/>
+          FROM growth_goals
+         WHERE streamer_id = #{streamerId}
+           AND id = #{goalId}
+         FOR UPDATE
+    </select>
+
+    <select id="findActions" resultType="com.example.laive.growth.domain.GrowthAction">
+        SELECT id,
+               growth_goal_id,
+               title,
+               content
+          FROM growth_actions
+         WHERE growth_goal_id IN
+        <foreach collection="goalIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+         ORDER BY growth_goal_id, id
+    </select>
+
+    <select id="findGoalMetrics" resultType="com.example.laive.growth.domain.GrowthGoalMetrics">
+        WITH selected_goals AS (
+            SELECT *
+              FROM growth_goals
+             WHERE streamer_id = #{streamerId}
+               AND id IN
+            <foreach collection="goalIds" item="id" open="(" separator="," close=")">
+                #{id}
+            </foreach>
+        ),
+        eligible AS (
+            SELECT s.streamer_id,
+                   s.started_at,
+                   s.ended_at,
+                   r.avg_viewers,
+                   r.total_chat
+              FROM broadcast_sessions s
+              JOIN reports r ON r.session_id = s.id
+             WHERE s.streamer_id = #{streamerId}
+               AND s.status = 'ENDED'
+               AND r.status IN ('COMPLETED', 'PARTIAL')
+        ),
+        per_goal AS (
+            SELECT g.id AS growth_goal_id,
+                   g.period_start,
+                   g.period_end,
+                   e.started_at,
+                   e.avg_viewers,
+                   e.total_chat,
+                   GREATEST(
+                       extract(epoch FROM
+                           LEAST(e.ended_at, (g.period_end + 1)::timestamptz)
+                           - GREATEST(e.started_at, g.period_start::timestamptz)
+                       ),
+                       0
+                   ) AS overlap_seconds
+              FROM selected_goals g
+              LEFT JOIN eligible e
+                ON e.started_at &lt; (g.period_end + 1)::timestamptz
+               AND e.ended_at &gt; g.period_start::timestamptz
+        )
+        SELECT growth_goal_id,
+               round((
+                   sum(avg_viewers * overlap_seconds)
+                       FILTER (WHERE avg_viewers IS NOT NULL)
+                   / nullif(
+                       sum(overlap_seconds) FILTER (WHERE avg_viewers IS NOT NULL),
+                       0
+                   )
+               )::numeric,
+                   2
+               ) AS average_viewers,
+               coalesce(sum(total_chat) FILTER (
+                   WHERE started_at &gt;= period_start::timestamptz
+                     AND started_at &lt; (period_end + 1)::timestamptz
+               ), 0)::numeric AS total_chat,
+               round(
+                   (coalesce(sum(overlap_seconds), 0) / 60.0)::numeric,
+                   2
+               ) AS broadcast_minutes,
+               round(
+                   count(started_at) FILTER (
+                       WHERE started_at &gt;= period_start::timestamptz
+                         AND started_at &lt; (period_end + 1)::timestamptz
+                   )::numeric
+                   / ((period_end - period_start + 1)::numeric / 7),
+                   2
+               ) AS broadcasts_per_week
+          FROM per_goal
+         GROUP BY growth_goal_id, period_start, period_end
+         ORDER BY growth_goal_id
+    </select>
+
+    <select id="lockScope" resultType="int">
+        SELECT 1
+          FROM (
+                SELECT pg_advisory_xact_lock(
+                    hashtextextended(
+                        concat(#{streamerId}::text, ':', #{metricType}::text),
+                        0
+                    )
+                )
+          ) locked
+    </select>
+
+    <select id="existsOverlappingActive" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1
+              FROM growth_goals
+             WHERE streamer_id = #{streamerId}
+               AND metric_type = #{metricType}
+               AND status = 'ACTIVE'
+               AND period_start &lt;= #{periodEnd}
+               AND period_end &gt;= #{periodStart}
+            <if test="excludedGoalId != null">
+               AND id &lt;&gt; #{excludedGoalId}
+            </if>
+        )
+    </select>
+
+    <select id="insertGoal" resultType="long">
+        INSERT INTO growth_goals (
+            streamer_id, metric_type, target_value, unit,
+            period_start, period_end, status
+        ) VALUES (
+            #{goal.streamerId},
+            #{goal.metricType},
+            #{goal.targetValue},
+            #{goal.unit},
+            #{goal.periodStart},
+            #{goal.periodEnd},
+            #{goal.status}
+        )
+        RETURNING id
+    </select>
+
+    <update id="updateGoal">
+        UPDATE growth_goals
+           SET metric_type = #{goal.metricType},
+               target_value = #{goal.targetValue},
+               unit = #{goal.unit},
+               period_start = #{goal.periodStart},
+               period_end = #{goal.periodEnd},
+               status = #{goal.status}
+         WHERE id = #{goal.id}
+           AND streamer_id = #{goal.streamerId}
+    </update>
+</mapper>
