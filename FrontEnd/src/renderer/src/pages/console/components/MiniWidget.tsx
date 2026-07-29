@@ -117,7 +117,10 @@ export default function MiniWidget({
           className="bg-muted-foreground/40"
           style={{ width: `${data.sentiment.neutralRatio * 100}%` }}
         />
-        <div className="bg-destructive" style={{ width: `${data.sentiment.negativeRatio * 100}%` }} />
+        <div
+          className="bg-destructive"
+          style={{ width: `${data.sentiment.negativeRatio * 100}%` }}
+        />
       </div>
 
       {/* 현재 브리핑 카드 (타입별) */}

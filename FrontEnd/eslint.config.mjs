@@ -76,11 +76,13 @@ export default defineConfig(
         },
         {
           selector: 'Literal[value=/shadow-\\[/]',
-          message: '그림자 임의값 대신 shadow-card/shadow-live-ring 같은 토큰 클래스를 쓰세요 (assets/globals.css).'
+          message:
+            '그림자 임의값 대신 shadow-card/shadow-live-ring 같은 토큰 클래스를 쓰세요 (assets/globals.css).'
         },
         {
           selector: 'TemplateElement[value.raw=/shadow-\\[/]',
-          message: '그림자 임의값 대신 shadow-card/shadow-live-ring 같은 토큰 클래스를 쓰세요 (assets/globals.css).'
+          message:
+            '그림자 임의값 대신 shadow-card/shadow-live-ring 같은 토큰 클래스를 쓰세요 (assets/globals.css).'
         }
       ]
     }

@@ -16,7 +16,7 @@ export default function PlatformCard({
   subLabel,
   color,
   selected,
-  onSelect,
+  onSelect
 }: PlatformCardProps): React.JSX.Element {
   return (
     <button
@@ -24,7 +24,7 @@ export default function PlatformCard({
       onClick={onSelect}
       className={cn(
         'relative flex flex-1 flex-col items-start gap-2 rounded-xl border p-4 text-left transition-colors',
-        selected ? 'border-primary bg-accent' : 'border-border hover:border-primary/40',
+        selected ? 'border-primary bg-accent' : 'border-border hover:border-primary/40'
       )}
     >
       {selected && (

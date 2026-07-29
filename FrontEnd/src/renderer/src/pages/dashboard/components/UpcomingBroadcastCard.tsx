@@ -12,7 +12,7 @@ interface UpcomingBroadcastCardProps {
 }
 
 export default function UpcomingBroadcastCard({
-  broadcast,
+  broadcast
 }: UpcomingBroadcastCardProps): React.JSX.Element {
   return (
     <Card className="gap-3 p-5">

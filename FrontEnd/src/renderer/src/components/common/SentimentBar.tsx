@@ -38,7 +38,11 @@ export default function SentimentBar({
     >
       {total > 0 &&
         segments.map((s) => (
-          <span key={s.key} className={s.className} style={{ width: `${(s.ratio / total) * 100}%` }} />
+          <span
+            key={s.key}
+            className={s.className}
+            style={{ width: `${(s.ratio / total) * 100}%` }}
+          />
         ))}
     </div>
   )

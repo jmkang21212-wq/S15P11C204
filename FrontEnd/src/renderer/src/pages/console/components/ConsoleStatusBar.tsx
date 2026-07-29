@@ -22,7 +22,7 @@ function ServiceDot({ label, ok }: { label: string; ok: boolean }): React.JSX.El
 export default function ConsoleStatusBar({
   session,
   services,
-  onOpenMini,
+  onOpenMini
 }: ConsoleStatusBarProps): React.JSX.Element {
   return (
     <div className="flex items-center gap-5 border-b bg-card px-6 py-3">
@@ -31,7 +31,9 @@ export default function ConsoleStatusBar({
         <span className="rounded bg-destructive px-2 py-0.5 text-micro font-bold tracking-wide text-white">
           ● LIVE
         </span>
-        <span className="font-mono text-xl font-bold">{formatMs(session.elapsedSeconds * 1000)}</span>
+        <span className="font-mono text-xl font-bold">
+          {formatMs(session.elapsedSeconds * 1000)}
+        </span>
       </div>
 
       {/* 현재 시청자 */}

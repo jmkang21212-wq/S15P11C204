@@ -32,7 +32,7 @@ export default function DashboardPage(): React.JSX.Element {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
-    weekday: 'long',
+    weekday: 'long'
   })
 
   return (

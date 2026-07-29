@@ -8,7 +8,7 @@ import {
   TrendingUp,
   UserRound,
   Handshake,
-  type LucideIcon,
+  type LucideIcon
 } from 'lucide-react'
 import { cn } from '@renderer/lib/utils'
 import { PATHS } from '@renderer/routes/paths'
@@ -28,7 +28,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: PATHS.clips, label: '클립', icon: Film },
   { to: PATHS.growth, label: '성장 리포트', icon: TrendingUp },
   { to: PATHS.portfolio, label: '포트폴리오', icon: UserRound },
-  { to: PATHS.matching, label: '비즈니스 매칭', icon: Handshake },
+  { to: PATHS.matching, label: '비즈니스 매칭', icon: Handshake }
 ]
 
 interface GNBProps {
@@ -47,7 +47,7 @@ export default function GNB({ collapsed = false, live = false }: GNBProps): Reac
     <nav
       className={cn(
         'flex h-full shrink-0 flex-col border-r bg-card',
-        collapsed ? 'w-[60px] items-center' : 'w-[232px]',
+        collapsed ? 'w-[60px] items-center' : 'w-[232px]'
       )}
     >
       {/* 로고 */}
@@ -65,13 +65,10 @@ export default function GNB({ collapsed = false, live = false }: GNBProps): Reac
           // TODO: 현재 진행 중인 세션의 콘솔(/console/:sessionId)로 이동
           className={cn(
             'mx-2 mb-2 flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs font-semibold text-destructive',
-            collapsed && 'mx-1 justify-center px-0',
+            collapsed && 'mx-1 justify-center px-0'
           )}
         >
-          <span
-            className="size-2 rounded-full bg-destructive shadow-live-ring"
-            aria-hidden
-          />
+          <span className="size-2 rounded-full bg-destructive shadow-live-ring" aria-hidden />
           {!collapsed && <span>LIVE · 콘솔 열기</span>}
         </button>
       )}
@@ -89,7 +86,7 @@ export default function GNB({ collapsed = false, live = false }: GNBProps): Reac
                   isActive
                     ? 'bg-accent font-semibold text-accent-foreground'
                     : 'font-medium text-muted-foreground hover:bg-accent/50',
-                  collapsed && 'justify-center px-0',
+                  collapsed && 'justify-center px-0'
                 )
               }
             >

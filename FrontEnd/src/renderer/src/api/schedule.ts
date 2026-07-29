@@ -18,7 +18,7 @@ export function buildMockAnnouncement(event: CalendarEvent): string {
   const time = new Date(event.startAt).toLocaleTimeString('ko-KR', {
     hour: '2-digit',
     minute: '2-digit',
-    hour12: false,
+    hour12: false
   })
   if (event.eventType === 'DAY_OFF') {
     return `📢 오늘은 휴방입니다. 다음 방송에서 만나요! 🙌`
@@ -37,7 +37,7 @@ const MOCK_EVENTS: CalendarEvent[] = [
   ev(107, 'BROADCAST', '발로란트 랭크 정복 Day 10', '2026-07-13T12:00:00Z', '2026-07-13T15:00:00Z'),
   ev(108, 'BROADCAST', '심야 수다방', '2026-07-15T12:00:00Z', '2026-07-15T15:00:00Z'),
   ev(109, 'BROADCAST', '롤토체스 랭크', '2026-07-17T11:00:00Z', '2026-07-17T14:00:00Z'),
-  ev(110, 'BROADCAST', '발로란트 랭크 정복 Day 12', '2026-07-20T12:00:00Z', '2026-07-20T15:00:00Z'),
+  ev(110, 'BROADCAST', '발로란트 랭크 정복 Day 12', '2026-07-20T12:00:00Z', '2026-07-20T15:00:00Z')
 ]
 
 function ev(
@@ -46,7 +46,7 @@ function ev(
   title: string,
   startAt: string,
   endAt: string,
-  platformAccountId: number | null = 15,
+  platformAccountId: number | null = 15
 ): CalendarEvent {
   return {
     calendarEventId: id,
@@ -56,6 +56,6 @@ function ev(
     memo: null,
     startAt,
     endAt,
-    status: 'SCHEDULED',
+    status: 'SCHEDULED'
   }
 }

@@ -33,7 +33,7 @@ export default function EventForm({
   event,
   onSave,
   onClose,
-  onDelete,
+  onDelete
 }: EventFormProps): React.JSX.Element {
   const [eventType, setEventType] = useState<CalendarEventType>(event?.eventType ?? 'BROADCAST')
   const [title, setTitle] = useState(event?.title ?? '')
@@ -58,7 +58,7 @@ export default function EventForm({
       title,
       memo: memo || null,
       startAt: withTime(event.startAt, startTime),
-      endAt: withTime(event.endAt, endTime),
+      endAt: withTime(event.endAt, endTime)
     })
   }
 
@@ -89,7 +89,7 @@ export default function EventForm({
               'flex-1 rounded-lg border py-2 text-xs font-semibold',
               eventType === t
                 ? 'border-primary bg-primary text-primary-foreground'
-                : 'text-muted-foreground',
+                : 'text-muted-foreground'
             )}
           >
             {t === 'BROADCAST' ? '방송' : '휴방'}

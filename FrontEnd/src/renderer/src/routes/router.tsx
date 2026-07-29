@@ -58,8 +58,8 @@ export const router = createHashRouter([
 
       // 아직 구현되지 않은 GNB 메뉴를 받는다. GNB는 남겨 두고 본문만 안내로 채운다.
       // 담당자가 위에 라우트를 추가하면 자연히 대체된다.
-      { path: '*', element: <NotFoundPage /> },
-    ],
+      { path: '*', element: <NotFoundPage /> }
+    ]
   },
 
   // ── 방송 콘솔: 축소 레이아웃 ──
@@ -67,7 +67,7 @@ export const router = createHashRouter([
     element: <ConsoleLayout />,
     children: [
       { path: PATHS.console, element: <BroadcastConsolePage /> },
-      { path: PATHS.consoleSession, element: <BroadcastConsolePage /> },
-    ],
-  },
+      { path: PATHS.consoleSession, element: <BroadcastConsolePage /> }
+    ]
+  }
 ])

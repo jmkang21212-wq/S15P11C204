@@ -28,7 +28,7 @@ export default function CalendarMonth({
   onPrevMonth,
   onNextMonth,
   onSelectEvent,
-  onAddEvent,
+  onAddEvent
 }: CalendarMonthProps): React.JSX.Element {
   // 일정을 날짜별로 그룹화 (로컬 날짜 기준)
   const eventsByDay = new Map<string, CalendarEvent[]>()
@@ -53,7 +53,9 @@ export default function CalendarMonth({
       {/* 헤더 */}
       <div className="mb-4 flex items-center gap-3">
         <div className="flex rounded-lg bg-muted p-0.5">
-          <span className="rounded-md bg-card px-3.5 py-1.5 text-xs font-semibold shadow-sm">월</span>
+          <span className="rounded-md bg-card px-3.5 py-1.5 text-xs font-semibold shadow-sm">
+            월
+          </span>
           <span className="px-3.5 py-1.5 text-xs font-semibold text-muted-foreground">주</span>
         </div>
         <div className="flex items-center gap-2">
@@ -83,7 +85,7 @@ export default function CalendarMonth({
             className={cn(
               'py-2 text-center text-xs font-semibold text-muted-foreground',
               i === 0 && 'text-destructive',
-              i === 6 && 'text-cyan-600',
+              i === 6 && 'text-cyan-600'
             )}
           >
             {w}
@@ -101,14 +103,14 @@ export default function CalendarMonth({
               key={i}
               className={cn(
                 'min-h-0 overflow-hidden border-r border-b p-1.5',
-                !inMonth && 'bg-muted/30',
+                !inMonth && 'bg-muted/30'
               )}
             >
               <span
                 className={cn(
                   'text-xs',
                   inMonth ? 'text-foreground' : 'text-muted-foreground/50',
-                  d.getDay() === 0 && inMonth && 'text-destructive',
+                  d.getDay() === 0 && inMonth && 'text-destructive'
                 )}
               >
                 {d.getDate()}
@@ -124,7 +126,7 @@ export default function CalendarMonth({
                       e.eventType === 'DAY_OFF'
                         ? 'bg-muted text-muted-foreground'
                         : 'bg-accent text-accent-foreground',
-                      e.calendarEventId === selectedEventId && 'ring-2 ring-primary',
+                      e.calendarEventId === selectedEventId && 'ring-2 ring-primary'
                     )}
                   >
                     {e.eventType === 'BROADCAST' && (

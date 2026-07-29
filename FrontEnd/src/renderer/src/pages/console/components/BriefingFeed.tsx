@@ -8,7 +8,7 @@ const TYPE_META: Record<BriefingType, { label: string; badge: string }> = {
   RISK: { label: '위험 발언', badge: 'text-destructive bg-destructive/10' },
   CHAT_SUMMARY: { label: '채팅 요약', badge: 'text-cyan-700 bg-cyan-50' },
   FAQ: { label: '반복 질문', badge: 'text-violet-700 bg-violet-50' },
-  PROMISE: { label: '약속 감지', badge: 'text-amber-700 bg-amber-50' },
+  PROMISE: { label: '약속 감지', badge: 'text-amber-700 bg-amber-50' }
 }
 
 function BriefingItem({ briefing }: { briefing: Briefing }): React.JSX.Element {
@@ -19,7 +19,7 @@ function BriefingItem({ briefing }: { briefing: Briefing }): React.JSX.Element {
     <li
       className={cn(
         'rounded-xl border bg-card p-4',
-        isHighRisk && 'border-destructive/40 border-l-4 border-l-destructive bg-destructive/5',
+        isHighRisk && 'border-destructive/40 border-l-4 border-l-destructive bg-destructive/5'
       )}
     >
       <div className="mb-1.5 flex items-center gap-2">

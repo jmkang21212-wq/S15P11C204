@@ -28,7 +28,11 @@ interface StatusBadgeProps {
   className?: string
 }
 
-export default function StatusBadge({ tone, label, className }: StatusBadgeProps): React.JSX.Element {
+export default function StatusBadge({
+  tone,
+  label,
+  className
+}: StatusBadgeProps): React.JSX.Element {
   return (
     <Badge variant="outline" className={cn('font-semibold', TONE_CLASS[tone], className)}>
       {label}

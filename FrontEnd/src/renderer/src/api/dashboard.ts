@@ -23,7 +23,7 @@ const MOCK_DASHBOARD: DashboardData = {
     title: '발로란트 랭크 정복 Day 12',
     startAt: '2026-07-21T12:00:00Z',
     endAt: '2026-07-21T15:00:00Z',
-    status: 'SCHEDULED',
+    status: 'SCHEDULED'
   },
   recentSession: {
     sessionId: 9001,
@@ -32,7 +32,7 @@ const MOCK_DASHBOARD: DashboardData = {
     reportStatus: 'COMPLETED',
     avgViewers: 2105,
     peakViewers: 3842,
-    summary: '롤토체스 구간에서 시청자 유입이 집중되었습니다.',
+    summary: '롤토체스 구간에서 시청자 유입이 집중되었습니다.'
   },
   pendingPromiseCount: 5,
   pendingPromises: [
@@ -42,7 +42,7 @@ const MOCK_DASHBOARD: DashboardData = {
       content: '구독자 500명 달성 시 게임 추가',
       status: 'PENDING',
       dueDate: '2026-07-26',
-      detectedAt: '2026-07-20T14:43:00Z',
+      detectedAt: '2026-07-20T14:43:00Z'
     },
     {
       promiseId: 32,
@@ -50,7 +50,7 @@ const MOCK_DASHBOARD: DashboardData = {
       content: '다음 주 합방 일정 공지하기',
       status: 'ON_HOLD',
       dueDate: null,
-      detectedAt: '2026-07-18T13:10:00Z',
+      detectedAt: '2026-07-18T13:10:00Z'
     },
     {
       promiseId: 33,
@@ -58,8 +58,8 @@ const MOCK_DASHBOARD: DashboardData = {
       content: '지난 방송 하이라이트 클립 올리기',
       status: 'PENDING',
       dueDate: '2026-07-28',
-      detectedAt: '2026-07-19T22:05:00Z',
-    },
+      detectedAt: '2026-07-19T22:05:00Z'
+    }
   ],
   weeklyMetrics: {
     periodStart: '2026-07-14',
@@ -67,13 +67,13 @@ const MOCK_DASHBOARD: DashboardData = {
     avgViewers: 2138,
     avgViewersChangeRate: 0.12,
     totalChat: 48200,
-    totalChatChangeRate: 0.08,
+    totalChatChangeRate: 0.08
   },
   recentHighlights: [
     { highlightId: 71, durationMs: 42000, clipUrl: '', thumbnailUrl: '' },
     { highlightId: 72, durationMs: 68000, clipUrl: '', thumbnailUrl: '' },
     { highlightId: 73, durationMs: 55000, clipUrl: '', thumbnailUrl: '' },
     { highlightId: 74, durationMs: 91000, clipUrl: '', thumbnailUrl: '' },
-    { highlightId: 75, durationMs: 38000, clipUrl: '', thumbnailUrl: '' },
-  ],
+    { highlightId: 75, durationMs: 38000, clipUrl: '', thumbnailUrl: '' }
+  ]
 }

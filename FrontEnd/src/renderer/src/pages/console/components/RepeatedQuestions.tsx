@@ -2,7 +2,7 @@ import { formatCount } from '@renderer/lib/format'
 import type { RepeatedQuestion } from '@renderer/types/console'
 
 export default function RepeatedQuestions({
-  questions,
+  questions
 }: {
   questions: RepeatedQuestion[]
 }): React.JSX.Element {

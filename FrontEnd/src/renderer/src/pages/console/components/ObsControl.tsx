@@ -90,7 +90,11 @@ export default function ObsControl(): React.JSX.Element {
       {showForm && !connected && (
         <div className="absolute top-full right-0 z-50 mt-2 flex w-64 flex-col gap-2 rounded-lg border bg-card p-3 shadow-md">
           <label className="text-xs font-medium text-muted-foreground">WebSocket 주소</label>
-          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="ws://127.0.0.1:4455" />
+          <Input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="ws://127.0.0.1:4455"
+          />
           <label className="text-xs font-medium text-muted-foreground">비밀번호</label>
           <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
           {error && <p className="text-xs text-destructive">{error}</p>}

@@ -20,7 +20,7 @@ function blankEvent(year: number, month: number): CalendarEvent {
     memo: null,
     startAt: start.toISOString(),
     endAt: end.toISOString(),
-    status: 'SCHEDULED',
+    status: 'SCHEDULED'
   }
 }
 

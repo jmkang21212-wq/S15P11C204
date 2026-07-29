@@ -26,7 +26,9 @@ export default function AnnouncementDraft({ content }: AnnouncementDraftProps): 
         </span>
         <span className="text-xs font-bold text-success">공지 문구 제안</span>
       </div>
-      <p className="mb-3 rounded-lg border bg-card px-3 py-2.5 text-xs leading-relaxed">{content}</p>
+      <p className="mb-3 rounded-lg border bg-card px-3 py-2.5 text-xs leading-relaxed">
+        {content}
+      </p>
       <div className="flex gap-2">
         <button
           type="button"

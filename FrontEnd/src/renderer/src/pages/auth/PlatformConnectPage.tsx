@@ -15,7 +15,7 @@ const STEPS = ['플랫폼 선택', 'OAuth 인증', '채널 확인']
 
 const PLATFORMS: { id: Platform; name: string; subLabel: string; color: string }[] = [
   { id: 'CHZZK', name: '치지직', subLabel: 'CHZZK', color: PLATFORM_BRAND_COLOR.CHZZK },
-  { id: 'SOOP', name: 'SOOP', subLabel: '숲', color: PLATFORM_BRAND_COLOR.SOOP },
+  { id: 'SOOP', name: 'SOOP', subLabel: '숲', color: PLATFORM_BRAND_COLOR.SOOP }
 ]
 
 /**
@@ -90,8 +90,8 @@ export default function PlatformConnectPage(): React.JSX.Element {
                   <Link2 className="size-4 text-muted-foreground" aria-hidden />
                 </span>
                 <p className="text-xs leading-relaxed text-muted-foreground">
-                  기본 브라우저에서 <b className="text-foreground">OAuth 인증 창</b>이 열립니다. 인증을
-                  완료하면 자동으로 앱으로 돌아옵니다.
+                  기본 브라우저에서 <b className="text-foreground">OAuth 인증 창</b>이 열립니다.
+                  인증을 완료하면 자동으로 앱으로 돌아옵니다.
                 </p>
               </div>
 

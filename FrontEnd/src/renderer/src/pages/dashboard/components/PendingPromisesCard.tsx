@@ -10,7 +10,7 @@ interface PendingPromisesCardProps {
 
 export default function PendingPromisesCard({
   promises,
-  count,
+  count
 }: PendingPromisesCardProps): React.JSX.Element {
   const remaining = count - promises.length
 
@@ -32,9 +32,7 @@ export default function PendingPromisesCard({
             >
               <div className="flex-1">
                 <p className="text-sm">{promise.content}</p>
-                <p className="text-xs text-muted-foreground">
-                  기한 {promise.dueDate ?? '미정'}
-                </p>
+                <p className="text-xs text-muted-foreground">기한 {promise.dueDate ?? '미정'}</p>
               </div>
               {/* TODO: PATCH /promises/{id} 로 상태 변경 (완료/보류) */}
               <div className="flex gap-1.5">
@@ -49,7 +47,9 @@ export default function PendingPromisesCard({
           ))}
           {remaining > 0 && (
             // TODO: 약속 전체 목록 화면(GET /promises)으로 이동
-            <p className="pt-1 text-center text-xs text-muted-foreground">더 보기 ({remaining}건)</p>
+            <p className="pt-1 text-center text-xs text-muted-foreground">
+              더 보기 ({remaining}건)
+            </p>
           )}
         </ul>
       ) : (
