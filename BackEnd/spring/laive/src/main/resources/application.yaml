@@ -92,6 +92,32 @@ laive:
     # 채팅 1초 배치가 이 수를 넘는 일은 없다. 사고성 대량 요청의 상한이다.
     max-batch-items: 1000
 
+  # 채팅 감정 분류 AI(chat-ai, 기본 포트 8001) 호출 설정 (계약: AI/CHAT_AI_API.md)
+  chat-ai:
+    # 비어 있으면 AI를 연결하지 않는다(no-op). 채팅은 sentiment_label 없이 저장된다.
+    base-url: "${CHATAI_BASE_URL:}"
+    token: "${CHATAI_TOKEN:}"
+    # 계약 권장 2초. 이 대기는 수집기 배치 응답 지연에 그대로 더해지므로,
+    # 늘릴 때는 수집기 쪽 HTTP Timeout도 함께 조정해야 한다.
+    ingest-timeout: 2s
+
+  # CHAT_SURGE 하이라이트 판정 파라미터 (알고리즘: AI/chat-ai/HIGHLIGHT_SPEC.md)
+  # 전부 백테스트 미검증 초기값이다. 실방송 DEBUG 로그(ts, engagement, z, state)가 튜닝 근거다.
+  highlight:
+    engage-window: 60s     # 유니크 채터 윈도우. ingest의 180초와 다른 이유는 스펙 §0
+    baseline-size: 900     # 900틱 = 15분
+    z-enter: 3.0
+    enter-ticks: 3
+    z-exit: 1.5
+    exit-ticks: 15
+    lead: 30s              # 확정 시 시작점 소급 — 반응은 원인보다 늦다
+    max-active: 5m
+    cooldown: 30s
+    warmup: 3m             # 방송 시작 인사 러시 오탐 방지 (가드 1)
+    min-window-chats: 10   # 저활동 틱 판정 생략 (가드 3)
+    mad-epsilon: 0.001     # MAD 하한 (가드 2)
+    tick-interval: 1s
+
   # Spring이 치지직 채팅 수집기 제어 서비스를 호출할 때 쓰는 설정
   collector:
     # 비어 있으면 수집기를 연결하지 않는다(no-op). 로컬에서 나머지 API만 돌릴 때 쓴다.

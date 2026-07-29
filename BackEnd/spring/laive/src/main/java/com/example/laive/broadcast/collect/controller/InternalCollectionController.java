@@ -9,6 +9,7 @@ import com.example.laive.broadcast.collect.dto.response.BatchIngestResponse;
 import com.example.laive.broadcast.collect.dto.response.CollectorCredentialsResponse;
 import com.example.laive.broadcast.collect.integration.CollectorStatusStore;
 import com.example.laive.broadcast.collect.service.CollectionIngestService;
+import com.example.laive.broadcast.collect.service.CollectionRelayService;
 import com.example.laive.broadcast.collect.service.CollectorCredentialsService;
 import com.example.laive.common.api.ApiResponse;
 import com.example.laive.common.exception.BusinessException;
@@ -44,6 +45,7 @@ import java.util.function.Supplier;
 public class InternalCollectionController {
 
     private final CollectionIngestService ingestService;
+    private final CollectionRelayService relayService;
     private final CollectorCredentialsService credentialsService;
     private final CollectorStatusStore collectorStatusStore;
     private final RequestIdGuard requestIdGuard;
@@ -52,6 +54,7 @@ public class InternalCollectionController {
 
     public InternalCollectionController(
             CollectionIngestService ingestService,
+            CollectionRelayService relayService,
             CollectorCredentialsService credentialsService,
             CollectorStatusStore collectorStatusStore,
             RequestIdGuard requestIdGuard,
@@ -59,6 +62,7 @@ public class InternalCollectionController {
             ObjectMapper objectMapper
     ) {
         this.ingestService = ingestService;
+        this.relayService = relayService;
         this.credentialsService = credentialsService;
         this.collectorStatusStore = collectorStatusStore;
         this.requestIdGuard = requestIdGuard;
@@ -79,7 +83,7 @@ public class InternalCollectionController {
                 BatchIngestResponse.class,
                 () -> {
                     BatchIngestResult result =
-                            ingestService.appendChatMessages(sessionId, request.toDomain());
+                            relayService.appendChatMessages(sessionId, request.toDomain());
                     return BatchIngestResponse.from(result);
                 }
         );
@@ -99,7 +103,7 @@ public class InternalCollectionController {
                 BatchIngestResponse.class,
                 () -> {
                     BatchIngestResult result =
-                            ingestService.appendViewerMetrics(sessionId, request.toDomain());
+                            relayService.appendViewerMetrics(sessionId, request.toDomain());
                     return BatchIngestResponse.from(result);
                 }
         );
@@ -145,7 +149,7 @@ public class InternalCollectionController {
             @PathVariable @Positive long sessionId,
             @Valid @RequestBody CollectionGapRequest request
     ) {
-        ingestService.recordCollectionGap(sessionId, request.toDomain());
+        relayService.recordCollectionGap(sessionId, request.toDomain());
         return ResponseEntity.noContent().build();
     }
 

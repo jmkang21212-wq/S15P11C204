@@ -49,7 +49,8 @@ public class CollectionIngestService {
                 .map(item -> new ResolvedChatMessage(
                         viewerIds.get(item.viewerHash()),
                         item.message(),
-                        item.sentAt()
+                        item.sentAt(),
+                        item.sentimentLabel()
                 ))
                 .toList();
 
