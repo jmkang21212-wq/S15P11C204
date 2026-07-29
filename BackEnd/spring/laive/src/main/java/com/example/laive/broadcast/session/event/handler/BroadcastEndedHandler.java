@@ -9,7 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
 /**
- * 방송 종료 후 수집기 Flush, 통계 확정과 리포트 생성을 수행한다.
+ * 방송 종료 후 수집기 Flush와 세션 통계 확정을 수행한다.
  */
 @Component
 public class BroadcastEndedHandler implements BroadcastOutboxEventHandler {

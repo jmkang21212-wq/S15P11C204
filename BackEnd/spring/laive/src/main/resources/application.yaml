@@ -80,8 +80,3 @@ laive:
       lease: 30s
       max-attempts: 8
       max-backoff: 5m
-    ai:
-      # FastAPI와 Object Storage 준비 전에는 로컬 통계까지만 확정해 PARTIAL로 저장한다.
-      report-enabled: "${AI_REPORT_ENABLED:false}"
-      base-url: "${AI_BASE_URL:http://localhost:8000}"
-      service-token: "${AI_SERVICE_TOKEN:}"

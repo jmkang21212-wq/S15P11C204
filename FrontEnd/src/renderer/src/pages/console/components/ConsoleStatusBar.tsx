@@ -2,6 +2,7 @@ import { Button } from '@renderer/components/ui/button'
 import { cn } from '@renderer/lib/utils'
 import { formatMs, formatCount } from '@renderer/lib/format'
 import type { ConsoleServices, LiveSnapshotSession } from '@renderer/types/console'
+import ObsControl from './ObsControl'
 
 interface ConsoleStatusBarProps {
   session: LiveSnapshotSession
@@ -50,10 +51,9 @@ export default function ConsoleStatusBar({
       <Button variant="outline" size="sm" onClick={onOpenMini}>
         미니 모드
       </Button>
-      {/* TODO: 방송 종료 = POST /broadcast-sessions/{id}/end */}
-      <Button variant="destructive" size="sm">
-        방송 종료
-      </Button>
+
+      {/* OBS 연결 + 방송 시작/종료(OBS 송출 제어) */}
+      <ObsControl />
     </div>
   )
 }

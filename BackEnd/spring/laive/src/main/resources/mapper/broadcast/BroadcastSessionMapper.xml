@@ -201,18 +201,15 @@
     </select>
 
     <!--
-      감정 비율은 방송 중 쌓인 sentiment_snapshots를 윈도우별 채팅량으로
-      가중 평균해서 확정한다 (API 명세 13.7). 3분 윈도우마다 채팅량 차이가
-      크므로 단순 평균은 한산한 구간을 피크 구간과 같은 비중으로 다룬다.
-      message_count가 없는 과거 스냅샷만 있는 세션에서는 단순 평균으로 되돌아간다.
+      감정은 chat_messages의 건별 라벨을 세어 확정한다 (API 명세 13.7).
+      비율이 아니라 건수를 저장하므로 반올림 잔차가 생기지 않고, 건별로 세는
+      것 자체가 채팅량 가중이라 윈도우 가중치를 따로 둘 필요가 없다.
 
-      세 비율을 sum(message_count)이 아니라 가중합의 총합으로 나누는 이유:
-      스냅샷마다 세 비율의 합이 반올림 때문에 정확히 1이 아닐 수 있다.
-      가중합의 총합으로 나누면 반올림 전 단계에서 합이 정확히 1이 된다.
-      round(_, 3) 이후 남는 ±0.001 잔차는 SessionStatistics가 흡수한다.
+      count(sentiment_label)은 NULL을 세지 않으므로 그대로 analyzed_chat이 된다.
+      total_chat과의 차이가 방송 중 분류 호출이 실패한 분량이다.
 
-      스냅샷이 하나도 없으면 sum·avg가 NULL이 되고 nullif가 분모를 NULL로
-      만들어 세 비율이 NULL로 남는다. 명세 1.5의 Nullable 사유와 같다.
+      채팅이 없으면 여덟 건수와 analyzed_chat이 모두 0이고, 시청자 지표가
+      없으면 average_viewers·peak_viewers만 NULL이 된다 (명세 1.5).
     -->
     <select id="calculateStatistics"
             resultType="com.example.laive.broadcast.session.domain.SessionStatistics">
@@ -223,46 +220,49 @@
              WHERE session_id = #{sessionId}
         ),
         chat AS (
-            SELECT count(*) AS total_chat
+            SELECT count(*)                                               AS total_chat,
+                   count(sentiment_label)                                 AS analyzed_chat,
+                   count(*) FILTER (WHERE sentiment_label = 'JOY')        AS joy_count,
+                   count(*) FILTER (WHERE sentiment_label = 'EXCITEMENT') AS excitement_count,
+                   count(*) FILTER (WHERE sentiment_label = 'SUPPORT')    AS support_count,
+                   count(*) FILTER (WHERE sentiment_label = 'SURPRISE')   AS surprise_count,
+                   count(*) FILTER (WHERE sentiment_label = 'SADNESS')    AS sadness_count,
+                   count(*) FILTER (WHERE sentiment_label = 'ANGER')      AS anger_count,
+                   count(*) FILTER (WHERE sentiment_label = 'CONFUSION')  AS confusion_count,
+                   count(*) FILTER (WHERE sentiment_label = 'NEUTRAL')    AS neutral_count
               FROM chat_messages
              WHERE session_id = #{sessionId}
-        ),
-        sentiment AS (
-            SELECT sum(coalesce(message_count, 0))                  AS analyzed_chat,
-                   sum(positive_ratio * coalesce(message_count, 0)) AS weighted_positive,
-                   sum(neutral_ratio  * coalesce(message_count, 0)) AS weighted_neutral,
-                   sum(negative_ratio * coalesce(message_count, 0)) AS weighted_negative,
-                   avg(positive_ratio)                              AS mean_positive,
-                   avg(neutral_ratio)                               AS mean_neutral,
-                   avg(negative_ratio)                              AS mean_negative
-              FROM sentiment_snapshots
-             WHERE session_id = #{sessionId}
-        ),
-        ratio AS (
-            SELECT CASE WHEN analyzed_chat > 0 THEN weighted_positive ELSE mean_positive END AS positive,
-                   CASE WHEN analyzed_chat > 0 THEN weighted_neutral  ELSE mean_neutral  END AS neutral,
-                   CASE WHEN analyzed_chat > 0 THEN weighted_negative ELSE mean_negative END AS negative
-              FROM sentiment
         )
         SELECT v.average_viewers,
                v.peak_viewers,
                c.total_chat,
-               round(r.positive / nullif(r.positive + r.neutral + r.negative, 0), 3) AS positive_ratio,
-               round(r.neutral  / nullif(r.positive + r.neutral + r.negative, 0), 3) AS neutral_ratio,
-               round(r.negative / nullif(r.positive + r.neutral + r.negative, 0), 3) AS negative_ratio
+               c.analyzed_chat,
+               c.joy_count,
+               c.excitement_count,
+               c.support_count,
+               c.surprise_count,
+               c.sadness_count,
+               c.anger_count,
+               c.confusion_count,
+               c.neutral_count
           FROM viewer v
          CROSS JOIN chat c
-         CROSS JOIN ratio r
     </select>
 
     <update id="updateReportStatistics">
         UPDATE reports
-           SET avg_viewers = #{statistics.averageViewers},
-               peak_viewers = #{statistics.peakViewers},
-               total_chat = #{statistics.totalChat},
-               positive_ratio = #{statistics.positiveRatio},
-               neutral_ratio = #{statistics.neutralRatio},
-               negative_ratio = #{statistics.negativeRatio}
+           SET avg_viewers      = #{statistics.averageViewers},
+               peak_viewers     = #{statistics.peakViewers},
+               total_chat       = #{statistics.totalChat},
+               analyzed_chat    = #{statistics.analyzedChat},
+               joy_count        = #{statistics.joyCount},
+               excitement_count = #{statistics.excitementCount},
+               support_count    = #{statistics.supportCount},
+               surprise_count   = #{statistics.surpriseCount},
+               sadness_count    = #{statistics.sadnessCount},
+               anger_count      = #{statistics.angerCount},
+               confusion_count  = #{statistics.confusionCount},
+               neutral_count    = #{statistics.neutralCount}
          WHERE id = #{reportId}
            AND status = 'PROCESSING'
     </update>
