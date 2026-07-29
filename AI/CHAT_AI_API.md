@@ -161,15 +161,164 @@ GET /broadcasts/{broadcastId}/summary
 이 값을 바꾸려면 AI(`chatai/config.py`의 `SUMMARY_FOCUS_THRESH`)와 프론트
 상수를 **함께** 수정할 것.
 
-## 3. 방송 종료
+## 3. 반복 질문 Top N
+
+```
+GET /broadcasts/{broadcastId}/questions?limit=5&exclude=3,7,12
+```
+
+**폴링 주기 10~30초를 권장한다.** `/ingest`(1초)와 달리 목록은 천천히 변한다.
+
+| 파라미터 | 기본 | 설명 |
+|---|---|---|
+| `limit` | 5 | 반환 개수 (최대 50) |
+| `exclude` | — | **스트리머가 지운 `questionId`** 목록 (쉼표 구분) |
+
+```json
+{
+  "questions": [
+    { "questionId": 7, "text": "오늘 몇 시까지 하세요?", "type": "FAQ",
+      "askers": 42, "messages": 51,
+      "firstAskedAt": 1753690000123, "lastAskedAt": 1753693400555 }
+  ],
+  "totalQuestions": 1284,
+  "pendingEmbedding": 23,
+  "updatedAt": 1753693410000
+}
+```
+
+| 필드 | 설명 |
+|---|---|
+| `questionId` | **폴링해도 안 바뀌고 재사용되지 않는다.** 삭제 기록의 기준 |
+| `text` | 그 묶음에서 가장 많이 쓰인 표현 |
+| `type` | `FAQ` \| `CONTEXT` \| `null`(아직 판정 전) — 아래 참조 |
+| `askers` | **몇 명이 물었나** (유니크 uid). 정렬 기준이자 화면에 표시할 숫자 |
+| `messages` | 총 메시지 수. `askers`와 크게 벌어지면 한 명의 도배 |
+| `pendingEmbedding` | 아직 반영 안 된 대기 건수. 0이 아니면 목록이 조금 늦은 상태 |
+
+집계 범위는 **방송 전체**다 (여론 요약의 3분 윈도우와 다르다).
+
+### `type` — 답할 수 있는 질문인가
+
+```
+FAQ     화면을 안 봐도 답할 수 있다
+        "내일 야방있음?" "오늘 2부는 메이플인가요?" "데바데도 브레이킹 있음?"
+CONTEXT 지금 화면이나 직전 대화를 알아야 한다
+        "저게 안맞아?" "아니 이거 뭐야" "왼쪽 3개?"
+null    아직 판정 전 (곧 채워진다)
+```
+
+**AI는 태그만 붙이고 거르지 않는다.** 필터는 프론트에서 "전체 / FAQ만" 토글로
+주는 것을 권한다 — 판정이 틀렸을 때 스트리머가 원본을 볼 수 있어야 한다.
+
+⚠ **FAQ는 소수다.** 게임 방송 실측에서 상위 30개 중 13개 정도였다. 시청자는
+화면을 보며 반응하지 FAQ를 던지지 않기 때문이다. **"FAQ만" 화면을 5개로 채우려면
+`limit=30` 정도로 넉넉히 받아 거르는 편이 안전하다.**
+
+### 삭제(답변 완료)는 Spring이 기억한다
+
+**AI는 무엇이 지워졌는지 저장하지 않는다.** 스트리머의 결정은 비즈니스 상태이고,
+AI의 Redis는 TTL 기반이라 재시작하면 지운 질문이 되살아난다.
+
+**AI는 답변 여부를 모르므로 계속 센다.** 이건 의도된 것이다 — 재질문 감지가
+공짜로 따라온다.
+
+```
+14:00  "내일 야방있음?"  askers 12
+14:05  스트리머 답변 → Spring이 dismissed 기록. AI는 모름
+16:00  같은 질문         askers 31   ← 19명이 더 물었다 = 답이 안 닿았다
+```
+
+#### ⚠ 답변 직후 60초는 기준을 잡지 말 것 (송출 지연)
+
+답변을 해도 시청자에게는 늦게 도달한다. **그동안 같은 질문이 계속 들어온다.**
+
+```
+T+0초   답변 시작
+T+5초   시청자 도달 (송출 지연)
+T+10초  듣고 이해
+T+15초  이미 타이핑 중이던 사람들이 엔터
+```
+
+답변 시점의 `askers`를 기준으로 삼으면 **답하자마자 "재질문 발생"이 뜬다.**
+기준값은 유예가 끝난 뒤에 기록해야 한다.
+
+```sql
+dismissed_at     TIMESTAMPTZ   -- 답변 처리 시각
+baseline_askers  INT           -- 유예 종료 후 기록 (NULL이면 아직 미확정)
+```
+
+```
+① 답변 완료      dismissed_at = now,  baseline_askers = NULL
+② 폴링마다       if baseline_askers IS NULL and now - dismissed_at >= 60초:
+                     baseline_askers = 현재 askers      ← 여기서 확정
+③ 재노출 판정    if baseline_askers IS NOT NULL
+                    and 현재 askers - baseline_askers >= 10:
+                     다시 보여준다
+```
+
+유예 60초는 송출 지연(4~5초) + 인지 시간 + 타이핑 중이던 사람을 덮는 값이다.
+짧으면 오탐이 남고, 길어도 재노출 임계(+10명)를 넘으려면 어차피 시간이 걸린다.
+
+#### 필터링 방식 — DB에 저장한다면
+
+`exclude` 파라미터로 AI에게 제외를 맡길 수도 있지만, **`repeated_questions`에
+저장한다면 쓰지 않는 편이 낫다.**
+
+```
+GET /questions?limit=50&exclude=3,7   →  3·7번이 응답에 없음
+Spring이 전량 교체                     →  DB에서도 사라짐
+                                       →  답변해준 질문이 세션 리포트에서 누락
+```
+
+권장:
+
+```
+AI 호출   GET /questions?limit=50        (exclude 없이 전량)
+DB        UPSERT (session_id, question_id)  — dismissed 플래그는 보존
+화면      DB에서 dismissed = false 필터
+```
+
+전량 교체(DELETE + INSERT)가 아니라 **UPSERT**여야 `dismissed`가 살아남는다.
+`questionId`를 재사용하지 않게 만든 이유가 여기에 있다.
+
+### 알아둘 것
+
+- **최대 30초 지연.** 임베딩을 배치로 처리한다. `/ingest` 안에서 부르면
+  GMS 호출(500건 1.9초)이 계약 타임아웃 2초를 먹는다
+- `askers`가 **3명 미만이면 목록에 안 나온다** (잡음 제거)
+- `GMS_KEY`가 없으면 빈 목록을 반환한다 — 나머지 기능은 정상
+- **404**: `ingest`가 들어온 적 없는 방송. **빈 목록(200)**: 아직 안 모임
+- 클러스터 상한(2,000개)을 넘으면 `askers`가 적은 것부터 사라진다. 그 `questionId`는
+  **재사용되지 않으므로** Spring의 기록이 엉뚱한 질문을 가리킬 일은 없다
+- Redis TTL 12시간. **세션 리포트는 DB에 저장된 값을 써야 한다**
+
+### DB 저장 시 쓰기 부담
+
+`limit=50` 폴링이면 세션당 행 수는 100~300행(약 60KB)으로 작다. 문제는 처리량이
+아니라 **의미 없는 UPDATE**다.
+
+```
+10초 폴링 × 5시간 × 50행 = 90,000 UPSERT
+그중 값이 실제로 바뀌는 건 극히 일부
+```
+
+PostgreSQL은 UPDATE마다 죽은 튜플을 남기므로 autovacuum 부담이 된다. 둘 중
+하나만 해도 충분하다:
+
+- **변경분만 UPSERT** — 직전 폴링 결과와 비교해 `askers`·`type`이 바뀐 행만
+  (90,000 → 수백 건)
+- **폴링 30초** — 10초 대비 1/3
+
+## 4. 방송 종료
 
 ```
 DELETE /broadcasts/{broadcastId}
 → 204
 ```
 
-윈도우·요약 캐시를 정리한다. 방송 종료 시 호출해주면 되고, **깜빡해도 된다** —
-마지막 ingest 후 10분이 지나면 AI 서버가 알아서 정리한다.
+윈도우·요약 캐시·질문 집계를 정리한다. 방송 종료 시 호출해주면 되고,
+**깜빡해도 된다** — TTL이 알아서 정리한다 (윈도우 10분, 질문 집계 12시간).
 
 ---
 
@@ -232,7 +381,7 @@ Spring이 DB 0을 쓰고 chat-ai는 **DB 1**을 쓰므로 키가 섞이지 않�
 CHATAI_TOKEN=<협의한 토큰>          # 비우면 인증 검사 안 함 (로컬 개발용)
 CHATAI_MODEL_DIR=models/kcelectra-chat-8emo-onnx
 CHATAI_REDIS_URL=redis://127.0.0.1:6379/1   # 팀 Redis의 DB 1 (기본값)
-GMS_KEY=<SSAFY GMS 키>              # /summary 용
+GMS_KEY=<SSAFY GMS 키>              # /summary(LLM) · /questions(임베딩) 공용
 ```
 
 동작 확인:
@@ -253,3 +402,6 @@ GET /health
 | 요약 최소 채팅 | 30건 | 〃 |
 | 요약 쿨다운 | 60초 | 〃 |
 | 유휴 자동 정리 | 마지막 ingest 후 10분 | 〃 |
+| 질문 노출 최소 인원 | 3명 | 〃 |
+| 질문 임베딩 주기 | 100건 또는 30초 | 〃 |
+| 질문 집계 보관 | 12시간 | 〃 |
