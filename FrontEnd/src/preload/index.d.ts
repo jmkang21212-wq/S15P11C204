@@ -1,4 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
+import type { BroadcastSessionDetail } from '@renderer/types/broadcastSession'
 
 export type ObsConnStatus = 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED'
 export interface ObsState {
@@ -35,11 +36,22 @@ export interface LaiveApi {
   obs: ObsBridge
   /** OAuth 인앱 창 (네이버 로그인·플랫폼 연동 공용). */
   oauth: OAuthBridge
+  /** 진행 중 방송 세션 상태 릴레이 (메인 창 → 미니·오버레이 창). */
+  session: SessionBridge
 }
 
 export interface OAuthBridge {
   /** OAuth 인앱 창. returnUri 복귀 시 그 URL, 취소 시 null. */
   open: (startUrl: string, returnUriPrefix: string) => Promise<string | null>
+}
+
+export interface SessionBridge {
+  /** owner(메인) 창이 새로 조회한 세션 상태를 다른 창에 전파하도록 main에 넘긴다. */
+  publish: (session: BroadcastSessionDetail | null) => void
+  /** follower(미니·오버레이) 창이 열릴 때 초기값을 받는다. */
+  getState: () => Promise<BroadcastSessionDetail | null>
+  /** 상태 변경 구독. 반환 함수 호출로 구독 해제. */
+  onState: (callback: (session: BroadcastSessionDetail | null) => void) => () => void
 }
 
 declare global {

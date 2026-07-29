@@ -3,6 +3,7 @@ import { cn } from '@renderer/lib/utils'
 import { formatMs, formatCount } from '@renderer/lib/format'
 import type { ConsoleServices, LiveSnapshotSession } from '@renderer/types/console'
 import ObsControl from './ObsControl'
+import SessionControl from './SessionControl'
 
 interface ConsoleStatusBarProps {
   session: LiveSnapshotSession
@@ -26,10 +27,15 @@ export default function ConsoleStatusBar({
 }: ConsoleStatusBarProps): React.JSX.Element {
   return (
     <div className="flex items-center gap-5 border-b bg-card px-6 py-3">
-      {/* LIVE + 경과 시간 */}
+      {/* 상태 + 경과 시간 */}
       <div className="flex items-center gap-2.5">
-        <span className="rounded bg-destructive px-2 py-0.5 text-micro font-bold tracking-wide text-white">
-          ● LIVE
+        <span
+          className={cn(
+            'rounded px-2 py-0.5 text-micro font-bold tracking-wide text-white',
+            session.status === 'PREPARING' ? 'bg-warning' : 'bg-destructive'
+          )}
+        >
+          {session.status === 'PREPARING' ? '● 준비 중' : '● LIVE'}
         </span>
         <span className="font-mono text-xl font-bold">
           {formatMs(session.elapsedSeconds * 1000)}
@@ -54,7 +60,10 @@ export default function ConsoleStatusBar({
         미니 모드
       </Button>
 
-      {/* OBS 연결 + 방송 시작/종료(OBS 송출 제어) */}
+      {/* LAIVE 분석 세션 종료 */}
+      <SessionControl sessionId={session.sessionId} />
+
+      {/* OBS 연결 + 송출 제어 */}
       <ObsControl />
     </div>
   )

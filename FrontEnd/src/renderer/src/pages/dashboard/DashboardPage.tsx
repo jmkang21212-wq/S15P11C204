@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { useAsyncData } from '@renderer/hooks/useAsyncData'
 import { getDashboard } from '@renderer/api/dashboard'
+import { fetchPrimaryPlatformAccount } from '@renderer/api/platformAccounts'
 import { ErrorState } from '@renderer/components/common/StateView'
 import UpcomingBroadcastCard from './components/UpcomingBroadcastCard'
 import RecentSessionCard from './components/RecentSessionCard'
@@ -27,6 +28,10 @@ export default function DashboardPage(): React.JSX.Element {
   const loader = useCallback(() => getDashboard(), [])
   const { data, loading, error, refetch } = useAsyncData(loader)
 
+  // "지금 방송 시작" 버튼이 누르기 전에 활성/비활성을 판단할 수 있도록 미리 조회해 둔다.
+  const platformLoader = useCallback(() => fetchPrimaryPlatformAccount(), [])
+  const { data: platformAccount, loading: platformAccountLoading } = useAsyncData(platformLoader)
+
   // TODO: 인사말의 이름은 GET /streamers/me 프로필에서 가져오기
   const today = new Date().toLocaleDateString('ko-KR', {
     year: 'numeric',
@@ -51,7 +56,11 @@ export default function DashboardPage(): React.JSX.Element {
       {!loading && data && (
         <>
           <div className="grid grid-cols-2 gap-4">
-            <UpcomingBroadcastCard broadcast={data.upcomingBroadcast} />
+            <UpcomingBroadcastCard
+              broadcast={data.upcomingBroadcast}
+              platformAccount={platformAccount ?? null}
+              platformAccountLoading={platformAccountLoading}
+            />
             <RecentSessionCard session={data.recentSession} />
             <PendingPromisesCard promises={data.pendingPromises} count={data.pendingPromiseCount} />
             <WeeklyMetricsCard metrics={data.weeklyMetrics} />

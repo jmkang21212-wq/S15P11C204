@@ -34,6 +34,19 @@ const api = {
   oauth: {
     open: (startUrl: string, returnUriPrefix: string): Promise<string | null> =>
       ipcRenderer.invoke('oauth:open', { startUrl, returnUriPrefix })
+  },
+  /**
+   * 진행 중 방송 세션 상태 릴레이. main은 값을 검사하지 않고 그대로 전달하므로
+   * 여기서는 unknown으로 받고, 실제 타입은 preload/index.d.ts의 SessionBridge가 정의한다.
+   */
+  session: {
+    publish: (session: unknown): void => ipcRenderer.send('session:state', session),
+    getState: (): Promise<unknown> => ipcRenderer.invoke('session:get-state'),
+    onState: (callback: (session: unknown) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, session: unknown): void => callback(session)
+      ipcRenderer.on('session:state', listener)
+      return () => ipcRenderer.removeListener('session:state', listener)
+    }
   }
 }
 

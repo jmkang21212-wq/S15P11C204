@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
   MonitorPlay,
@@ -36,13 +36,20 @@ interface GNBProps {
   collapsed?: boolean
   /** 진행 중인 방송이 있으면 상단 LIVE 배너를 노출한다. */
   live?: boolean
+  /** live일 때 배너 클릭 시 이동할 세션 ID. */
+  liveSessionId?: number
 }
 
 /**
  * Global Navigation Bar — 로그인 후 앱 화면들이 공유하는 좌측 주 메뉴.
  * 일반 화면은 232px, 방송 콘솔에서는 collapsed로 60px 축소된다.
  */
-export default function GNB({ collapsed = false, live = false }: GNBProps): React.JSX.Element {
+export default function GNB({
+  collapsed = false,
+  live = false,
+  liveSessionId
+}: GNBProps): React.JSX.Element {
+  const navigate = useNavigate()
   return (
     <nav
       className={cn(
@@ -62,7 +69,13 @@ export default function GNB({ collapsed = false, live = false }: GNBProps): Reac
       {live && (
         <button
           type="button"
-          // TODO: 현재 진행 중인 세션의 콘솔(/console/:sessionId)로 이동
+          onClick={() => {
+            if (liveSessionId !== undefined) {
+              navigate(PATHS.consoleSession.replace(':sessionId', String(liveSessionId)))
+            } else {
+              navigate(PATHS.console)
+            }
+          }}
           className={cn(
             'mx-2 mb-2 flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs font-semibold text-destructive',
             collapsed && 'mx-1 justify-center px-0'

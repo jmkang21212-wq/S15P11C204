@@ -1,16 +1,17 @@
 import { useCallback } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
+import { MonitorPlay } from 'lucide-react'
 import { useAsyncData } from '@renderer/hooks/useAsyncData'
+import type { CurrentSessionContext } from '@renderer/hooks/useCurrentSession'
 import { getLiveSnapshot } from '@renderer/api/console'
 import { Skeleton } from '@renderer/components/ui/skeleton'
-import { ErrorState } from '@renderer/components/common/StateView'
+import { Button } from '@renderer/components/ui/button'
+import { EmptyState, ErrorState } from '@renderer/components/common/StateView'
+import { PATHS } from '@renderer/routes/paths'
 import ConsoleStatusBar from './components/ConsoleStatusBar'
 import BriefingFeed from './components/BriefingFeed'
 import SentimentPanel from './components/SentimentPanel'
 import RepeatedQuestions from './components/RepeatedQuestions'
-
-/** 기본 세션 ID — /console(파라미터 없음) 진입 시 현재 세션 대체용. */
-const DEFAULT_SESSION_ID = 9002
 
 /**
  * SC-03 방송 콘솔 (정적 껍데기).
@@ -19,10 +20,50 @@ const DEFAULT_SESSION_ID = 9002
  *  briefings·sentiment·repeatedQuestions·viewers를 실시간 갱신.
  */
 export default function BroadcastConsolePage(): React.JSX.Element {
+  const navigate = useNavigate()
   const { sessionId } = useParams()
-  const sid = sessionId ? Number(sessionId) : DEFAULT_SESSION_ID
-  const loader = useCallback(() => getLiveSnapshot(sid), [sid])
+  // URL에 sessionId가 없으면(GNB LIVE 배너를 거치지 않고 /console로 바로 들어온 경우)
+  // 서버가 보고하는 진행 중 세션을 대신 쓴다. 폴링은 ConsoleLayout이 한 번만 돌려 여기로 내려준다.
+  const { session: currentSession, loading: currentLoading } =
+    useOutletContext<CurrentSessionContext>()
+  const sid = sessionId ? Number(sessionId) : (currentSession?.sessionId ?? null)
+
+  const loader = useCallback(() => {
+    if (sid === null) return Promise.resolve(null)
+    return getLiveSnapshot(sid)
+  }, [sid])
   const { data, loading, error, refetch } = useAsyncData(loader)
+
+  if (sessionId === undefined && currentLoading) {
+    return (
+      <div className="flex h-full flex-col gap-4 p-5">
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-full w-full rounded-xl" />
+      </div>
+    )
+  }
+
+  if (sid === null) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <EmptyState
+          icon={MonitorPlay}
+          title="진행 중인 방송이 없어요"
+          description="방송을 시작하면 콘솔이 여기에 표시됩니다."
+          action={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => navigate(PATHS.dashboard)}
+            >
+              대시보드로 가기
+            </Button>
+          }
+        />
+      </div>
+    )
+  }
 
   if (loading) {
     return (

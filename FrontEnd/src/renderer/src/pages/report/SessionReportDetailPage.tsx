@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { MessageSquare, Sparkles, TrendingUp, Users } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@renderer/components/ui/card'
@@ -40,7 +40,7 @@ function DetailSkeleton(): React.JSX.Element {
  * SC-06 세션 리포트 — 상세. "방송 직후 5분 복기"용 화면.
  *
  * 리포트 상태에 따라 화면이 갈린다.
- *   PROCESSING → 진행 카드로 전체 대체 (자동 폴링 없이 수동 새로고침)
+ *   PROCESSING → 진행 카드로 전체 대체, 10초 간격으로 자동 새로고침
  *   PARTIAL    → AI 요약 자리에 앰버 배너, 지표·차트는 정상 렌더
  *   FAILED     → 에러 상태
  */
@@ -51,6 +51,13 @@ export default function SessionReportDetailPage(): React.JSX.Element {
 
   const loader = useCallback(() => fetchSessionReport(numericSessionId), [numericSessionId])
   const { data, loading, error, refetch } = useAsyncData(loader)
+
+  // 분석 진행 중이면 수동 새로고침만으로는 불편하니 10초마다 자동으로 다시 조회한다.
+  useEffect(() => {
+    if (!data || !isProcessing(data)) return
+    const id = window.setInterval(refetch, 10_000)
+    return () => window.clearInterval(id)
+  }, [data, refetch])
 
   const goBack = (): void => {
     navigate(PATHS.sessionReport)

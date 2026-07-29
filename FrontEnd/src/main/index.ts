@@ -4,6 +4,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { registerObsIpc } from './obs'
 import { registerOAuthIpc } from './oauth'
+import { registerSessionIpc } from './session'
 
 /**
  * 렌더러가 넘긴 URL이 외부로 내보내도 되는 주소인지 검증한다.
@@ -153,6 +154,9 @@ app.whenReady().then(() => {
 
   // ── OAuth 인앱 창 (네이버 로그인 · 플랫폼 연동 공용) ──
   registerOAuthIpc()
+
+  // ── 현재 방송 세션 상태 릴레이 (메인 창 → 미니·오버레이 창) ──
+  registerSessionIpc()
 
   createWindow()
 

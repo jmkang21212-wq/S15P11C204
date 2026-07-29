@@ -1,5 +1,4 @@
 import type {
-  EndedSessionSummary,
   ReportHighlight,
   ReportInsight,
   ReportSegment,
@@ -8,6 +7,7 @@ import type {
   SessionReportProcessing,
   ViewerTimelinePoint
 } from '@renderer/types/report'
+import type { BroadcastSessionListItem } from '@renderer/types/broadcastSession'
 
 /**
  * SC-06 세션 리포트 목 데이터.
@@ -328,11 +328,47 @@ export const MOCK_REPORTS: Record<number, SessionReport | SessionReportProcessin
 }
 
 /** 종료된 세션 목록 — 명세서 §10.1 `GET /broadcast-sessions?status=ENDED` 대응 */
-export const MOCK_ENDED_SESSIONS: EndedSessionSummary[] = [
-  { ...SESSIONS[9002], avgViewers: 0, peakViewers: 0, reportStatus: 'PROCESSING' },
-  { ...SESSIONS[9003], avgViewers: 1480, peakViewers: 2260, reportStatus: 'PARTIAL' },
-  { ...SESSIONS[9001], avgViewers: 2105, peakViewers: 3842, reportStatus: 'COMPLETED' },
-  { ...SESSIONS[9004], avgViewers: 0, peakViewers: 0, reportStatus: 'FAILED' },
-  { ...SESSIONS[9005], avgViewers: 1726, peakViewers: 3150, reportStatus: 'COMPLETED' },
-  { ...SESSIONS[9006], avgViewers: 2610, peakViewers: 4764, reportStatus: 'COMPLETED' }
+export const MOCK_ENDED_SESSIONS: BroadcastSessionListItem[] = [
+  {
+    ...SESSIONS[9002],
+    category: '로그라이크',
+    thumbnailUrl: null,
+    status: 'ENDED',
+    reportStatus: 'PROCESSING'
+  },
+  {
+    ...SESSIONS[9003],
+    category: '저챗',
+    thumbnailUrl: null,
+    status: 'ENDED',
+    reportStatus: 'PARTIAL'
+  },
+  {
+    ...SESSIONS[9001],
+    category: '롤토체스',
+    thumbnailUrl: null,
+    status: 'ENDED',
+    reportStatus: 'COMPLETED'
+  },
+  {
+    ...SESSIONS[9004],
+    category: '노래방',
+    thumbnailUrl: null,
+    status: 'ENDED',
+    reportStatus: 'FAILED'
+  },
+  {
+    ...SESSIONS[9005],
+    category: '저챗',
+    thumbnailUrl: null,
+    status: 'ENDED',
+    reportStatus: 'COMPLETED'
+  },
+  {
+    ...SESSIONS[9006],
+    category: '마리오카트',
+    thumbnailUrl: null,
+    status: 'ENDED',
+    reportStatus: 'COMPLETED'
+  }
 ]
