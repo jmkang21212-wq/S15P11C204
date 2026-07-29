@@ -29,6 +29,10 @@ export interface Briefing {
   // UI 표현용 확장 필드 — 스냅샷엔 없을 수 있고 WebSocket data에서 전달됨
   level?: RiskLevel
   promiseId?: number
+  /** 근거가 된 발화 원문 (API 명세 §8 브리핑 payload의 quote) */
+  quote?: string
+  /** 판정 근거나 권장 조치 (API 명세 §8 브리핑 payload의 advice) */
+  advice?: string
 }
 
 export interface Sentiment {
