@@ -40,7 +40,7 @@ uvicorn server:app --host 0.0.0.0 --port 8002
 5. `POST /open/v1/sessions/events/subscribe/chat?sessionKey=...`
 6. `CHAT` 이벤트 수신
 
-## 반드시 지켜야 하는 세 가지
+## 반드시 지켜야 하는 네 가지
 
 ### 1. 자동 재연결을 쓰지 않는다
 
@@ -57,7 +57,36 @@ uvicorn server:app --host 0.0.0.0 --port 8002
 자격 정보는 핸드셰이크마다 새로 받는다. 들고 있던 Access Token이 만료되면 이후
 재핸드셰이크가 전부 401로 실패해 남은 방송 내내 수집이 죽는다.
 
-### 2. `sent_at`은 `messageTime`을 쓴다
+### 2. 우리가 engine.io PING을 보낸다 (없으면 85초마다 끊긴다)
+
+**치지직 서버는 `pingInterval: 25000`을 광고하고 PING을 한 번도 보내지 않는다**
+(2026-07-29 실측). EIO v4에서 ping은 서버 몫이라 클라이언트는 보낼 PONG이 없고,
+그러면 python-engineio가 두 곳에서 연결을 포기한다.
+
+| 루프 | 공식 | 값 |
+| --- | --- | --- |
+| 쓰기 | `max(pingInterval, pingTimeout) + 5` 동안 보낼 게 없으면 중단 | 65초 |
+| 읽기 | `pingInterval + pingTimeout` 동안 수신이 없으면 중단 | 85초 |
+
+실측이 두 공식과 초 단위로 일치했다 — 채팅이 없으면 85.3초, 39초에 채팅이 있으면
+124.3초에 끊겼다. 즉 **이 주기는 우발적 장애가 아니라 구조적**이다.
+
+`COLLECTOR_SOCKET_PING_SEC`(기본 20초)마다 우리가 PING을 보내면 서버가 PONG으로
+답하므로 보낼 것과 받을 것이 동시에 생겨 두 루프가 모두 살아 있다. 이 값은 65초와
+85초보다 충분히 짧아야 한다.
+
+시도했다가 버린 것:
+
+- **CONNECT 패킷을 맨 `0`으로 보내기** — python-socketio가 보내는 `0{}`에 치지직이
+  `4{},"Invalid namespace"`로 답하는 것이 원인인지 확인했는데, 맨 `0`은 즉시
+  `auth fail`로 끊긴다. **`0{}`은 원인이 아니라 필수다.** `Invalid namespace`는
+  서버가 내는 잡음이며 PING 실종과 무관하다.
+
+engine.io는 PONG 수신을 `Received unexpected packet of type 3` ERROR로 남긴다
+(EIO v4에서 클라이언트가 PONG을 받을 일이 없다고 보기 때문). 20초마다 한 줄이면
+4시간 방송에 720줄이라 진짜 오류가 묻히므로 `session.py`가 그 한 줄만 걸러낸다.
+
+### 3. `sent_at`은 `messageTime`을 쓴다
 
 `eventSentAt`은 `2026-07-28T11:43:32.220788801` 형태의 **타임존 없는 KST 로컬
 문자열**이다. UTC로 파싱하면 9시간 틀어지고, 그 오차는 하이라이트 구간과 채팅
@@ -70,7 +99,7 @@ uvicorn server:app --host 0.0.0.0 --port 8002
 대체한다 — 어긋난 시계 하나가 `chat_messages`의 먼 과거·미래 청크에 행을 만들고
 리플레이 정렬을 깨뜨린다. 대체 건수는 상태의 `clockSkewCorrected`에 쌓인다.
 
-### 3. 수집 공백 구간을 기록한다
+### 4. 수집 공백 구간을 기록한다
 
 끊긴 동안의 채팅은 재생되지 않아 **영구 유실된다.** 유실 자체는 막을 수 없으므로
 "이 구간은 못 봤다"를 남긴다.
@@ -144,7 +173,8 @@ Spring이 종료 시각으로 닫는다. 저장 위치는 `collection_gaps`(V9)�
 | `COLLECTOR_CHAT_BATCH_SIZE` | `100` | 채팅 배치 최대 건수 |
 | `COLLECTOR_VIEWER_POLL_SEC` | `10` | 시청자 수 폴링 주기 |
 | `COLLECTOR_VIEWER_STALE_AFTER_SEC` | `300` | 가드 4의 마지막 정상값 유효 기간 |
-| `COLLECTOR_HEARTBEAT_SEC` | `10` | 상태 보고 주기. Spring의 `heartbeat-timeout`보다 충분히 짧아야 한다 |
+| `COLLECTOR_HEARTBEAT_SEC` | `10` | Spring에 상태 보고하는 주기. Spring의 `heartbeat-timeout`보다 충분히 짧아야 한다 |
+| `COLLECTOR_SOCKET_PING_SEC` | `20` | 치지직에 engine.io PING을 보내는 주기. 65초·85초보다 충분히 짧아야 한다 |
 | `COLLECTOR_MESSAGE_TIME_MAX_SKEW` | `300` | 이보다 어긋난 `messageTime`은 수신 시각으로 대체 |
 | `COLLECTOR_RECONNECT_BACKOFF_START` | `1` | 재핸드셰이크 최초 대기(초) |
 | `COLLECTOR_RECONNECT_BACKOFF_MAX` | `30` | 재핸드셰이크 최대 대기(초) |

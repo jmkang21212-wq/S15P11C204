@@ -23,6 +23,7 @@ import time
 from typing import Optional
 
 import socketio
+from engineio import packet as eio_packet
 
 from chatcollector import chzzk
 from chatcollector.config import (
@@ -33,6 +34,7 @@ from chatcollector.config import (
     MESSAGE_TIME_MAX_SKEW_SEC,
     RECONNECT_BACKOFF_MAX_SEC,
     RECONNECT_BACKOFF_START_SEC,
+    SOCKET_PING_SEC,
     VIEWER_POLL_SEC,
     VIEWER_STALE_AFTER_SEC,
 )
@@ -40,6 +42,24 @@ from chatcollector.hashing import viewer_hash
 from chatcollector.spring import SpringClient, SpringRejected, iso
 
 log = logging.getLogger(__name__)
+
+
+class _SuppressUnexpectedPong(logging.Filter):
+    """우리 PING에 대한 PONG을 engineio가 ERROR로 찍는 것을 지운다.
+
+    EIO v4는 클라이언트가 PONG을 받을 일이 없다고 보므로 engineio가
+    "Received unexpected packet of type 3"을 ERROR로 남긴다. 치지직이 ping을
+    보내지 않아 우리가 대신 보내는 이상 하트비트마다 한 줄씩 쌓인다 —
+    20초 주기면 4시간 방송에 720줄이고, 그 사이에서 진짜 오류를 찾을 수 없게 된다.
+
+    PONG 수신은 우리가 의도한 정상 동작이므로 이 한 줄만 걸러낸다.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return 'unexpected packet of type 3' not in record.getMessage()
+
+
+logging.getLogger('engineio.client').addFilter(_SuppressUnexpectedPong())
 
 # Spring의 CollectorState와 같은 값이어야 한다.
 RUNNING = 'RUNNING'
@@ -232,8 +252,40 @@ class CollectorSession:
         self._close_gap()
         log.info('채팅 구독 완료: sessionId=%s', self.session_id)
 
-        # 끊길 때까지 여기서 대기한다. 이벤트는 socketio 내부 스레드가 배달한다.
-        client.wait()
+        # 하트비트 없이는 서버가 ping을 보내지 않아 85초 안에 반드시 끊긴다.
+        ping_stop = threading.Event()
+        ping_thread = threading.Thread(
+            target=self._socket_ping_loop, args=(client, ping_stop),
+            daemon=True, name=f'socket-ping-{self.session_id}')
+        ping_thread.start()
+
+        try:
+            # 끊길 때까지 여기서 대기한다. 이벤트는 socketio 내부 스레드가 배달한다.
+            client.wait()
+        finally:
+            ping_stop.set()
+
+    def _socket_ping_loop(self, client: socketio.Client,
+                          stop: threading.Event) -> None:
+        """engine.io PING을 주기적으로 보낸다.
+
+        치지직은 pingInterval을 광고하고 PING을 보내지 않는다(2026-07-29 실측).
+        그러면 python-engineio의 쓰기 루프가 65초, 읽기 루프가 85초에 연결을
+        포기한다. 우리가 PING을 보내면 서버가 PONG으로 답하므로 보낼 것과 받을
+        것이 동시에 생겨 두 루프가 모두 살아 있다.
+
+        _send_packet은 비공개 API다. EIO v4에서 클라이언트가 PING을 보내는 것은
+        규격 밖이라 공개 경로가 없다. python-socketio를 올릴 때 이 호출이
+        살아 있는지 확인해야 한다.
+        """
+        while not stop.wait(SOCKET_PING_SEC):
+            try:
+                client.eio._send_packet(eio_packet.Packet(eio_packet.PING))
+            except Exception as exception:  # noqa: BLE001
+                # 이미 끊긴 뒤일 수 있다. 재핸드셰이크는 _collect_loop가 맡는다.
+                log.debug('socket.io PING 송신 중단: sessionId=%s %s',
+                          self.session_id, exception)
+                return
 
     def _on_chat(self, payload) -> None:  # noqa: ANN001
         received_at = time.time()

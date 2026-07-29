@@ -56,6 +56,22 @@ VIEWER_POLL_SEC = float(os.getenv('COLLECTOR_VIEWER_POLL_SEC', '10'))
 # 나이를 실어 판정 계층이 같은 기준을 쓰게 한다.
 VIEWER_STALE_AFTER_SEC = float(os.getenv('COLLECTOR_VIEWER_STALE_AFTER_SEC', '300'))
 
+# --- socket.io 하트비트 ---
+
+# 우리가 engine.io PING을 보내는 주기(초).
+#
+# 치지직 서버는 핸드셰이크에서 pingInterval 25초를 광고하고 **PING을 한 번도
+# 보내지 않는다**(2026-07-29 실측). EIO v4에서 ping은 서버 몫이라 클라이언트는
+# 보낼 PONG이 없고, 그러면 python-engineio가 두 곳에서 연결을 포기한다.
+#
+#   쓰기 루프: max(pingInterval, pingTimeout) + 5 = 65초 동안 보낼 게 없으면 중단
+#   읽기 루프: pingInterval + pingTimeout = 85초 동안 수신이 없으면 중단
+#
+# 실측으로 정확히 이 값에 끊겼다(채팅 없으면 85초, 39초에 채팅이 있으면 124초).
+# 우리가 PING을 보내면 서버가 PONG으로 답하므로 두 조건이 동시에 충족된다.
+# 두 한계보다 충분히 짧아야 한다.
+SOCKET_PING_SEC = float(os.getenv('COLLECTOR_SOCKET_PING_SEC', '20'))
+
 # --- 재핸드셰이크 ---
 
 # 치지직 socket.io는 자동 재연결이 불가능하다. 끊기면 전체 핸드셰이크를 다시 하며

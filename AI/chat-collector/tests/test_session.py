@@ -4,9 +4,11 @@
 아니라 "시각을 어디서 가져오는가"와 "공백을 언제 열고 닫는가"다.
 """
 import queue
+import threading
 import time
 
 import pytest
+from engineio import packet as eio_packet
 
 from chatcollector.session import (
     GAP_AUTH_FAILED,
@@ -189,6 +191,54 @@ def test_5분_넘은_시청자_수는_stale이다(session):
 
     assert snapshot['viewerStale'] is True
     assert snapshot['viewerUsable'] is False
+
+
+def test_socket_ping을_주기적으로_보낸다(session, monkeypatch):
+    # 치지직이 ping을 보내지 않아 우리가 보낸다. 안 보내면 85초 안에 끊긴다.
+    monkeypatch.setattr('chatcollector.session.SOCKET_PING_SEC', 0.01)
+    sent = []
+
+    class FakeEngine:
+        def _send_packet(self, packet):
+            sent.append(packet.packet_type)
+
+    class FakeClient:
+        eio = FakeEngine()
+
+    stop = threading.Event()
+    thread = threading.Thread(
+        target=session._socket_ping_loop, args=(FakeClient(), stop), daemon=True)
+    thread.start()
+    time.sleep(0.1)
+    stop.set()
+    thread.join(timeout=1)
+
+    assert len(sent) >= 2
+    # engine.io PING은 패킷 타입 2다.
+    assert set(sent) == {eio_packet.PING}
+
+
+def test_socket_ping은_송신_실패하면_멈춘다(session, monkeypatch):
+    # 이미 끊긴 연결에 계속 쓰려 하면 안 된다. 복구는 재핸드셰이크 담당이다.
+    monkeypatch.setattr('chatcollector.session.SOCKET_PING_SEC', 0.01)
+    attempts = []
+
+    class DeadEngine:
+        def _send_packet(self, packet):
+            attempts.append(1)
+            raise RuntimeError('not connected')
+
+    class DeadClient:
+        eio = DeadEngine()
+
+    stop = threading.Event()
+    thread = threading.Thread(
+        target=session._socket_ping_loop, args=(DeadClient(), stop), daemon=True)
+    thread.start()
+    thread.join(timeout=1)
+
+    assert not thread.is_alive()
+    assert len(attempts) == 1
 
 
 def test_방금_측정한_시청자_0명은_판정에_쓸_수_없다(session):
