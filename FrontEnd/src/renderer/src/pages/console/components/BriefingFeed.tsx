@@ -33,6 +33,18 @@ function BriefingItem({ briefing }: { briefing: Briefing }): React.JSX.Element {
       </div>
       <p className="text-sm leading-relaxed">{briefing.message}</p>
 
+      {/* 근거가 된 발화 원문 */}
+      {briefing.quote && (
+        <p className="mt-1.5 border-l-2 pl-2.5 text-xs leading-relaxed text-muted-foreground">
+          “{briefing.quote}”
+        </p>
+      )}
+
+      {/* 판정 근거 · 권장 조치 */}
+      {briefing.advice && (
+        <p className="mt-1.5 text-xs text-muted-foreground">{briefing.advice}</p>
+      )}
+
       {/* PROMISE 감지 시 확정/무시 액션 */}
       {briefing.briefingType === 'PROMISE' && (
         // TODO: POST /promises/{id}/confirm · /dismiss

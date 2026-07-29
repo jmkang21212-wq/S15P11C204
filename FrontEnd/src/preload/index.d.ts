@@ -35,11 +35,27 @@ export interface LaiveApi {
   obs: ObsBridge
   /** OAuth 인앱 창 (네이버 로그인·플랫폼 연동 공용). */
   oauth: OAuthBridge
+  /** 실시간 브리핑 중계 (콘솔 → 미니 창). */
+  briefing: BriefingBridge
 }
 
 export interface OAuthBridge {
   /** OAuth 인앱 창. returnUri 복귀 시 그 URL, 취소 시 null. */
   open: (startUrl: string, returnUriPrefix: string) => Promise<string | null>
+}
+
+/**
+ * 창 간 실시간 브리핑 중계.
+ * main은 페이로드를 해석하지 않으므로 여기서는 unknown으로 두고,
+ * 타입 확정은 렌더러(useLiveBriefings)에서 한 번만 한다.
+ */
+export interface BriefingBridge {
+  /** 다른 창(미니 모드)에 브리핑을 중계한다. */
+  publish: (briefing: unknown) => void
+  /** main이 보관한 최근 브리핑 (최신순). */
+  recent: () => Promise<unknown[]>
+  /** 중계된 브리핑 구독. 반환 함수 호출로 구독 해제. */
+  onNew: (callback: (briefing: unknown) => void) => () => void
 }
 
 declare global {
