@@ -68,7 +68,8 @@ public class SessionRedisGateway {
         return "session:" + sessionId + ":state";
     }
 
-    private String streamKey(long sessionId) {
+    /** 세션 이벤트 Stream의 키다. 실시간 콘솔 스냅샷이 lastEventId를 읽을 때도 쓴다. */
+    public static String streamKey(long sessionId) {
         return "ws:session:" + sessionId + ":events";
     }
 }
