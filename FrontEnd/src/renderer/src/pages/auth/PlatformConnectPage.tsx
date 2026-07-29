@@ -4,6 +4,7 @@ import { Loader2, Link2, Check } from 'lucide-react'
 import { PATHS } from '@renderer/routes/paths'
 import { Button } from '@renderer/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@renderer/components/ui/card'
+import { PLATFORM_BRAND_COLOR } from '@renderer/lib/brand'
 import Stepper from './components/Stepper'
 import PlatformCard from './components/PlatformCard'
 
@@ -13,8 +14,8 @@ type Status = 'idle' | 'connecting' | 'connected' | 'error'
 const STEPS = ['플랫폼 선택', 'OAuth 인증', '채널 확인']
 
 const PLATFORMS: { id: Platform; name: string; subLabel: string; color: string }[] = [
-  { id: 'CHZZK', name: '치지직', subLabel: 'CHZZK', color: '#00ffa3' },
-  { id: 'SOOP', name: 'SOOP', subLabel: '숲', color: '#00c73c' },
+  { id: 'CHZZK', name: '치지직', subLabel: 'CHZZK', color: PLATFORM_BRAND_COLOR.CHZZK },
+  { id: 'SOOP', name: 'SOOP', subLabel: '숲', color: PLATFORM_BRAND_COLOR.SOOP },
 ]
 
 /**

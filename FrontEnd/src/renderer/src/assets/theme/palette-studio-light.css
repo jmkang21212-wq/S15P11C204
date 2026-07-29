@@ -47,4 +47,25 @@
 
   --laive-violet-400: #c084fc;
   --laive-violet-600: #7c3aed;
+
+  /*
+   * 방송 오버레이 전용 — 미니 위젯·OBS 오버레이처럼 방송 화면 위에 얹히는
+   * 표면이 쓰는 값이다. Studio Light와 무관하게 항상 어둡다(§ semantic.css
+   * [data-surface='overlay'] 참고). 나머지 화면과 겹치지 않는 새 값이라
+   * 여기서 새로 추가한다 — 옮겨온 값이 아니다.
+   */
+  --laive-navy-950: #0b0d12;
+  --laive-navy-600: #4a5162;
+  --laive-navy-500: #7b8494;
+  --laive-navy-450: #a7b0bf;
+  --laive-navy-300: #c4cbd6;
+  --laive-rose-100: #ffe4e6;
+  --laive-rose-300: #fda4af;
+  --laive-cyan-400: #22d3ee;
+  --laive-cyan-300: #67e8f9;
+  --laive-violet-300: #c4b5fd;
+  --laive-amber-300: #fcd34d;
+  --laive-gauge-from: #fb923c;
+  --laive-gauge-to: #f43f5e;
+  --laive-obs-backdrop: #0a0c12;
 }

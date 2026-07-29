@@ -42,6 +42,16 @@
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
 
+  /* 방송 오버레이(미니 위젯·OBS) 전용 — [data-surface='overlay']에서만 값이 채워진다 */
+  --color-briefing-risk: var(--briefing-risk);
+  --color-briefing-chat: var(--briefing-chat);
+  --color-briefing-faq: var(--briefing-faq);
+  --color-briefing-promise: var(--briefing-promise);
+  --color-overlay-icon: var(--overlay-icon);
+  --color-gauge-from: var(--gauge-from);
+  --color-gauge-to: var(--gauge-to);
+  --color-overlay-backdrop: var(--overlay-backdrop);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
