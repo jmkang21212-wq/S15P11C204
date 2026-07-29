@@ -41,8 +41,8 @@ export default function GoalCard({ goal }: GoalCardProps): React.JSX.Element {
   const status = STATUS_STYLE[goal.status]
   const unit = METRIC_UNIT[goal.metricType]
   // 초과 달성이면 progressRate가 1을 넘는데, 바는 100%에서 멈춘다.
-  const barValue = goal.progressRate == null ? 0 : Math.min(100, Math.round(goal.progressRate * 100))
-  const achieved = goal.progressRate != null && goal.progressRate >= 1
+  const barValue = Math.min(100, Math.round(goal.progressRate * 100))
+  const achieved = goal.progressRate >= 1
 
   return (
     <Card>
@@ -62,7 +62,7 @@ export default function GoalCard({ goal }: GoalCardProps): React.JSX.Element {
         <div className="flex flex-col gap-2">
           <div className="flex items-baseline justify-between gap-2">
             <span className="font-mono text-[20px] leading-none font-extrabold tracking-[-0.02em]">
-              {goal.currentValue == null ? '-' : formatCount(goal.currentValue)}
+              {formatCount(goal.currentValue)}
               <span className="text-xs font-medium text-muted-foreground">
                 {' '}
                 / {formatCount(goal.targetValue)}
@@ -75,7 +75,7 @@ export default function GoalCard({ goal }: GoalCardProps): React.JSX.Element {
                 achieved ? 'text-success' : 'text-muted-foreground'
               )}
             >
-              {goal.progressRate == null ? '-' : formatPercent(goal.progressRate)}
+              {formatPercent(goal.progressRate)}
             </span>
           </div>
           <Progress

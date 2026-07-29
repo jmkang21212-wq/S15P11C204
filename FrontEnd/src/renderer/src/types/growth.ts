@@ -19,19 +19,19 @@ export type GoalStatus = 'ACTIVE' | 'ACHIEVED' | 'CANCELLED'
 export type SeriesMetric = 'avgViewers' | 'totalChat' | 'broadcastMinutes'
 
 export interface GrowthSummaryMetrics {
-  avgViewers: number | null
+  avgViewers: number
   /** 직전 구간 대비 증감률. 0.18 = +18% */
-  avgViewersChangeRate: number | null
+  avgViewersChangeRate: number
   totalChat: number
-  totalChatChangeRate: number | null
+  totalChatChangeRate: number
   broadcastMinutes: number
-  broadcastMinutesChangeRate: number | null
+  broadcastMinutesChangeRate: number
 }
 
 export interface GrowthSeriesPoint {
   periodStart: string
   periodEnd: string
-  avgViewers: number | null
+  avgViewers: number
   totalChat: number
   broadcastMinutes: number
 }
@@ -59,9 +59,9 @@ export interface GrowthGoal {
   periodEnd: string
   status: GoalStatus
   /** REPORTS·BROADCAST_SESSIONS 집계로 계산되며 DB 컬럼이 아니다 (명세서 §11.3) */
-  currentValue: number | null
+  currentValue: number
   /** 0~1. 1을 넘을 수 있다(초과 달성) */
-  progressRate: number | null
+  progressRate: number
   /** GROWTH_ACTIONS에서 연결된 AI 다음 액션. 없을 수 있다. */
   actions: GrowthAction[]
 }
