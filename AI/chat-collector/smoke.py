@@ -50,7 +50,7 @@ from chatcollector.spring import (
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 log = logging.getLogger('smoke')
 
-seen = {'chat_events': 0, 'raw_frames': 0, 'pings': 0}
+seen = {'chat_events': 0, 'raw_frames': 0, 'pings': 0, 'pongs': 0, 'sent_pings': 0}
 
 
 class BareConnectClient(socketio.Client):
@@ -74,11 +74,10 @@ class BareConnectClient(socketio.Client):
 
 
 def count_pings(client: socketio.Client) -> None:
-    """서버가 PING을 보내는지 센다.
+    """서버가 보내는 PING과, 우리 PING에 대한 PONG을 센다.
 
-    PING은 engine.io 계층이라 socketio 이벤트로 노출되지 않는다. 패킷 수신
-    지점을 감싸서 직접 센다 — 이 값이 0이면 서버가 스펙(pingInterval)을
-    광고만 하고 지키지 않는다는 뜻이다.
+    둘 다 engine.io 계층이라 socketio 이벤트로 노출되지 않는다. 패킷 수신
+    지점을 감싸서 직접 센다.
     """
     engine = client.eio
     original = engine._receive_packet
@@ -86,10 +85,42 @@ def count_pings(client: socketio.Client) -> None:
     def wrapped(pkt):
         if pkt.packet_type == eio_packet.PING:
             seen['pings'] += 1
-            print(f'  ← PING 수신 #{seen["pings"]}')
+            print(f'  ← 서버 PING 수신 #{seen["pings"]}')
+        elif pkt.packet_type == eio_packet.PONG:
+            seen['pongs'] += 1
+            print(f'  ← PONG 수신 #{seen["pongs"]} (우리 PING에 대한 응답)')
         return original(pkt)
 
     engine._receive_packet = wrapped
+
+
+def start_client_ping(client: socketio.Client, interval: float,
+                      stop: threading.Event) -> threading.Thread:
+    """우리가 주기적으로 engine.io PING을 보낸다.
+
+    EIO v4에서 ping은 서버 몫이지만 치지직 서버가 보내지 않는다. 클라이언트가
+    보내면 규격을 지키는 서버는 PONG으로 답한다. 성립하면 두 가지가 동시에
+    해결된다.
+
+        1. 쓰기 큐가 굶지 않는다 (우리가 보낼 게 생긴다)
+        2. 읽기 루프가 데이터를 본다 (PONG이 수신된다)
+
+    즉 88초 주기 끊김이 사라진다. 서버가 PONG을 안 주거나 PING을 거부하면
+    이 방법은 못 쓴다.
+    """
+    def loop():
+        while not stop.wait(interval):
+            try:
+                client.eio._send_packet(eio_packet.Packet(eio_packet.PING))
+                seen['sent_pings'] += 1
+                print(f'  → PING 송신 #{seen["sent_pings"]}')
+            except Exception as exception:  # noqa: BLE001
+                print(f'  ⚠ PING 송신 실패: {exception!r}')
+                return
+
+    thread = threading.Thread(target=loop, daemon=True, name='client-ping')
+    thread.start()
+    return thread
 
 
 def mask(value: str, keep: int = 6) -> str:
@@ -155,8 +186,12 @@ def main() -> int:
              '(핸드셰이크의 pingInterval·pingTimeout과 종료 이유가 보인다)')
     parser.add_argument(
         '--bare-connect', action='store_true',
-        help='CONNECT 패킷을 `0{}` 대신 맨 `0`으로 보낸다. 치지직이 되돌려주는 '
-             '"Invalid namespace" 에러가 PING 실종의 원인인지 확인하는 실험이다')
+        help='CONNECT 패킷을 `0{}` 대신 맨 `0`으로 보낸다. 2026-07-29 실험 결과 '
+             '치지직은 이걸 auth fail로 즉시 끊는다 — `0{}`이 필수다')
+    parser.add_argument(
+        '--client-ping', type=float, metavar='초',
+        help='서버가 PING을 안 보내므로 우리가 이 주기로 보낸다(예: 20). '
+             'PONG이 오면 88초 주기 끊김을 없앨 수 있다')
     args = parser.parse_args()
 
     if args.verbose:
@@ -259,6 +294,11 @@ def main() -> int:
         except chzzk.ChzzkError as exception:
             print(f'⚠ 시청자 수 조회 실패: {exception}')
 
+    ping_stop = threading.Event()
+    if args.client_ping:
+        start_client_ping(client, args.client_ping, ping_stop)
+        print(f'\n클라이언트 PING {args.client_ping}초 주기로 송신 시작')
+
     print('\n대기 중 — 방송 채팅창에 아무 말이나 쳐보세요. Ctrl+C로 종료.')
     print('(끊길 때까지 얼마나 버티는지도 함께 봅니다. 프로브는 재연결하지 않습니다.)\n')
     try:
@@ -270,25 +310,41 @@ def main() -> int:
     except KeyboardInterrupt:
         pass
     finally:
+        ping_stop.set()
         client.disconnect()
 
-    held = ('?' if connected_at['value'] is None
-            else f'{time.time() - connected_at["value"]:.1f}초')
+    elapsed = (None if connected_at['value'] is None
+               else time.time() - connected_at['value'])
+    held = '?' if elapsed is None else f'{elapsed:.1f}초'
     print(f'''
 요약
-    연결 유지     : {held}
-    CHAT 프레임   : {seen["raw_frames"]}개 (해석된 채팅 {seen["chat_events"]}건)
-    PING 수신     : {seen["pings"]}회''')
+    연결 유지       : {held}
+    CHAT 프레임     : {seen["raw_frames"]}개 (해석된 채팅 {seen["chat_events"]}건)
+    서버 PING 수신  : {seen["pings"]}회
+    우리 PING 송신  : {seen["sent_pings"]}회
+    PONG 수신       : {seen["pongs"]}회''')
 
-    if seen['pings'] == 0:
+    limit = max(getattr(engine, 'ping_interval', 0),
+                getattr(engine, 'ping_timeout', 0)) + 5
+    if args.client_ping:
+        if seen['pongs'] > 0:
+            print(f'''
+  ✓ PONG이 {seen["pongs"]}회 왔다. 클라이언트 주도 PING이 통한다 —
+    수집기에 하트비트를 넣으면 88초 주기 끊김이 사라진다.''')
+        elif elapsed is not None and elapsed > limit:
+            print(f'''
+  △ PONG은 없지만 {limit}초를 넘겨 버텼다. 우리 PING이 쓰기 큐를 먹여
+    쓰기 루프는 살렸으나, 읽기 루프는 수신 데이터가 없으면 결국 끊긴다.''')
+        else:
+            print('''
+  ✗ PONG이 없고 여전히 끊겼다. 클라이언트 주도 PING은 답이 아니다.''')
+    elif seen['pings'] == 0:
         print(f'''
-  ⚠ PING이 0회다. 서버가 pingInterval {getattr(engine, "ping_interval", "?")}초를
+  ⚠ 서버 PING이 0회다. pingInterval {getattr(engine, "ping_interval", "?")}초를
     광고하고 지키지 않는다는 뜻이다. 클라이언트는 보낼 PONG이 없어 쓰기 큐가
-    굶고, max(pingInterval, pingTimeout)+5초에 연결을 포기한다.''')
-    else:
-        print(f'''
-  ✓ PING이 {seen["pings"]}회 왔다. 위 CONNECT 방식에서는 서버가 ping을 보낸다 —
-    끊김의 원인이 CONNECT 패킷이었다는 뜻이다.''')
+    굶고 {limit}초에 포기한다.
+
+  → 다음: --client-ping 20 으로 우리가 PING을 보내보세요.''')
     return 0
 
 
