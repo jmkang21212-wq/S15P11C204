@@ -2,6 +2,7 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { registerObsIpc } from './obs'
 
 /**
  * 렌더러가 넘긴 URL이 외부로 내보내도 되는 주소인지 검증한다.
@@ -145,6 +146,9 @@ app.whenReady().then(() => {
       mainWindow.focus()
     }
   })
+
+  // ── OBS(obs-websocket) 연결·제어 ──
+  registerObsIpc()
 
   createWindow()
 
