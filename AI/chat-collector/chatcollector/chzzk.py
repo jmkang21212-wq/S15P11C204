@@ -43,7 +43,7 @@ class ChatEvent:
     # 'streamer' / 'manager' / 'common_user' 등. 스트리머 본인 채팅을 여론
     # 집계에서 제외할 수 있게 남긴다.
     user_role_code: Optional[str]
-    # 이모티콘 밀도 입력. content와 별도 필드로 온다.
+    # 이모티콘 **사용 횟수**다. 종류 수가 아니다 — _count_emojis 주석 참고.
     emoji_count: int
 
 
@@ -151,13 +151,31 @@ def _to_chat_event(raw: Any) -> Optional[ChatEvent]:
         content=str(content),
         message_time_ms=message_time,
         user_role_code=role,
-        emoji_count=_count_emojis(raw.get('emojis')),
+        emoji_count=_count_emojis(str(content), raw.get('emojis')),
     )
 
 
-def _count_emojis(emojis: Any) -> int:
+def _count_emojis(content: str, emojis: Any) -> int:
+    """이모티콘이 몇 번 쓰였는지 센다.
+
+    emojis는 {키: 이미지URL} 사전이고, 그 키가 content에 `{:키:}` 자리표시자로
+    박혀 온다. 같은 이모티콘을 여러 번 쓰면 자리표시자는 늘지만 사전의 키는
+    하나다.
+
+    그래서 len(emojis)로 세면 안 된다. 그건 종류 수이고 이모티콘 밀도에 필요한
+    값은 사용 횟수다. 2026-07-29 실측:
+
+        content "{:d_2:}{:lck_2:}{:lck_2:}{:lck_2:}"   -> 4번 사용
+        emojis  {"d_2": ..., "lck_2": ...}             -> 키 2개
+
+    사전에 있는 키만 센다. 시청자가 `{:없는키:}`를 직접 타이핑한 것을 이모티콘으로
+    세지 않기 위해서다.
+    """
     parsed = _as_json(emojis)
-    if isinstance(parsed, (dict, list)):
+    if isinstance(parsed, dict):
+        return sum(content.count('{:' + str(key) + ':}') for key in parsed)
+    if isinstance(parsed, list):
+        # 사전이 아닌 형태로 오면 자리표시자를 대조할 키가 없다. 종류 수로 둔다.
         return len(parsed)
     return 0
 

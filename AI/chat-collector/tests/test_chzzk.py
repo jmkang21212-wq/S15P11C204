@@ -52,13 +52,49 @@ def test_profile이_없으면_역할은_None이다():
     assert parse_chat_event(dict(_BASE))[0].user_role_code is None
 
 
-def test_이모티콘_개수를_센다():
-    payload = dict(_BASE, emojis={'emoji1': 'https://a', 'emoji2': 'https://b'})
+def test_이모티콘_종류가_아니라_사용_횟수를_센다():
+    # 2026-07-29 실측 페이로드. 자리표시자는 4개인데 emojis 키는 2개다.
+    # len(emojis)로 세면 밀도가 절반으로 깎인다.
+    payload = dict(
+        _BASE,
+        content='{:d_2:}{:lck_2:}{:lck_2:}{:lck_2:}',
+        emojis={
+            'd_2': 'https://ssl.pstatic.net/static/nng/glive/icon/cha02.png',
+            'lck_2': 'https://ssl.pstatic.net/static/nng/glive/icon/02_t1.png',
+        },
+    )
 
-    assert parse_chat_event(payload)[0].emoji_count == 2
+    assert parse_chat_event(payload)[0].emoji_count == 4
+
+
+def test_서로_다른_이모티콘_다섯_개():
+    # 실측: 종류 수와 사용 횟수가 같은 경우도 정확해야 한다.
+    keys = ['lck_1', 'lck_2', 'lck_3', 'lck_4', 'lck_5']
+    payload = dict(
+        _BASE,
+        content=''.join('{:' + key + ':}' for key in keys),
+        emojis={key: f'https://x/{key}.png' for key in keys},
+    )
+
+    assert parse_chat_event(payload)[0].emoji_count == 5
+
+
+def test_이모티콘과_글자가_섞여도_센다():
+    payload = dict(_BASE, content='{:d_2:}ㅇㅋㅋ', emojis={'d_2': 'https://a'})
+
+    assert parse_chat_event(payload)[0].emoji_count == 1
+
+
+def test_사전에_없는_자리표시자는_세지_않는다():
+    # 시청자가 {:없는키:}를 직접 타이핑한 경우다. 이모티콘이 아니다.
+    payload = dict(_BASE, content='{:d_2:}{:직접타이핑:}', emojis={'d_2': 'https://a'})
+
+    assert parse_chat_event(payload)[0].emoji_count == 1
 
 
 def test_이모티콘이_없으면_0이다():
+    # 실측: 이모티콘을 안 쓰면 빈 사전으로 온다.
+    assert parse_chat_event(dict(_BASE, emojis={}))[0].emoji_count == 0
     assert parse_chat_event(dict(_BASE))[0].emoji_count == 0
 
 

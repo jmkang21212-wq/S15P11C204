@@ -27,6 +27,8 @@ import threading
 import time
 
 import socketio
+from engineio import packet as eio_packet
+from socketio import packet as sio_packet
 
 # Windows 콘솔 기본 코드페이지(cp949)로는 출력이 깨진다. 이 스크립트는 읽으라고
 # 있는 것이라 인코딩이 틀어지면 쓸모가 없다.
@@ -48,7 +50,46 @@ from chatcollector.spring import (
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 log = logging.getLogger('smoke')
 
-seen = {'chat_events': 0, 'raw_frames': 0}
+seen = {'chat_events': 0, 'raw_frames': 0, 'pings': 0}
+
+
+class BareConnectClient(socketio.Client):
+    """CONNECT 패킷을 `0{}`이 아니라 맨 `0`으로 보낸다.
+
+    python-socketio는 auth가 없어도 `real_auth = ... or {}`로 빈 사전을 실어
+    `0{}`을 보낸다(socketio/client.py `_handle_eio_connect`). 규격상 합법이지만
+    치지직 서버는 이 직후 `4{},"Invalid namespace"`를 되돌려준다.
+
+    그 에러가 PING 실종의 원인인지 확인하기 위한 실험용 클래스다. 서버가
+    연결을 반쯤 망가진 것으로 취급해 ping 타이머를 안 걸었을 가능성을 본다.
+    """
+
+    def _handle_eio_connect(self):
+        self.logger.info('Engine.IO connection established (bare connect)')
+        self.sid = self.eio.sid
+        for namespace in self.connection_namespaces:
+            # data=None이면 packet.encode()가 페이로드를 붙이지 않아 맨 `0`이 된다.
+            self._send_packet(self.packet_class(
+                sio_packet.CONNECT, data=None, namespace=namespace))
+
+
+def count_pings(client: socketio.Client) -> None:
+    """서버가 PING을 보내는지 센다.
+
+    PING은 engine.io 계층이라 socketio 이벤트로 노출되지 않는다. 패킷 수신
+    지점을 감싸서 직접 센다 — 이 값이 0이면 서버가 스펙(pingInterval)을
+    광고만 하고 지키지 않는다는 뜻이다.
+    """
+    engine = client.eio
+    original = engine._receive_packet
+
+    def wrapped(pkt):
+        if pkt.packet_type == eio_packet.PING:
+            seen['pings'] += 1
+            print(f'  ← PING 수신 #{seen["pings"]}')
+        return original(pkt)
+
+    engine._receive_packet = wrapped
 
 
 def mask(value: str, keep: int = 6) -> str:
@@ -108,7 +149,21 @@ def main() -> int:
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument('--session-id', type=int, help='Spring에서 자격을 받아온다')
     source.add_argument('--token', help='치지직 Access Token을 직접 넣는다')
+    parser.add_argument(
+        '--verbose', action='store_true',
+        help='engine.io 프레임까지 찍는다. 끊기는 원인을 볼 때 쓴다 '
+             '(핸드셰이크의 pingInterval·pingTimeout과 종료 이유가 보인다)')
+    parser.add_argument(
+        '--bare-connect', action='store_true',
+        help='CONNECT 패킷을 `0{}` 대신 맨 `0`으로 보낸다. 치지직이 되돌려주는 '
+             '"Invalid namespace" 에러가 PING 실종의 원인인지 확인하는 실험이다')
     args = parser.parse_args()
+
+    if args.verbose:
+        # socketio는 이벤트, engineio는 전송 계층(ping/pong, close)을 찍는다.
+        # 주기적으로 끊기는 원인은 대개 engineio 쪽에 있다.
+        logging.getLogger('socketio').setLevel(logging.DEBUG)
+        logging.getLogger('engineio').setLevel(logging.DEBUG)
 
     # 1. 자격
     if args.token:
@@ -143,7 +198,23 @@ def main() -> int:
     # 3. socket.io 연결 + SYSTEM
     session_key = {}
     received = threading.Event()
-    client = socketio.Client(reconnection=False)
+    client_class = BareConnectClient if args.bare_connect else socketio.Client
+    print(f'CONNECT 패킷: {"맨 0 (실험)" if args.bare_connect else "0{} (기본)"}')
+    client = client_class(
+        reconnection=False,
+        logger=args.verbose,
+        engineio_logger=args.verbose,
+    )
+    connected_at = {'value': None}
+
+    @client.on('disconnect')
+    def _on_disconnect(*payload):  # noqa: ANN001
+        # 실측: 치지직은 약 88초 주기로 연결을 닫는다. 얼마나 버텼는지가
+        # 원인 추적의 핵심 단서다 — 매번 같은 값이면 서버 타임아웃이고,
+        # 들쭉날쭉하면 네트워크다.
+        held = ('?' if connected_at['value'] is None
+                else f'{time.time() - connected_at["value"]:.1f}초')
+        print(f'\n⚠ 연결 끊김 — 유지 시간 {held}, 인자={payload!r}')
 
     @client.on('SYSTEM')
     def _on_system(payload):  # noqa: ANN001
@@ -163,7 +234,13 @@ def main() -> int:
         print(f'\n⚠ error 이벤트: {payload!r}')
 
     client.connect(url, transports=['websocket'])
-    print('✓ 3단계 socket.io 연결됨')
+    connected_at['value'] = time.time()
+    count_pings(client)
+    engine = client.eio
+    print(f'''✓ 3단계 socket.io 연결됨
+    engine.io 프로토콜 : EIO={getattr(engine, "protocol", "?")}
+    pingInterval       : {getattr(engine, "ping_interval", "?")}초
+    pingTimeout        : {getattr(engine, "ping_timeout", "?")}초''')
 
     if not received.wait(timeout=_SESSION_KEY_TIMEOUT_SEC):
         print('✗ SYSTEM에서 sessionKey를 못 받았다')
@@ -182,16 +259,36 @@ def main() -> int:
         except chzzk.ChzzkError as exception:
             print(f'⚠ 시청자 수 조회 실패: {exception}')
 
-    print('\n대기 중 — 방송 채팅창에 아무 말이나 쳐보세요. Ctrl+C로 종료.\n')
+    print('\n대기 중 — 방송 채팅창에 아무 말이나 쳐보세요. Ctrl+C로 종료.')
+    print('(끊길 때까지 얼마나 버티는지도 함께 봅니다. 프로브는 재연결하지 않습니다.)\n')
     try:
         while client.connected:
             time.sleep(0.5)
+        # 프로브는 재핸드셰이크를 하지 않는다. 끊긴 시점을 그대로 보여주는 것이
+        # 목적이라, 수집기처럼 되살리면 원인이 로그에 묻힌다.
+        print('연결이 닫혀서 프로브를 종료합니다.')
     except KeyboardInterrupt:
         pass
     finally:
         client.disconnect()
 
-    print(f'\n요약: CHAT 프레임 {seen["raw_frames"]}개, 해석된 채팅 {seen["chat_events"]}건')
+    held = ('?' if connected_at['value'] is None
+            else f'{time.time() - connected_at["value"]:.1f}초')
+    print(f'''
+요약
+    연결 유지     : {held}
+    CHAT 프레임   : {seen["raw_frames"]}개 (해석된 채팅 {seen["chat_events"]}건)
+    PING 수신     : {seen["pings"]}회''')
+
+    if seen['pings'] == 0:
+        print(f'''
+  ⚠ PING이 0회다. 서버가 pingInterval {getattr(engine, "ping_interval", "?")}초를
+    광고하고 지키지 않는다는 뜻이다. 클라이언트는 보낼 PONG이 없어 쓰기 큐가
+    굶고, max(pingInterval, pingTimeout)+5초에 연결을 포기한다.''')
+    else:
+        print(f'''
+  ✓ PING이 {seen["pings"]}회 왔다. 위 CONNECT 방식에서는 서버가 ping을 보낸다 —
+    끊김의 원인이 CONNECT 패킷이었다는 뜻이다.''')
     return 0
 
 
