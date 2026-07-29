@@ -82,8 +82,10 @@ function buildSummary(series: GrowthSeriesPoint[]): GrowthSummaryMetrics {
   const last = series[series.length - 1]
   const prev = series[series.length - 2]
 
-  const rate = (current: number, before: number): number =>
-    before === 0 ? 0 : Number(((current - before) / before).toFixed(4))
+  const rate = (current: number | null, before: number | null): number | null =>
+    current == null || before == null || before === 0
+      ? null
+      : Number(((current - before) / before).toFixed(4))
 
   return {
     avgViewers: last.avgViewers,
