@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import PageHeader from '@renderer/components/common/PageHeader'
 import PortfolioSearchPanel from './components/PortfolioSearchPanel'
 import { PATHS } from '@renderer/routes/paths'
 
@@ -17,12 +18,10 @@ export default function MatchingPage(): React.JSX.Element {
 
   return (
     <div className="mx-auto flex max-w-[1400px] flex-col gap-6 p-8">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-[18px] font-bold tracking-[-0.02em]">비즈니스 매칭</h1>
-        <p className="text-xs text-muted-foreground">
-          다른 스트리머의 공개 포트폴리오를 채널·태그·시청자 규모로 찾아보세요.
-        </p>
-      </header>
+      <PageHeader
+        title="비즈니스 매칭"
+        caption="다른 스트리머의 공개 포트폴리오를 채널·태그·시청자 규모로 찾아보세요."
+      />
 
       <PortfolioSearchPanel onSelectPortfolio={openPortfolio} />
     </div>

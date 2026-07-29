@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { CalendarDays, Film } from 'lucide-react'
 import { Button } from '@renderer/components/ui/button'
 import { EmptyState, ErrorState } from '@renderer/components/common/StateView'
+import PageHeader from '@renderer/components/common/PageHeader'
 import ClipCard, { ClipCardSkeleton } from './components/ClipCard'
 import SessionSelect from '@renderer/components/common/SessionSelect'
 import { fetchEndedSessions } from '@renderer/api/broadcastSessions'
@@ -67,24 +68,23 @@ export default function ClipsPage(): React.JSX.Element {
 
   return (
     <div className="mx-auto flex max-w-[1400px] flex-col gap-6 p-8">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-[18px] font-bold tracking-[-0.02em]">하이라이트 / 클립</h1>
-          <p className="text-xs text-muted-foreground">
-            방송에서 자동으로 뽑아낸 구간이에요. 재생하거나 파일로 내려받을 수 있어요.
-          </p>
-        </div>
-        {sessions && sessions.length > 0 && (
-          <SessionSelect
-            sessions={sessions}
-            // 목록에 없는 세션이면 placeholder를 띄워 사용자가 다시 고를 수 있게 한다
-            value={
-              sessions.some((s) => s.sessionId === selectedSessionId) ? selectedSessionId : null
-            }
-            onChange={selectSession}
-          />
-        )}
-      </header>
+      <PageHeader
+        title="하이라이트 / 클립"
+        caption="방송에서 자동으로 뽑아낸 구간이에요. 재생하거나 파일로 내려받을 수 있어요."
+        actions={
+          sessions &&
+          sessions.length > 0 && (
+            <SessionSelect
+              sessions={sessions}
+              // 목록에 없는 세션이면 placeholder를 띄워 사용자가 다시 고를 수 있게 한다
+              value={
+                sessions.some((s) => s.sessionId === selectedSessionId) ? selectedSessionId : null
+              }
+              onChange={selectSession}
+            />
+          )
+        }
+      />
 
       {/* 세션 목록 자체를 못 불러온 경우 — 아래 그리드를 그릴 근거가 없다 */}
       {sessionsError && (

@@ -1,6 +1,7 @@
-import { ArrowDownRight, ArrowUpRight, type LucideIcon } from 'lucide-react'
+import { type LucideIcon } from 'lucide-react'
 import { Card, CardContent } from '@renderer/components/ui/card'
 import { Skeleton } from '@renderer/components/ui/skeleton'
+import DeltaText from '@renderer/components/common/DeltaText'
 import { cn } from '@renderer/lib/utils'
 
 /**
@@ -72,35 +73,12 @@ export default function MetricCard({
           <p className="font-mono text-[28px] leading-none font-extrabold tracking-[-0.03em]">
             {value}
           </p>
-          {delta !== undefined && <DeltaBadge delta={delta} />}
+          {delta !== undefined && <DeltaText delta={delta} />}
         </div>
 
         {caption && <p className="text-[11px] text-muted-foreground">{caption}</p>}
       </CardContent>
     </Card>
-  )
-}
-
-/** 증가/감소 표기 — design.md §6: Success/Danger 텍스트 + 화살표, 수치는 mono. */
-function DeltaBadge({ delta }: { delta: number }): React.JSX.Element {
-  // 변화가 없으면 방향을 지어내지 않고 뉴트럴로 둔다.
-  if (delta === 0) {
-    return <span className="font-mono text-xs font-semibold text-muted-foreground">0%</span>
-  }
-
-  const up = delta > 0
-  const Arrow = up ? ArrowUpRight : ArrowDownRight
-  return (
-    <span
-      className={cn(
-        'flex items-center gap-0.5 font-mono text-xs font-semibold',
-        up ? 'text-success' : 'text-destructive'
-      )}
-    >
-      <Arrow className="size-[14px]" strokeWidth={2} aria-hidden />
-      {up ? '+' : ''}
-      {(delta * 100).toFixed(1)}%
-    </span>
   )
 }
 

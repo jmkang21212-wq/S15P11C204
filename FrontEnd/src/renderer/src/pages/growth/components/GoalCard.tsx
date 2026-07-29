@@ -1,7 +1,7 @@
 import { Lightbulb } from 'lucide-react'
-import { Badge } from '@renderer/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@renderer/components/ui/card'
 import { Progress } from '@renderer/components/ui/progress'
+import StatusBadge, { type StatusTone } from '@renderer/components/common/StatusBadge'
 import { formatCount, formatPercent } from '@renderer/lib/format'
 import { cn } from '@renderer/lib/utils'
 import type { GoalStatus, GrowthGoal, MetricType } from '@renderer/types/growth'
@@ -27,10 +27,10 @@ const METRIC_UNIT: Record<MetricType, string> = {
   BROADCAST_MINUTES: '분'
 }
 
-const STATUS_STYLE: Record<GoalStatus, { label: string; className: string }> = {
-  ACTIVE: { label: '진행 중', className: 'border-border bg-muted text-muted-foreground' },
-  ACHIEVED: { label: '달성', className: 'border-success/25 bg-success/10 text-success' },
-  CANCELLED: { label: '중단', className: 'border-border bg-muted text-muted-foreground' }
+const STATUS_STYLE: Record<GoalStatus, { label: string; tone: StatusTone }> = {
+  ACTIVE: { label: '진행 중', tone: 'neutral' },
+  ACHIEVED: { label: '달성', tone: 'success' },
+  CANCELLED: { label: '중단', tone: 'neutral' }
 }
 
 interface GoalCardProps {
@@ -49,9 +49,7 @@ export default function GoalCard({ goal }: GoalCardProps): React.JSX.Element {
       <CardHeader>
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="text-sm font-semibold">{METRIC_LABEL[goal.metricType]}</CardTitle>
-          <Badge variant="outline" className={cn('shrink-0 font-semibold', status.className)}>
-            {status.label}
-          </Badge>
+          <StatusBadge tone={status.tone} label={status.label} className="shrink-0" />
         </div>
         <p className="font-mono text-[11px] text-muted-foreground">
           {goal.periodStart} ~ {goal.periodEnd}
