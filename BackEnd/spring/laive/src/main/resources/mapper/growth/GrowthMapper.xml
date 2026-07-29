@@ -20,6 +20,7 @@
     <select id="findSeries" resultType="com.example.laive.growth.domain.GrowthSeriesPoint">
         WITH buckets AS (
             SELECT gs::date AS period_start,
+                   LEAST(
                    <choose>
                        <when test="periodType.name() == 'WEEKLY'">
                            gs + interval '7 days'
@@ -27,7 +28,9 @@
                        <otherwise>
                            gs + interval '1 month'
                        </otherwise>
-                   </choose> AS period_end_exclusive
+                   </choose>,
+                   cast(#{to} as date) + interval '1 day'
+                   ) AS period_end_exclusive
               FROM generate_series(
                     cast(#{from} as date),
                     cast(#{to} as date),

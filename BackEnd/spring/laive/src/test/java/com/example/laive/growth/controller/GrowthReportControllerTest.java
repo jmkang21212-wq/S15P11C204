@@ -57,7 +57,7 @@ class GrowthReportControllerTest {
     }
 
     @Test
-    void returnsNullForUnavailableAverageAndChangeRate() throws Exception {
+    void returnsZeroForUnavailableAverageAndChangeRate() throws Exception {
         LocalDate from = LocalDate.parse("2026-07-13");
         LocalDate to = LocalDate.parse("2026-07-19");
         when(service.getReport(101L, GrowthPeriodType.WEEKLY, from, to))
@@ -65,8 +65,9 @@ class GrowthReportControllerTest {
                         GrowthPeriodType.WEEKLY,
                         from,
                         to,
-                        new GrowthSummary(null, null, 0, null, 0, null),
-                        List.of(new GrowthSeriesPoint(from, to, null, 0, 0))
+                        new GrowthSummary(0, java.math.BigDecimal.ZERO, 0,
+                                java.math.BigDecimal.ZERO, 0, java.math.BigDecimal.ZERO),
+                        List.of(new GrowthSeriesPoint(from, to, 0, 0, 0))
                 ));
 
         mockMvc.perform(get("/api/v1/growth-reports")
@@ -75,8 +76,8 @@ class GrowthReportControllerTest {
                         .queryParam("to", "2026-07-19"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.summaryMetrics.avgViewers").isEmpty())
-                .andExpect(jsonPath("$.data.summaryMetrics.avgViewersChangeRate").isEmpty())
+                .andExpect(jsonPath("$.data.summaryMetrics.avgViewers").value(0))
+                .andExpect(jsonPath("$.data.summaryMetrics.avgViewersChangeRate").value(0))
                 .andExpect(jsonPath("$.data.series[0].totalChat").value(0));
     }
 }

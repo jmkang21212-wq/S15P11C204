@@ -18,7 +18,7 @@ interface MetricCardProps {
   icon: LucideIcon
   caption?: string
   /** 직전 구간 대비 증감률(0.18 = +18%). 없으면 표시하지 않는다. */
-  delta?: number | null
+  delta?: number
   /** 선택 가능한 카드로 만들 때만 넘긴다. */
   onSelect?: () => void
   selected?: boolean
@@ -72,7 +72,7 @@ export default function MetricCard({
           <p className="font-mono text-[28px] leading-none font-extrabold tracking-[-0.03em]">
             {value}
           </p>
-          {delta != null && <DeltaBadge delta={delta} />}
+          {delta !== undefined && <DeltaBadge delta={delta} />}
         </div>
 
         {caption && <p className="text-[11px] text-muted-foreground">{caption}</p>}

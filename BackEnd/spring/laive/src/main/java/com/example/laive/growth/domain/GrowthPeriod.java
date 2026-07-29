@@ -19,11 +19,10 @@ public record GrowthPeriod(LocalDate start, LocalDate end) {
     }
 
     public static GrowthPeriod aligned(GrowthPeriodType type, LocalDate start, LocalDate end) {
-        GrowthPeriod period = new GrowthPeriod(start, end);
-        if (type == null || !type.isAligned(start, end)) {
+        if (type == null) {
             throw GrowthException.invalidPeriod();
         }
-        return period;
+        return new GrowthPeriod(start, end);
     }
 
     public Instant startInclusive() {

@@ -43,7 +43,7 @@ class GrowthReportQueryServiceTest {
         );
 
         assertThat(result.series()).hasSize(3);
-        assertThat(result.series().getFirst().averageViewers()).isNull();
+        assertThat(result.series().getFirst().averageViewers()).isZero();
         assertThat(result.summary().averageViewers()).isEqualTo(120);
         assertThat(result.summary().averageViewersChangeRate()).isEqualByComparingTo("0.2000");
         assertThat(result.summary().broadcastMinutesChangeRate()).isEqualByComparingTo("-0.2000");

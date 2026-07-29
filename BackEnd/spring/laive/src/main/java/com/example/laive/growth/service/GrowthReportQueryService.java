@@ -30,7 +30,15 @@ public class GrowthReportQueryService {
             LocalDate to
     ) {
         GrowthPeriod period = GrowthPeriod.aligned(periodType, from, to);
-        List<GrowthSeriesPoint> series = repository.findSeries(streamerId, periodType, period);
+        List<GrowthSeriesPoint> series = repository.findSeries(streamerId, periodType, period)
+                .stream()
+                .map(row -> row.averageViewers() == null
+                        ? new GrowthSeriesPoint(
+                                row.periodStart(), row.periodEnd(), 0,
+                                row.totalChat(), row.broadcastMinutes()
+                        )
+                        : row)
+                .toList();
         List<GrowthSeriesPoint> normalized = normalize(periodType, period, series);
         GrowthSeriesPoint current = normalized.getLast();
         GrowthSeriesPoint previous = normalized.size() > 1
@@ -67,12 +75,13 @@ public class GrowthReportQueryService {
         var result = new java.util.ArrayList<GrowthSeriesPoint>();
         LocalDate cursor = period.start();
         while (!cursor.isAfter(period.end())) {
-            LocalDate end = type == GrowthPeriodType.WEEKLY
+            LocalDate naturalEnd = type == GrowthPeriodType.WEEKLY
                     ? cursor.plusDays(6)
-                    : cursor.with(java.time.temporal.TemporalAdjusters.lastDayOfMonth());
+                    : cursor.plusMonths(1).minusDays(1);
+            LocalDate end = naturalEnd.isAfter(period.end()) ? period.end() : naturalEnd;
             result.add(byStart.getOrDefault(
                     cursor,
-                    new GrowthSeriesPoint(cursor, end, null, 0, 0)
+                    new GrowthSeriesPoint(cursor, end, 0, 0, 0)
             ));
             cursor = end.plusDays(1);
         }

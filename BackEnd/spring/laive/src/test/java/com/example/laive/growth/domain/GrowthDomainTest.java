@@ -26,10 +26,15 @@ class GrowthDomainTest {
     }
 
     @Test
-    void rejectsMisalignedOrExcessivePeriod() {
-        assertThatThrownBy(() -> GrowthPeriod.aligned(
+    void acceptsUnalignedPeriodButRejectsExcessivePeriod() {
+        assertThat(GrowthPeriod.aligned(
                 GrowthPeriodType.WEEKLY,
                 LocalDate.parse("2026-07-14"),
+                LocalDate.parse("2026-07-20")
+        ).start()).isEqualTo(LocalDate.parse("2026-07-14"));
+        assertThatThrownBy(() -> GrowthPeriod.aligned(
+                GrowthPeriodType.WEEKLY,
+                LocalDate.parse("2024-01-01"),
                 LocalDate.parse("2026-07-20")
         )).isInstanceOf(GrowthException.class)
                 .extracting("code").isEqualTo("INVALID_GROWTH_PERIOD");
@@ -40,7 +45,9 @@ class GrowthDomainTest {
         assertThat(GrowthMath.changeRate(
                 new BigDecimal("120"), new BigDecimal("100")
         )).isEqualByComparingTo("0.2000");
-        assertThat(GrowthMath.changeRate(BigDecimal.TEN, BigDecimal.ZERO)).isNull();
+        assertThat(GrowthMath.changeRate(
+                BigDecimal.TEN, BigDecimal.ZERO
+        )).isEqualByComparingTo("0.0000");
         assertThat(GrowthMath.progress(
                 new BigDecimal("120"), new BigDecimal("100")
         )).isEqualByComparingTo("1.2000");

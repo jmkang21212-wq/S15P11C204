@@ -56,7 +56,9 @@ public class GrowthGoalQueryService {
                 .collect(Collectors.groupingBy(GrowthAction::growthGoalId));
         return goals.stream().map(goal -> {
             GrowthGoalMetrics row = metrics.get(goal.id());
-            var current = row == null ? null : row.valueFor(goal.metricType());
+            var current = row == null || row.valueFor(goal.metricType()) == null
+                    ? java.math.BigDecimal.ZERO
+                    : row.valueFor(goal.metricType());
             return new GrowthGoalView(
                     goal,
                     current,

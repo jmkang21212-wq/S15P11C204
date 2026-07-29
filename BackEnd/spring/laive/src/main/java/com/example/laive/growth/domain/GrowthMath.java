@@ -9,16 +9,14 @@ public final class GrowthMath {
 
     public static BigDecimal changeRate(BigDecimal current, BigDecimal previous) {
         if (current == null || previous == null || previous.signum() == 0) {
-            return null;
+            return BigDecimal.ZERO.setScale(4);
         }
         return current.subtract(previous)
                 .divide(previous, 4, RoundingMode.HALF_UP);
     }
 
     public static BigDecimal progress(BigDecimal current, BigDecimal target) {
-        if (current == null) {
-            return null;
-        }
-        return current.divide(target, 4, RoundingMode.HALF_UP);
+        BigDecimal value = current == null ? BigDecimal.ZERO : current;
+        return value.divide(target, 4, RoundingMode.HALF_UP);
     }
 }
