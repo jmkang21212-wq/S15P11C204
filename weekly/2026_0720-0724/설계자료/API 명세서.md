@@ -269,6 +269,7 @@ ERD의 관계와 API의 단일 리소스 식별 규칙을 실제 DDL에서도 �
 | Report | GET | `/broadcast-sessions/{sessionId}/report` | 세션 리포트 조회 |
 | Report | GET | `/growth-reports` | 성장 지표 조회 |
 | Growth Goal | GET | `/growth-goals` | 성장 목표와 다음 액션 조회 |
+| Growth Goal | POST | `/growth-goals` | 성장 목표 생성 |
 | Growth Goal | PATCH | `/growth-goals/{growthGoalId}` | 성장 목표 수정 |
 | Highlight | GET | `/broadcast-sessions/{sessionId}/highlights` | 하이라이트 조회 |
 | Highlight | GET | `/highlights/{highlightId}/chat-replay` | 하이라이트 구간 채팅 리플레이(보류) |
@@ -1124,6 +1125,14 @@ AI가 약속 발언을 감지하면 `PROMISES`에 `DETECTED` 상태로 저장하
 
 `periodType`은 `WEEKLY` 또는 `MONTHLY`다. 성장 목표와 AI 다음 액션은 별도 Growth Goal API로 조회한다.
 
+- 날짜는 UTC `LocalDate`이며 `from`, `to`를 모두 포함한다. 최대 조회 범위는 2년이다.
+- `WEEKLY`는 월요일~일요일, `MONTHLY`는 월초~월말로 정렬된 완결 구간만 허용한다.
+- 방송 시간과 평균 시청자는 버킷과 실제로 겹친 시간에 따라 분할한다. 평균 시청자는 겹친 시간을 가중치로 계산한다.
+- `totalChat`은 채팅 시각 분포를 `REPORTS`에서 복원할 수 없으므로 방송 시작일 버킷에 귀속한다.
+- 방송이 없는 버킷도 반환한다. 합계 지표는 `0`, 평균 시청자는 `null`이다.
+- 직전 값이 없거나 `0`이면 증감률은 계산할 수 없으므로 `null`이다.
+- `REPORTS.status`가 `COMPLETED`, `PARTIAL`인 종료 세션만 포함한다.
+
 ### 11.3 성장 목표 조회·수정
 
 목표와 AI 다음 액션 조회:
@@ -1162,6 +1171,27 @@ AI가 약속 발언을 감지하면 `PROMISES`에 `DETECTED` 상태로 저장하
 - `actions`는 `GROWTH_ACTIONS.growth_goal_id`로 연결된 항목이다.
 - `metricType`은 `AVG_VIEWERS`, `BROADCASTS_PER_WEEK`, `TOTAL_CHAT`, `BROADCAST_MINUTES` 중 하나다.
 - `status`는 `ACTIVE`, `ACHIEVED`, `CANCELLED` 중 하나다.
+
+목표 생성:
+
+`POST /growth-goals`
+
+```json
+{
+  "metricType": "AVG_VIEWERS",
+  "targetValue": 3000,
+  "unit": "VIEWERS",
+  "periodStart": "2026-08-01",
+  "periodEnd": "2026-10-31"
+}
+```
+
+- 생성 상태는 `ACTIVE`다.
+- 목표값은 0보다 커야 하며 최대 기간은 2년이다.
+- 같은 사용자의 동일 지표 `ACTIVE` 목표는 기간이 겹칠 수 없다.
+- 표준 단위는 `AVG_VIEWERS=VIEWERS`, `BROADCASTS_PER_WEEK=COUNT`,
+  `TOTAL_CHAT=MESSAGES`, `BROADCAST_MINUTES=MINUTES`다.
+- 성공 시 `201 Created`로 생성된 목표와 현재 진행률을 반환한다.
 
 목표 수정:
 
@@ -1832,6 +1862,9 @@ ERD가 스트리머 중심으로 수정되었으므로 `ADVERTISER` 역할과 �
 | `PROMISE_STATE_CONFLICT` | 409 | 현재 약속 상태에서 확정·무시·상태 변경 불가 |
 | `REPORT_FAILED` | 500 | 리포트 생성 최종 실패 |
 | `GROWTH_GOAL_NOT_FOUND` | 404 | 성장 목표 없음 |
+| `INVALID_GROWTH_GOAL` | 400 | 성장 목표값·기간·단위 조합 오류 |
+| `GROWTH_GOAL_STATE_CONFLICT` | 409 | 성장 목표 상태 전이 또는 활성 기간 중복 |
+| `INVALID_GROWTH_PERIOD` | 400 | 성장 리포트 기간 역전·경계 불일치·최대 범위 초과 |
 | `HIGHLIGHT_NOT_FOUND` | 404 | 하이라이트 없음 |
 | `PORTFOLIO_NOT_FOUND` | 404 | 포트폴리오 없음 또는 비공개 |
 | `PORTFOLIO_HIGHLIGHT_INVALID` | 400 | 본인 소유가 아닌 하이라이트 지정 |
@@ -1850,7 +1883,7 @@ ERD가 스트리머 중심으로 수정되었으므로 `ADVERTISER` 역할과 �
 - [ ]  1.4의 Unique 제약과 1.5의 Nullable 규칙을 실제 DDL·마이그레이션에 반영
 - [ ]  `CALENDAR_EVENTS.event_type/status`, `SCHEDULE_ANNOUNCEMENTS.publish_status` Enum을 실제 DDL에 반영
 - [ ]  `PROMISES.status`에 `DETECTED`, `PENDING`, `ON_HOLD`, `COMPLETED`, `DISMISSED` 반영
-- [ ]  `GROWTH_GOALS.metric_type/status` Enum과 단위 문자열 정책 확정
+- [x]  `GROWTH_GOALS.metric_type/status` Enum과 단위 문자열 정책 확정
 - [ ]  소셜 제공자 이메일과 기존 이메일 계정의 안전한 연결 정책
 - [ ]  비밀번호 재설정 메일 발송 서비스와 Redis TTL 설정
 - [ ]  Electron 앱의 음성 수집 방식과 권한
