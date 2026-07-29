@@ -193,6 +193,47 @@ def test_5분_넘은_시청자_수는_stale이다(session):
     assert snapshot['viewerUsable'] is False
 
 
+# --- 규격 위반 패킷 ---
+
+
+def test_치지직의_규격_위반_패킷에_예외가_새지_않는다(session):
+    # 2026-07-29 실측. 치지직은 우리 CONNECT `0{}`의 `{}`를 namespace로 잘못 읽고
+    # `4{},"Invalid namespace"`를 되돌려준다. JSON이 두 개 붙어 있어
+    # python-socketio의 json.loads가 "Extra data"로 깨지고, 그게 배경 스레드라
+    # 연결마다 처리되지 않은 스택트레이스가 찍혔다.
+    client = session._make_socket_client()
+
+    client._handle_eio_message('4{},"Invalid namespace"')
+
+    assert session.malformed_packets == 1
+    assert session.snapshot()['malformedPackets'] == 1
+
+
+def test_정상_패킷은_그대로_처리된다(session):
+    client = session._make_socket_client()
+    delivered = []
+    client.on('CHAT', lambda payload: delivered.append(payload))
+
+    client._handle_eio_message('2["CHAT","{}"]')
+
+    assert delivered == ['{}']
+    assert session.malformed_packets == 0
+
+
+def test_핸들러_안의_ValueError는_삼키지_않는다(session):
+    # 규격 위반 패킷을 버리려고 super()를 try로 감싸면 우리 버그까지 숨는다.
+    client = session._make_socket_client()
+
+    @client.on('CHAT')
+    def _boom(payload):  # noqa: ANN001
+        raise ValueError('우리 코드의 버그')
+
+    with pytest.raises(ValueError, match='우리 코드의 버그'):
+        client._handle_eio_message('2["CHAT","{}"]')
+
+    assert session.malformed_packets == 0
+
+
 def test_socket_ping을_주기적으로_보낸다(session, monkeypatch):
     # 치지직이 ping을 보내지 않아 우리가 보낸다. 안 보내면 85초 안에 끊긴다.
     monkeypatch.setattr('chatcollector.session.SOCKET_PING_SEC', 0.01)

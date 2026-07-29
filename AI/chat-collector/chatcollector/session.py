@@ -61,6 +61,44 @@ class _SuppressUnexpectedPong(logging.Filter):
 
 logging.getLogger('engineio.client').addFilter(_SuppressUnexpectedPong())
 
+
+class _ChzzkSocketClient(socketio.Client):
+    """치지직의 규격 위반 패킷에 배경 스레드가 죽지 않게 한다.
+
+    치지직은 우리 CONNECT `0{}`의 `{}`를 auth 페이로드가 아니라 **namespace로**
+    잘못 읽고 이렇게 되돌려준다.
+
+        4{},"Invalid namespace"
+
+    socket.io 규격이라면 타입 문자 `4` 뒤에는 JSON 하나가 와야 하는데 `{}`와
+    `"Invalid namespace"` 둘이 붙어 있다. python-socketio의 json.loads가
+    "Extra data"로 깨지고, 이 디코딩이 배경 스레드에서 일어나므로 연결마다
+    처리되지 않은 스택트레이스가 찍힌다.
+
+    연결·구독·CHAT 수신은 모두 정상이라 이 패킷은 무시해도 된다. 하지만
+    스택트레이스를 그대로 두면 진짜 오류와 섞여서 로그를 못 읽는다.
+
+    디코딩만 미리 시험하고 실패한 것만 버린다. super()에 그대로 넘기면서
+    try로 감싸는 방식은 쓰지 않는다 — 그러면 CHAT 핸들러 안에서 난 ValueError
+    까지 함께 삼켜 우리 버그를 숨긴다.
+    """
+
+    # 세션이 계수기를 붙인다. 관측만 하고 동작에는 영향이 없다.
+    on_malformed_packet = None
+
+    def _handle_eio_message(self, data):
+        # 바이너리 첨부는 패킷으로 디코딩할 대상이 아니다.
+        if not self._binary_packet and isinstance(data, str):
+            try:
+                self.packet_class(encoded_packet=data)
+            except ValueError as exception:
+                if self.on_malformed_packet is not None:
+                    self.on_malformed_packet()
+                log.debug('치지직 규격 위반 패킷 무시: %r (%s)',
+                          data[:120], exception)
+                return
+        super()._handle_eio_message(data)
+
 # Spring의 CollectorState와 같은 값이어야 한다.
 RUNNING = 'RUNNING'
 RECONNECTING = 'RECONNECTING'
@@ -103,6 +141,12 @@ class CollectorSession:
         self.clock_skew_corrected = 0
         self.streamer_messages = 0
         self.emoji_total = 0
+        # 치지직이 보내는 규격 위반 패킷 수. 연결마다 1건이 정상이다
+        # (_ChzzkSocketClient 주석 참고). 갑자기 늘면 서버 쪽이 바뀐 것이다.
+        self.malformed_packets = 0
+
+    def _count_malformed_packet(self) -> None:
+        self.malformed_packets += 1
 
     # --- 생명주기 ---
 
@@ -157,6 +201,7 @@ class CollectorSession:
             'sent': self.sent,
             'dropped': self.dropped,
             'clockSkewCorrected': self.clock_skew_corrected,
+            'malformedPackets': self.malformed_packets,
             # 13.3.1에 필드가 없어 Spring으로는 보내지 못하는 값이다.
             'streamerMessages': self.streamer_messages,
             'emojiTotal': self.emoji_total,
@@ -211,6 +256,26 @@ class CollectorSession:
             self._stop.wait(backoff)
             backoff = min(backoff * 2, RECONNECT_BACKOFF_MAX_SEC)
 
+    def _make_socket_client(self) -> _ChzzkSocketClient:
+        """CHAT과 error 핸들러가 붙은 socket.io 클라이언트를 만든다.
+
+        SYSTEM은 sessionKey 대기와 묶여 있어 핸드셰이크 쪽에서 등록한다.
+        """
+        client = _ChzzkSocketClient(reconnection=False)
+        client.on_malformed_packet = self._count_malformed_packet
+
+        @client.on('CHAT')
+        def _on_chat(payload):  # noqa: ANN001
+            self._on_chat(payload)
+
+        @client.on('error')
+        def _on_error(payload):  # noqa: ANN001
+            # 재사용된 인증 URL로 붙으면 여기로 "auth fail"이 온다.
+            log.warning('치지직 error 이벤트: sessionId=%s %s',
+                        self.session_id, payload)
+
+        return client
+
     def _handshake_and_receive(self) -> None:
         # 자격은 매번 새로 받는다. 들고 있던 Access Token이 만료되면 이후
         # 재핸드셰이크가 전부 401로 실패해 남은 방송 내내 수집이 죽는다.
@@ -222,7 +287,7 @@ class CollectorSession:
 
         session_key: dict = {}
         received_key = threading.Event()
-        client = socketio.Client(reconnection=False)
+        client = self._make_socket_client()
 
         @client.on('SYSTEM')
         def _on_system(payload):  # noqa: ANN001
@@ -230,16 +295,6 @@ class CollectorSession:
             if key:
                 session_key['value'] = key
                 received_key.set()
-
-        @client.on('CHAT')
-        def _on_chat(payload):  # noqa: ANN001
-            self._on_chat(payload)
-
-        @client.on('error')
-        def _on_error(payload):  # noqa: ANN001
-            # 재사용된 인증 URL로 붙으면 여기로 "auth fail"이 온다.
-            log.warning('치지직 error 이벤트: sessionId=%s %s',
-                        self.session_id, payload)
 
         client.connect(url, transports=['websocket'])
         with self._lock:

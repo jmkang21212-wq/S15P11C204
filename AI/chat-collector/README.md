@@ -86,6 +86,26 @@ engine.io는 PONG 수신을 `Received unexpected packet of type 3` ERROR로 남�
 (EIO v4에서 클라이언트가 PONG을 받을 일이 없다고 보기 때문). 20초마다 한 줄이면
 4시간 방송에 720줄이라 진짜 오류가 묻히므로 `session.py`가 그 한 줄만 걸러낸다.
 
+### 치지직이 보내는 규격 위반 패킷
+
+`0{}`의 `{}`를 치지직이 auth 페이로드가 아니라 **namespace로** 잘못 읽고 이렇게
+되돌려준다.
+
+```
+4{},"Invalid namespace"
+```
+
+`4` 뒤에는 JSON 하나가 와야 하는데 `{}`와 `"Invalid namespace"` 둘이 붙어 있다.
+python-socketio의 `json.loads`가 `Extra data`로 깨지고, 이 디코딩이 배경 스레드에서
+일어나므로 **연결마다 처리되지 않은 스택트레이스가 찍혔다.**
+
+연결·구독·CHAT 수신은 모두 정상이라 이 패킷은 버려도 된다. `_ChzzkSocketClient`가
+디코딩을 미리 시험해 실패한 것만 버리고 `malformedPackets`로 센다. 연결당 1건이
+정상이며, 갑자기 늘면 서버 쪽이 바뀐 것이다.
+
+`super()`를 `try`로 감싸지 않는 이유: 그러면 CHAT 핸들러 안에서 난 `ValueError`까지
+함께 삼켜 우리 버그를 숨긴다. 테스트로 고정해 두었다.
+
 ### 3. `sent_at`은 `messageTime`을 쓴다
 
 `eventSentAt`은 `2026-07-28T11:43:32.220788801` 형태의 **타임존 없는 KST 로컬
