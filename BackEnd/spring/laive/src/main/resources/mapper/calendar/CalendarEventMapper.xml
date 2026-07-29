@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.laive.calendar.repository.mybatis.CalendarEventMapper">
+
+    <!--
+      CalendarEvent record의 생성자 인자 순서와 컬럼 순서를 일치시킨다.
+      MyBatis는 record를 생성자로 매핑하므로 순서가 어긋나면 조용히 잘못 채워진다.
+    -->
+    <sql id="eventColumns">
+        id AS calendar_event_id,
+        streamer_id,
+        platform_account_id,
+        event_type,
+        title,
+        memo,
+        start_at,
+        end_at,
+        status
+    </sql>
+
+    <select id="findOwnedPlatformAccount"
+            resultType="com.example.laive.calendar.repository.PlatformAccountReference">
+        SELECT id AS platform_account_id,
+               streamer_id,
+               CASE
+                   WHEN connection_status = 'CONNECTED'
+                        AND refresh_token_expires_at IS NOT NULL
+                        AND refresh_token_expires_at &lt;= now()
+                   THEN 'REAUTH_REQUIRED'
+                   ELSE connection_status
+               END AS connection_status
+          FROM platform_accounts
+         WHERE id = #{platformAccountId}
+           AND streamer_id = #{streamerId}
+    </select>
+
+    <!--
+      캘린더 화면에 그릴 일정이라 포함이 아니라 겹침으로 찾는다.
+      경계를 걸치는 여러 날짜짜리 휴방이 조회 범위에서 빠지면 안 되기 때문이다.
+      start_at 조건이 ix_calendar_events_streamer_start의 범위 스캔을 유지한다.
+    -->
+    <select id="findRange" resultType="com.example.laive.calendar.domain.CalendarEvent">
+        SELECT <include refid="eventColumns"/>
+          FROM calendar_events
+         WHERE streamer_id = #{streamerId}
+           AND start_at &lt; #{to}
+           AND end_at &gt; #{from}
+         ORDER BY start_at, id
+    </select>
+
+    <select id="findDetail" resultType="com.example.laive.calendar.domain.CalendarEvent">
+        SELECT <include refid="eventColumns"/>
+          FROM calendar_events
+         WHERE id = #{calendarEventId}
+           AND streamer_id = #{streamerId}
+    </select>
+
+    <select id="findForUpdate" resultType="com.example.laive.calendar.domain.CalendarEvent">
+        SELECT <include refid="eventColumns"/>
+          FROM calendar_events
+         WHERE id = #{calendarEventId}
+           AND streamer_id = #{streamerId}
+         FOR UPDATE
+    </select>
+
+    <select id="existsLinkedSession" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1
+              FROM broadcast_sessions
+             WHERE calendar_event_id = #{calendarEventId}
+        )
+    </select>
+
+    <select id="insertEvent" resultType="long" affectData="true" flushCache="true">
+        INSERT INTO calendar_events (
+            streamer_id,
+            platform_account_id,
+            event_type,
+            title,
+            memo,
+            start_at,
+            end_at,
+            status
+        ) VALUES (
+            #{event.streamerId},
+            #{event.platformAccountId},
+            #{event.eventType},
+            #{event.title},
+            #{event.memo},
+            #{event.startAt},
+            #{event.endAt},
+            #{event.status}
+        )
+        RETURNING id
+    </select>
+
+    <!--
+      applyPatch가 현재 값과 병합해 완전한 일정을 만들어 오므로 동적 SET이 필요 없다.
+      같은 트랜잭션에서 FOR UPDATE로 읽은 행만 갱신하니 덮어쓰기 문제도 생기지 않는다.
+    -->
+    <update id="updateEvent">
+        UPDATE calendar_events
+           SET platform_account_id = #{event.platformAccountId},
+               event_type          = #{event.eventType},
+               title               = #{event.title},
+               memo                = #{event.memo},
+               start_at            = #{event.startAt},
+               end_at              = #{event.endAt},
+               status              = #{event.status}
+         WHERE id = #{event.calendarEventId}
+           AND streamer_id = #{event.streamerId}
+    </update>
+
+</mapper>
