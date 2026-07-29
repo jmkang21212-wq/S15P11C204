@@ -32,7 +32,7 @@ export default function RecentClipsCard({ highlights }: RecentClipsCardProps): R
                 <span className="flex size-7 items-center justify-center rounded-full bg-black/50 text-white">
                   <Play className="size-3.5" aria-hidden />
                 </span>
-                <span className="absolute right-1.5 bottom-1.5 rounded bg-black/65 px-1.5 py-0.5 font-mono text-[10px] text-white">
+                <span className="absolute right-1.5 bottom-1.5 rounded bg-black/65 px-1.5 py-0.5 font-mono text-micro text-white">
                   {formatMs(clip.durationMs)}
                 </span>
               </div>

@@ -34,13 +34,13 @@ export default function SessionCard({ session, onClick }: SessionCardProps): Rea
     >
       <CardContent className="flex flex-col gap-3 px-5">
         <div className="flex items-start justify-between gap-2">
-          <h2 className="line-clamp-2 text-[14px] font-semibold tracking-[-0.01em]">
+          <h2 className="line-clamp-2 text-subtitle font-semibold tracking-[-0.01em]">
             {session.title}
           </h2>
           <ReportStatusBadge status={session.reportStatus} className="shrink-0" />
         </div>
 
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           <span className="font-mono">{formatDateTime(session.startedAt)}</span>
           {' · '}
           <span className="font-mono">{formatDuration(session.startedAt, session.endedAt)}</span>

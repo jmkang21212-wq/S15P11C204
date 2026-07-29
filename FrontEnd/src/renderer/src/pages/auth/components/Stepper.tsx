@@ -29,7 +29,7 @@ export default function Stepper({ steps, current }: StepperProps): React.JSX.Ele
               </span>
               <span
                 className={cn(
-                  'text-[11px]',
+                  'text-caption',
                   active ? 'font-semibold text-primary' : 'text-muted-foreground',
                 )}
               >

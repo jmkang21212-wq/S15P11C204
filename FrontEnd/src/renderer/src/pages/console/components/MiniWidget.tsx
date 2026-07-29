@@ -50,8 +50,8 @@ export default function MiniWidget({
           <span className="flex size-5 items-center justify-center rounded bg-destructive text-xs font-extrabold text-white">
             !
           </span>
-          <span className="text-[13px] font-bold text-muted-foreground">위험 발언 감지 (HIGH)</span>
-          <span className="ml-auto font-mono text-[11px] text-accent-foreground">
+          <span className="text-body font-bold text-muted-foreground">위험 발언 감지 (HIGH)</span>
+          <span className="ml-auto font-mono text-caption text-accent-foreground">
             {formatTime(highBriefing.createdAt)}
           </span>
           <button
@@ -63,15 +63,15 @@ export default function MiniWidget({
             ✕
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto rounded-lg border border-destructive/35 bg-destructive/15 p-3 text-[12.5px] leading-relaxed">
+        <div className="flex-1 overflow-y-auto rounded-lg border border-destructive/35 bg-destructive/15 p-3 text-caption leading-relaxed">
           {highBriefing.message}
         </div>
         <div className="mt-3 flex items-center gap-2">
-          <span className="text-[11px] text-muted-foreground">사운드 알림 재생됨</span>
+          <span className="text-caption text-muted-foreground">사운드 알림 재생됨</span>
           <button
             type="button"
             onClick={onGoConsole}
-            className={`ml-auto rounded-md bg-destructive px-3 py-1.5 text-[11.5px] font-bold text-white ${NO_DRAG}`}
+            className={`ml-auto rounded-md bg-destructive px-3 py-1.5 text-caption font-bold text-white ${NO_DRAG}`}
           >
             콘솔에서 확인 ↗
           </button>
@@ -95,7 +95,7 @@ export default function MiniWidget({
     >
       {/* 상단: LIVE · 시청자 · 닫기 */}
       <div className="mb-2.5 flex items-center gap-2.5">
-        <span className="rounded bg-destructive px-1.5 py-0.5 text-[10px] font-bold text-white">
+        <span className="rounded bg-destructive px-1.5 py-0.5 text-micro font-bold text-white">
           ● LIVE
         </span>
         <span className="flex items-center gap-1.5 text-sm font-bold">
@@ -122,7 +122,7 @@ export default function MiniWidget({
 
       {/* 현재 브리핑 카드 (타입별) */}
       <div
-        className={`flex-1 overflow-y-auto rounded-lg p-2.5 text-[12px] leading-relaxed ${
+        className={`flex-1 overflow-y-auto rounded-lg p-2.5 text-caption leading-relaxed ${
           isRisk ? 'bg-destructive/15 ring-1 ring-destructive/40' : 'bg-white/5'
         }`}
       >
@@ -130,15 +130,15 @@ export default function MiniWidget({
           <>
             <div className="mb-1 flex items-center gap-1.5">
               {isRisk && (
-                <span className="flex size-4 items-center justify-center rounded bg-destructive text-[9px] font-extrabold text-white">
+                <span className="flex size-4 items-center justify-center rounded bg-destructive text-micro font-extrabold text-white">
                   !
                 </span>
               )}
-              <span className={`text-[10.5px] font-bold ${meta.accent}`}>
+              <span className={`text-micro font-bold ${meta.accent}`}>
                 {meta.label}
                 {current.level ? ` (${current.level})` : ''}
               </span>
-              <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+              <span className="ml-auto font-mono text-micro text-muted-foreground">
                 {formatTime(current.createdAt)}
               </span>
             </div>
@@ -158,7 +158,7 @@ export default function MiniWidget({
         >
           ‹
         </button>
-        <span className="font-mono text-[10.5px] text-muted-foreground">
+        <span className="font-mono text-micro text-muted-foreground">
           {total > 0 ? safeIdx + 1 : 0}/{total}
         </span>
         <button
@@ -173,7 +173,7 @@ export default function MiniWidget({
         <button
           type="button"
           onClick={onGoConsole}
-          className={`ml-auto rounded-md bg-primary px-3 py-1.5 text-[11.5px] font-bold text-primary-foreground ${NO_DRAG}`}
+          className={`ml-auto rounded-md bg-primary px-3 py-1.5 text-caption font-bold text-primary-foreground ${NO_DRAG}`}
         >
           콘솔로 ↗
         </button>

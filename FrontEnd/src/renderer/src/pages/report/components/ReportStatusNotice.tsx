@@ -43,7 +43,7 @@ export function ReportProcessingCard({
         <div className="flex w-full max-w-[360px] flex-col gap-2">
           {/* 진행 중(클립 생성 등)은 뉴트럴 프로그레스 바 + 캡션 — design.md §6 */}
           <Progress value={percent ?? 12} />
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-caption text-muted-foreground">
             <span className="font-mono">{formatDateTime(session.startedAt)}</span>
             {' · '}
             <span className="font-mono">{formatDuration(session.startedAt, session.endedAt)}</span>
@@ -78,7 +78,7 @@ export function PartialSummaryNotice(): React.JSX.Element {
         aria-hidden
       />
       <div className="flex flex-col gap-0.5">
-        <p className="text-[13px] font-semibold text-warning">AI 요약을 생성하지 못했어요</p>
+        <p className="text-body font-semibold text-warning">AI 요약을 생성하지 못했어요</p>
         <p className="text-xs text-muted-foreground">
           집계 지표와 시청자 추이는 정상입니다. 요약과 개선 제안은 다음 방송부터 다시 제공됩니다.
         </p>

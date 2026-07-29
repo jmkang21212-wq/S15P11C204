@@ -15,7 +15,7 @@ export default function SentimentPanel({ sentiment }: { sentiment: Sentiment }):
         negativeRatio={negativeRatio}
         className="mb-2.5 h-3"
       />
-      <div className="flex justify-between text-[11px]">
+      <div className="flex justify-between text-caption">
         <span className="font-semibold text-success">긍정 {formatPercent(positiveRatio)}</span>
         <span className="text-muted-foreground">중립 {formatPercent(neutralRatio)}</span>
         <span className="font-semibold text-destructive">부정 {formatPercent(negativeRatio)}</span>

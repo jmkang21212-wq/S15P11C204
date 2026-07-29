@@ -87,7 +87,7 @@ export default function GrowthTrendChart({
                 tickLine={false}
                 axisLine={false}
                 tickMargin={8}
-                className="font-mono text-[11px]"
+                className="font-mono text-caption"
               />
               <YAxis
                 width={48}
@@ -95,7 +95,7 @@ export default function GrowthTrendChart({
                 tickLine={false}
                 axisLine={false}
                 tickMargin={4}
-                className="font-mono text-[11px]"
+                className="font-mono text-caption"
               />
 
               <ChartTooltip

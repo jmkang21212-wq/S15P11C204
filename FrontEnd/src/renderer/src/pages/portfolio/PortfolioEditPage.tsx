@@ -161,7 +161,7 @@ export default function PortfolioEditPage(): React.JSX.Element {
           <section className="flex flex-col gap-3">
             <div className="flex items-baseline gap-2">
               <h2 className="text-sm font-semibold">방송 실적</h2>
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-caption text-muted-foreground">
                 자동 집계되며 직접 수정할 수 없어요
               </span>
             </div>
@@ -187,8 +187,8 @@ export default function PortfolioEditPage(): React.JSX.Element {
             <CardContent className="flex flex-col gap-4">
               <div className="flex items-center justify-between gap-3">
                 <Label htmlFor="portfolio-public" className="flex flex-col items-start gap-0.5">
-                  <span className="text-[13px] font-medium">포트폴리오 공개</span>
-                  <span className="text-[11px] font-normal text-muted-foreground">
+                  <span className="text-body font-medium">포트폴리오 공개</span>
+                  <span className="text-caption font-normal text-muted-foreground">
                     끄면 링크로도 볼 수 없어요
                   </span>
                 </Label>
@@ -203,9 +203,9 @@ export default function PortfolioEditPage(): React.JSX.Element {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <span className="text-[11px] font-medium text-muted-foreground">공개 주소</span>
+                <span className="text-caption font-medium text-muted-foreground">공개 주소</span>
                 <div className="flex items-center gap-2">
-                  <span className="min-w-0 flex-1 truncate rounded-md bg-muted px-2.5 py-1.5 font-mono text-[11px]">
+                  <span className="min-w-0 flex-1 truncate rounded-md bg-muted px-2.5 py-1.5 font-mono text-caption">
                     {publicUrlOf(data.publicSlug)}
                   </span>
                   <Button
@@ -222,11 +222,11 @@ export default function PortfolioEditPage(): React.JSX.Element {
                     )}
                   </Button>
                 </div>
-                <span className="text-[11px] text-muted-foreground">주소는 변경할 수 없어요.</span>
+                <span className="text-caption text-muted-foreground">주소는 변경할 수 없어요.</span>
               </div>
 
               {data.publishedAt !== null && (
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-caption text-muted-foreground">
                   공개 시작 <span className="font-mono">{formatDateTime(data.publishedAt)}</span>
                 </p>
               )}

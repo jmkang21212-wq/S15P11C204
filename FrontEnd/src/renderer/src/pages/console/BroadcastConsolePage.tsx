@@ -57,7 +57,7 @@ export default function BroadcastConsolePage(): React.JSX.Element {
         <aside className="flex w-[328px] shrink-0 flex-col gap-4 border-l bg-card p-5">
           <SentimentPanel sentiment={data.sentiment} />
           <RepeatedQuestions questions={data.repeatedQuestions} />
-          <div className="mt-auto flex items-center gap-2 rounded-lg bg-success/10 px-3 py-2 text-[11px] text-success">
+          <div className="mt-auto flex items-center gap-2 rounded-lg bg-success/10 px-3 py-2 text-caption text-success">
             <span className="size-1.5 rounded-full bg-success" />
             WebSocket 연결됨
           </div>

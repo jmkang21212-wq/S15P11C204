@@ -70,13 +70,13 @@ export default function MetricCard({
         </div>
 
         <div className="flex items-baseline gap-2">
-          <p className="font-mono text-[28px] leading-none font-extrabold tracking-[-0.03em]">
+          <p className="font-mono text-metric leading-none font-extrabold tracking-[-0.03em]">
             {value}
           </p>
           {delta !== undefined && <DeltaText delta={delta} />}
         </div>
 
-        {caption && <p className="text-[11px] text-muted-foreground">{caption}</p>}
+        {caption && <p className="text-caption text-muted-foreground">{caption}</p>}
       </CardContent>
     </Card>
   )

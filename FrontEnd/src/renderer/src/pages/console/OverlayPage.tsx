@@ -24,7 +24,7 @@ export default function OverlayPage(): React.JSX.Element {
           🔥
         </span>
         <div>
-          <div className="mb-1 text-[9.5px] font-semibold tracking-wider text-white/65">호응도</div>
+          <div className="mb-1 text-micro font-semibold tracking-wider text-white/65">호응도</div>
           <div className="h-2.5 w-[118px] overflow-hidden rounded-full bg-white/15">
             <div
               className="h-full rounded-full bg-gradient-to-r from-gauge-from to-gauge-to"

@@ -71,7 +71,7 @@ export default function ViewerTimelineChart({
             {legendTypes.map((type) => (
               <span
                 key={type}
-                className="flex items-center gap-1.5 text-[11px] text-muted-foreground"
+                className="flex items-center gap-1.5 text-caption text-muted-foreground"
               >
                 <span
                   className="size-2 rounded-full"
@@ -113,7 +113,7 @@ export default function ViewerTimelineChart({
                 tickLine={false}
                 axisLine={false}
                 tickMargin={8}
-                className="font-mono text-[11px]"
+                className="font-mono text-caption"
               />
               <YAxis
                 width={44}
@@ -121,7 +121,7 @@ export default function ViewerTimelineChart({
                 tickLine={false}
                 axisLine={false}
                 tickMargin={4}
-                className="font-mono text-[11px]"
+                className="font-mono text-caption"
               />
 
               {/* 변곡점 구간 오버레이 — 유입/이탈/채팅 피크 */}

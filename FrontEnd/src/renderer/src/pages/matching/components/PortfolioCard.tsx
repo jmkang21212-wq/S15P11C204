@@ -36,7 +36,7 @@ export default function PortfolioCard({ item, onSelect }: PortfolioCardProps): R
         <div className="flex items-center gap-3">
           <Avatar src={item.profileImageUrl} alt={`${item.nickname} 프로필 이미지`} />
           <div className="flex min-w-0 flex-col gap-1">
-            <span className="truncate text-[14px] font-bold tracking-[-0.01em]">
+            <span className="truncate text-subtitle font-bold tracking-[-0.01em]">
               {item.nickname}
             </span>
             <div className="flex flex-wrap gap-1">

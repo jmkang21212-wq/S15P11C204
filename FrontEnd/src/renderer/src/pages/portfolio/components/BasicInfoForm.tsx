@@ -27,7 +27,7 @@ export default function BasicInfoForm({ values, onChange }: BasicInfoFormProps):
     <Card>
       <CardHeader>
         <CardTitle className="text-sm font-semibold">기본 정보</CardTitle>
-        <p className="text-[11px] text-muted-foreground">공개 포트폴리오에 그대로 노출됩니다.</p>
+        <p className="text-caption text-muted-foreground">공개 포트폴리오에 그대로 노출됩니다.</p>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
         <div className="flex flex-col gap-2">
@@ -51,7 +51,7 @@ export default function BasicInfoForm({ values, onChange }: BasicInfoFormProps):
             rows={5}
             maxLength={500}
           />
-          <span className="self-end font-mono text-[11px] text-muted-foreground">
+          <span className="self-end font-mono text-caption text-muted-foreground">
             {values.introduction.length} / 500
           </span>
         </div>
@@ -78,7 +78,7 @@ export default function BasicInfoForm({ values, onChange }: BasicInfoFormProps):
             />
           </div>
         </div>
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           비워 두면 공개 포트폴리오에 연락처가 표시되지 않습니다.
         </p>
       </CardContent>

@@ -29,7 +29,7 @@ export default function InsightList({ insights }: InsightListProps): React.JSX.E
                   {index + 1}
                 </span>
                 <div className="flex flex-col gap-1">
-                  <p className="text-[13px] font-semibold">{insight.title}</p>
+                  <p className="text-body font-semibold">{insight.title}</p>
                   <p className="text-xs leading-relaxed text-muted-foreground">{insight.content}</p>
                 </div>
               </li>

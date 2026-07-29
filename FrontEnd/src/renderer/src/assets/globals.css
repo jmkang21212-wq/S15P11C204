@@ -65,11 +65,22 @@
   /* 타이포 스케일 — design.md §1 (text-title/body/caption/metric로 사용) */
   --text-title: 1.125rem; /* 18px 화면 제목 */
   --text-body: 0.8125rem; /* 13px 본문 */
-  --text-caption: 0.6875rem; /* 11px 캡션 */
+  --text-caption: 0.6875rem; /* 11px 캡션. design.md가 11~12px를 캡션으로 묶어 12·12.5px도 여기 흡수 */
   --text-metric: 1.75rem; /* 28px 지표 숫자 */
+
+  /*
+   * 스케일 밖 임의값을 기계적으로 흡수하며 커밋 6에서 추가한 보조 단계.
+   * design.md에 명시된 4단계(title/body/caption/metric)로는 못 덮는 지점만 넣었다.
+   */
+  --text-micro: 0.625rem; /* 10px — 뱃지·미니 위젯처럼 캡션보다도 더 작은 지점 (9~10.5px 흡수) */
+  --text-subtitle: 0.875rem; /* 14px — 카드·프로필 이름 헤딩 (본문보다 굵고 크게, 15px 흡수) */
+  --text-display: 1.5rem; /* 24px — 공개 뷰(비인증 웹) 히어로 제목, 앱 내부 title과 구분 (22·26px 흡수) */
+  --text-metric-sm: 1.25rem; /* 20px — 카드 안에 작게 들어가는 보조 지표 숫자 */
 
   /* elevation — design.md §1 카드 그림자 (shadow-card로 사용) */
   --shadow-card: 0 10px 34px rgba(0, 0, 0, 0.09);
+  /* LIVE 표시 점 둘레 링 — design.md §6 "레드 도트 + box-shadow 링" */
+  --shadow-live-ring: 0 0 0 3px rgba(225, 29, 72, 0.25);
 }
 
 @layer base {

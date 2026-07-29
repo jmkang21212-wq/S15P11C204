@@ -120,7 +120,7 @@ export default function CalendarMonth({
                     type="button"
                     onClick={() => onSelectEvent(e)}
                     className={cn(
-                      'truncate rounded px-1.5 py-0.5 text-left text-[10.5px] leading-tight',
+                      'truncate rounded px-1.5 py-0.5 text-left text-micro leading-tight',
                       e.eventType === 'DAY_OFF'
                         ? 'bg-muted text-muted-foreground'
                         : 'bg-accent text-accent-foreground',
