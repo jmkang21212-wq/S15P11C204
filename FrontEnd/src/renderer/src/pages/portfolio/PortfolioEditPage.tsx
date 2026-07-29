@@ -7,6 +7,7 @@ import { Label } from '@renderer/components/ui/label'
 import { Skeleton } from '@renderer/components/ui/skeleton'
 import { Switch } from '@renderer/components/ui/switch'
 import { ErrorState } from '@renderer/components/common/StateView'
+import PageHeader from '@renderer/components/common/PageHeader'
 import { MetricCardSkeleton } from '@renderer/components/common/MetricCard'
 import BasicInfoForm, { type BasicInfoValues } from './components/BasicInfoForm'
 import FeaturedHighlightsEditor from './components/FeaturedHighlightsEditor'
@@ -121,39 +122,38 @@ export default function PortfolioEditPage(): React.JSX.Element {
 
   return (
     <div className="mx-auto flex max-w-[1400px] flex-col gap-6 p-8">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-[18px] font-bold tracking-[-0.02em]">포트폴리오</h1>
-          <p className="text-xs text-muted-foreground">
-            광고주와 다른 스트리머에게 보여줄 공개 프로필을 관리하세요.
-          </p>
-        </div>
-
-        <div className="flex shrink-0 items-center gap-2">
-          {saveState === 'saved' && (
-            <span className="flex items-center gap-1 text-xs font-medium text-success">
-              <Check className="size-[14px]" strokeWidth={2} aria-hidden />
-              저장됨
-            </span>
-          )}
-          {saveState === 'error' && (
-            <span className="text-xs font-medium text-destructive">저장하지 못했어요</span>
-          )}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => navigate(PATHS.publicPortfolio.replace(':publicSlug', data.publicSlug))}
-          >
-            <ExternalLink className="size-[14px]" strokeWidth={1.8} aria-hidden />
-            공개 뷰 보기
-          </Button>
-          <Button type="button" size="sm" onClick={handleSave} disabled={saveState === 'saving'}>
-            <Save className="size-[14px]" strokeWidth={1.8} aria-hidden />
-            {saveState === 'saving' ? '저장 중…' : '저장'}
-          </Button>
-        </div>
-      </header>
+      <PageHeader
+        title="포트폴리오"
+        caption="광고주와 다른 스트리머에게 보여줄 공개 프로필을 관리하세요."
+        actions={
+          <div className="flex shrink-0 items-center gap-2">
+            {saveState === 'saved' && (
+              <span className="flex items-center gap-1 text-xs font-medium text-success">
+                <Check className="size-[14px]" strokeWidth={2} aria-hidden />
+                저장됨
+              </span>
+            )}
+            {saveState === 'error' && (
+              <span className="text-xs font-medium text-destructive">저장하지 못했어요</span>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                navigate(PATHS.publicPortfolio.replace(':publicSlug', data.publicSlug))
+              }
+            >
+              <ExternalLink className="size-[14px]" strokeWidth={1.8} aria-hidden />
+              공개 뷰 보기
+            </Button>
+            <Button type="button" size="sm" onClick={handleSave} disabled={saveState === 'saving'}>
+              <Save className="size-[14px]" strokeWidth={1.8} aria-hidden />
+              {saveState === 'saving' ? '저장 중…' : '저장'}
+            </Button>
+          </div>
+        }
+      />
 
       {/* 2열: 편집 폼 + 사이드 340px (design.md §2) */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -161,7 +161,7 @@ export default function PortfolioEditPage(): React.JSX.Element {
           <section className="flex flex-col gap-3">
             <div className="flex items-baseline gap-2">
               <h2 className="text-sm font-semibold">방송 실적</h2>
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-caption text-muted-foreground">
                 자동 집계되며 직접 수정할 수 없어요
               </span>
             </div>
@@ -187,8 +187,8 @@ export default function PortfolioEditPage(): React.JSX.Element {
             <CardContent className="flex flex-col gap-4">
               <div className="flex items-center justify-between gap-3">
                 <Label htmlFor="portfolio-public" className="flex flex-col items-start gap-0.5">
-                  <span className="text-[13px] font-medium">포트폴리오 공개</span>
-                  <span className="text-[11px] font-normal text-muted-foreground">
+                  <span className="text-body font-medium">포트폴리오 공개</span>
+                  <span className="text-caption font-normal text-muted-foreground">
                     끄면 링크로도 볼 수 없어요
                   </span>
                 </Label>
@@ -203,9 +203,9 @@ export default function PortfolioEditPage(): React.JSX.Element {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <span className="text-[11px] font-medium text-muted-foreground">공개 주소</span>
+                <span className="text-caption font-medium text-muted-foreground">공개 주소</span>
                 <div className="flex items-center gap-2">
-                  <span className="min-w-0 flex-1 truncate rounded-md bg-muted px-2.5 py-1.5 font-mono text-[11px]">
+                  <span className="min-w-0 flex-1 truncate rounded-md bg-muted px-2.5 py-1.5 font-mono text-caption">
                     {publicUrlOf(data.publicSlug)}
                   </span>
                   <Button
@@ -222,11 +222,11 @@ export default function PortfolioEditPage(): React.JSX.Element {
                     )}
                   </Button>
                 </div>
-                <span className="text-[11px] text-muted-foreground">주소는 변경할 수 없어요.</span>
+                <span className="text-caption text-muted-foreground">주소는 변경할 수 없어요.</span>
               </div>
 
               {data.publishedAt !== null && (
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-caption text-muted-foreground">
                   공개 시작 <span className="font-mono">{formatDateTime(data.publishedAt)}</span>
                 </p>
               )}

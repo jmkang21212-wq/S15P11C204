@@ -12,8 +12,8 @@ export default function RepeatedQuestions({
       <ul className="flex flex-col gap-2.5">
         {questions.map((q) => (
           <li key={q.questionId} className="flex items-center gap-2.5">
-            <span className="flex-1 text-[13px]">{q.question}</span>
-            <span className="rounded bg-accent px-1.5 py-0.5 font-mono text-[11px] font-bold text-accent-foreground">
+            <span className="flex-1 text-body">{q.question}</span>
+            <span className="rounded bg-accent px-1.5 py-0.5 font-mono text-caption font-bold text-accent-foreground">
               {formatCount(q.occurrenceCount)}
             </span>
           </li>

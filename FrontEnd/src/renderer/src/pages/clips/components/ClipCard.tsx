@@ -36,8 +36,8 @@ export default function ClipCard({
         <ClipThumbnail src={highlight.thumbnailUrl} alt={`${range} 구간 썸네일`} />
 
         <div className="flex flex-col gap-0.5">
-          <span className="font-mono text-[13px] font-semibold">{range}</span>
-          <span className="text-[11px] text-muted-foreground">
+          <span className="font-mono text-body font-semibold">{range}</span>
+          <span className="text-caption text-muted-foreground">
             {formatClipLength(highlight.endMs - highlight.startMs)}
           </span>
         </div>
@@ -55,7 +55,7 @@ export default function ClipCard({
               aria-label="클립 생성 중"
               className="animate-pulse bg-muted [&>[data-slot=progress-indicator]]:bg-muted-foreground/40"
             />
-            <span className="text-[11px] text-muted-foreground">클립을 만드는 중이에요</span>
+            <span className="text-caption text-muted-foreground">클립을 만드는 중이에요</span>
           </div>
         ) : (
           <div className="flex items-center gap-2">

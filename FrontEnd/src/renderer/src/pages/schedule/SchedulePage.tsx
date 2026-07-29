@@ -1,6 +1,8 @@
-import { useState } from 'react'
-import { useCalendarEvents } from '@renderer/hooks/useCalendarEvents'
-import { buildMockAnnouncement } from '@renderer/api/schedule'
+import { useCallback, useState } from 'react'
+import { useAsyncData } from '@renderer/hooks/useAsyncData'
+import { buildMockAnnouncement, getCalendarEvents } from '@renderer/api/schedule'
+import { Skeleton } from '@renderer/components/ui/skeleton'
+import { ErrorState } from '@renderer/components/common/StateView'
 import CalendarMonth from './components/CalendarMonth'
 import EventForm from './components/EventForm'
 import AnnouncementDraft from './components/AnnouncementDraft'
@@ -34,7 +36,8 @@ export default function SchedulePage(): React.JSX.Element {
 
   const from = new Date(viewYear, viewMonth, 1).toISOString()
   const to = new Date(viewYear, viewMonth + 1, 1).toISOString()
-  const { data, isLoading, error } = useCalendarEvents(from, to)
+  const loader = useCallback(() => getCalendarEvents(from, to), [from, to])
+  const { data, loading, error, refetch } = useAsyncData(loader)
 
   const moveMonth = (delta: number): void => {
     const d = new Date(viewYear, viewMonth + delta, 1)
@@ -68,9 +71,14 @@ export default function SchedulePage(): React.JSX.Element {
 
   return (
     <div className="flex h-full">
-      {isLoading || !data ? (
-        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-          {error ? '일정을 불러오지 못했어요.' : '불러오는 중…'}
+      {error ? (
+        <div className="flex flex-1 items-center justify-center">
+          <ErrorState message="일정을 불러오지 못했어요." onRetry={refetch} />
+        </div>
+      ) : loading || !data ? (
+        <div className="flex flex-1 flex-col gap-3 p-8">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-full w-full rounded-xl" />
         </div>
       ) : (
         <CalendarMonth
@@ -88,6 +96,7 @@ export default function SchedulePage(): React.JSX.Element {
       {/* 사이드: 일정 등록/수정 + 공지 초안 */}
       <aside className="flex w-[344px] shrink-0 flex-col border-l bg-card">
         <EventForm
+          key={selectedEvent?.calendarEventId ?? 'empty'}
           event={selectedEvent}
           onSave={handleSave}
           onClose={handleClose}

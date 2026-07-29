@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { CalendarDays } from 'lucide-react'
 import { Button } from '@renderer/components/ui/button'
 import { EmptyState, ErrorState } from '@renderer/components/common/StateView'
+import PageHeader from '@renderer/components/common/PageHeader'
 import SessionCard, { SessionCardSkeleton } from './components/SessionCard'
 import { fetchEndedSessions } from '@renderer/api/broadcastSessions'
 import { useAsyncData } from '@renderer/hooks/useAsyncData'
@@ -23,10 +24,7 @@ export default function SessionReportListPage(): React.JSX.Element {
 
   return (
     <div className="mx-auto flex max-w-[1400px] flex-col gap-6 p-8">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-[18px] font-bold tracking-[-0.02em]">세션 리포트</h1>
-        <p className="text-xs text-muted-foreground">종료된 방송의 분석 결과를 확인하세요.</p>
-      </header>
+      <PageHeader title="세션 리포트" caption="종료된 방송의 분석 결과를 확인하세요." />
 
       {loading && (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">

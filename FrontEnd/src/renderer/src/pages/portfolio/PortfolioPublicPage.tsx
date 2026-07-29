@@ -72,8 +72,10 @@ export default function PortfolioPublicPage(): React.JSX.Element {
         <article className="mx-auto flex max-w-[840px] flex-col gap-8 p-8">
           <header className="flex flex-col gap-4">
             <ProfileSummary profile={data.profile} tags={data.tags} variant="plain" />
-            <h1 className="text-[26px] font-extrabold tracking-[-0.03em]">{data.title}</h1>
-            <p className="text-[14px] leading-relaxed text-muted-foreground">{data.introduction}</p>
+            <h1 className="text-display font-extrabold tracking-[-0.03em]">{data.title}</h1>
+            <p className="text-subtitle leading-relaxed text-muted-foreground">
+              {data.introduction}
+            </p>
           </header>
 
           <section className="flex flex-col gap-3">

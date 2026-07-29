@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Button } from '@renderer/components/ui/button'
 import { Input } from '@renderer/components/ui/input'
 import { Label } from '@renderer/components/ui/label'
@@ -24,27 +24,22 @@ function withTime(iso: string, time: string): string {
   return d.toISOString()
 }
 
+/**
+ * 선택된 일정이 바뀌면 폼이 초기화돼야 하므로, 부모(SchedulePage)가
+ * `key={event?.calendarEventId ?? 'empty'}`로 이 컴포넌트를 매번 새로
+ * 마운트한다. 그래서 아래 초기값은 effect 없이 한 번만 평가되면 된다.
+ */
 export default function EventForm({
   event,
   onSave,
   onClose,
   onDelete,
 }: EventFormProps): React.JSX.Element {
-  const [eventType, setEventType] = useState<CalendarEventType>('BROADCAST')
-  const [title, setTitle] = useState('')
-  const [startTime, setStartTime] = useState('21:00')
-  const [endTime, setEndTime] = useState('24:00')
-  const [memo, setMemo] = useState('')
-
-  // 선택된 일정이 바뀌면 폼을 초기화
-  useEffect(() => {
-    if (!event) return
-    setEventType(event.eventType)
-    setTitle(event.title)
-    setStartTime(toTimeInput(event.startAt))
-    setEndTime(toTimeInput(event.endAt))
-    setMemo(event.memo ?? '')
-  }, [event])
+  const [eventType, setEventType] = useState<CalendarEventType>(event?.eventType ?? 'BROADCAST')
+  const [title, setTitle] = useState(event?.title ?? '')
+  const [startTime, setStartTime] = useState(event ? toTimeInput(event.startAt) : '21:00')
+  const [endTime, setEndTime] = useState(event ? toTimeInput(event.endAt) : '24:00')
+  const [memo, setMemo] = useState(event?.memo ?? '')
 
   if (!event) {
     return (

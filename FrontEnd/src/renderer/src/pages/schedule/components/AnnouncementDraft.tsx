@@ -21,7 +21,7 @@ export default function AnnouncementDraft({ content }: AnnouncementDraftProps): 
   return (
     <div className="mt-auto rounded-xl border border-success/40 bg-success/5 p-4">
       <div className="mb-2 flex items-center gap-2">
-        <span className="rounded bg-success px-1.5 py-0.5 text-[10px] font-bold text-success-foreground">
+        <span className="rounded bg-success px-1.5 py-0.5 text-micro font-bold text-success-foreground">
           AI 생성
         </span>
         <span className="text-xs font-bold text-success">공지 문구 제안</span>
@@ -43,7 +43,7 @@ export default function AnnouncementDraft({ content }: AnnouncementDraftProps): 
           게시
         </button>
       </div>
-      <p className="mt-2 text-[10.5px] text-muted-foreground">
+      <p className="mt-2 text-micro text-muted-foreground">
         * 게시 대상 플랫폼은 연동 권한 범위에 따라 결정
       </p>
     </div>

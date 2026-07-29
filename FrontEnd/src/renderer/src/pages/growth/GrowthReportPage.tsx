@@ -4,6 +4,7 @@ import { Card, CardContent } from '@renderer/components/ui/card'
 import { Skeleton } from '@renderer/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@renderer/components/ui/tabs'
 import { EmptyState, ErrorState } from '@renderer/components/common/StateView'
+import PageHeader from '@renderer/components/common/PageHeader'
 import MetricCard, { MetricCardSkeleton } from '@renderer/components/common/MetricCard'
 import GrowthTrendChart from './components/GrowthTrendChart'
 import GoalCard from './components/GoalCard'
@@ -60,20 +61,18 @@ export default function GrowthReportPage(): React.JSX.Element {
 
   return (
     <div className="mx-auto flex max-w-[1400px] flex-col gap-6 p-8">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-[18px] font-bold tracking-[-0.02em]">성장 리포트</h1>
-          <p className="text-xs text-muted-foreground">
-            방송 지표가 어떻게 달라지고 있는지, 목표에 얼마나 가까워졌는지 확인하세요.
-          </p>
-        </div>
-        <Tabs value={periodType} onValueChange={(v) => setPeriodType(v as PeriodType)}>
-          <TabsList>
-            <TabsTrigger value="WEEKLY">주간</TabsTrigger>
-            <TabsTrigger value="MONTHLY">월간</TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </header>
+      <PageHeader
+        title="성장 리포트"
+        caption="방송 지표가 어떻게 달라지고 있는지, 목표에 얼마나 가까워졌는지 확인하세요."
+        actions={
+          <Tabs value={periodType} onValueChange={(v) => setPeriodType(v as PeriodType)}>
+            <TabsList>
+              <TabsTrigger value="WEEKLY">주간</TabsTrigger>
+              <TabsTrigger value="MONTHLY">월간</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        }
+      />
 
       {/* KPI — 카드를 누르면 아래 차트의 지표가 바뀐다 */}
       {reportLoading && (

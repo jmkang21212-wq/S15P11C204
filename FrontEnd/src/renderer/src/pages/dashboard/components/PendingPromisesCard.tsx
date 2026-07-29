@@ -1,6 +1,6 @@
 import { Card } from '@renderer/components/ui/card'
 import { Button } from '@renderer/components/ui/button'
-import EmptyState from '@renderer/components/common/EmptyState'
+import { EmptyState } from '@renderer/components/common/StateView'
 import type { PendingPromise } from '@renderer/types/dashboard'
 
 interface PendingPromisesCardProps {
@@ -53,7 +53,7 @@ export default function PendingPromisesCard({
           )}
         </ul>
       ) : (
-        <EmptyState message="미이행 약속이 없어요" />
+        <EmptyState title="미이행 약속이 없어요" className="rounded-lg bg-muted/40 py-8" />
       )}
     </Card>
   )

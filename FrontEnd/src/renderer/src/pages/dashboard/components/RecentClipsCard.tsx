@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Play } from 'lucide-react'
 import { Card } from '@renderer/components/ui/card'
-import EmptyState from '@renderer/components/common/EmptyState'
+import { EmptyState } from '@renderer/components/common/StateView'
 import { PATHS } from '@renderer/routes/paths'
 import { formatMs } from '@renderer/lib/format'
 import type { RecentHighlight } from '@renderer/types/dashboard'
@@ -32,7 +32,7 @@ export default function RecentClipsCard({ highlights }: RecentClipsCardProps): R
                 <span className="flex size-7 items-center justify-center rounded-full bg-black/50 text-white">
                   <Play className="size-3.5" aria-hidden />
                 </span>
-                <span className="absolute right-1.5 bottom-1.5 rounded bg-black/65 px-1.5 py-0.5 font-mono text-[10px] text-white">
+                <span className="absolute right-1.5 bottom-1.5 rounded bg-black/65 px-1.5 py-0.5 font-mono text-micro text-white">
                   {formatMs(clip.durationMs)}
                 </span>
               </div>
@@ -40,7 +40,7 @@ export default function RecentClipsCard({ highlights }: RecentClipsCardProps): R
           ))}
         </div>
       ) : (
-        <EmptyState message="아직 생성된 클립이 없어요" />
+        <EmptyState title="아직 생성된 클립이 없어요" className="rounded-lg bg-muted/40 py-8" />
       )}
     </Card>
   )

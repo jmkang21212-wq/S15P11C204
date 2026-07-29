@@ -5,6 +5,7 @@ import { Button } from '@renderer/components/ui/button'
 import { Input } from '@renderer/components/ui/input'
 import { Label } from '@renderer/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@renderer/components/ui/card'
+import { NAVER_GREEN } from '@renderer/lib/brand'
 
 /**
  * SC-01a 로그인 화면.
@@ -75,7 +76,8 @@ export default function LoginPage(): React.JSX.Element {
             <Button
               type="button"
               size="lg"
-              className="w-full bg-[#03c75a] text-white hover:bg-[#03c75a]/90"
+              className="w-full text-white transition-opacity hover:opacity-90"
+              style={{ backgroundColor: NAVER_GREEN }}
             >
               네이버로 계속하기
             </Button>

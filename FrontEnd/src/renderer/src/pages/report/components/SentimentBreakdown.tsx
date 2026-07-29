@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@renderer/components/ui/card'
+import SentimentBar from '@renderer/components/common/SentimentBar'
 import { formatPercent } from '@renderer/lib/format'
 import type { ReportMetrics } from '@renderer/types/report'
 
@@ -37,18 +38,11 @@ export default function SentimentBreakdown({
           <p className="py-2 text-xs text-muted-foreground">감성 분석 데이터가 없습니다.</p>
         ) : (
           <>
-            <div
-              className="flex h-2.5 w-full overflow-hidden rounded-full bg-muted"
-              role="img"
-              aria-label={rows.map((row) => `${row.label} ${formatPercent(row.ratio)}`).join(', ')}
-            >
-              {rows.map((row) => (
-                <span
-                  key={row.key}
-                  style={{ width: `${(row.ratio / total) * 100}%`, backgroundColor: row.color }}
-                />
-              ))}
-            </div>
+            <SentimentBar
+              positiveRatio={metrics.positiveRatio}
+              neutralRatio={metrics.neutralRatio}
+              negativeRatio={metrics.negativeRatio}
+            />
 
             <ul className="flex flex-col gap-2">
               {rows.map((row) => (

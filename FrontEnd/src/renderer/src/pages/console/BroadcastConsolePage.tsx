@@ -1,5 +1,9 @@
+import { useCallback } from 'react'
 import { useParams } from 'react-router-dom'
-import { useLiveSnapshot } from '@renderer/hooks/useLiveSnapshot'
+import { useAsyncData } from '@renderer/hooks/useAsyncData'
+import { getLiveSnapshot } from '@renderer/api/console'
+import { Skeleton } from '@renderer/components/ui/skeleton'
+import { ErrorState } from '@renderer/components/common/StateView'
 import ConsoleStatusBar from './components/ConsoleStatusBar'
 import BriefingFeed from './components/BriefingFeed'
 import SentimentPanel from './components/SentimentPanel'
@@ -17,20 +21,22 @@ const DEFAULT_SESSION_ID = 9002
 export default function BroadcastConsolePage(): React.JSX.Element {
   const { sessionId } = useParams()
   const sid = sessionId ? Number(sessionId) : DEFAULT_SESSION_ID
-  const { data, isLoading, error } = useLiveSnapshot(sid)
+  const loader = useCallback(() => getLiveSnapshot(sid), [sid])
+  const { data, loading, error, refetch } = useAsyncData(loader)
 
-  if (isLoading) {
+  if (loading) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        콘솔 불러오는 중…
+      <div className="flex h-full flex-col gap-4 p-5">
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-full w-full rounded-xl" />
       </div>
     )
   }
 
   if (error || !data) {
     return (
-      <div className="flex h-full items-center justify-center text-sm text-destructive">
-        콘솔 상태를 불러오지 못했어요.
+      <div className="flex h-full items-center justify-center">
+        <ErrorState message="콘솔 상태를 불러오지 못했어요." onRetry={refetch} />
       </div>
     )
   }
@@ -51,7 +57,7 @@ export default function BroadcastConsolePage(): React.JSX.Element {
         <aside className="flex w-[328px] shrink-0 flex-col gap-4 border-l bg-card p-5">
           <SentimentPanel sentiment={data.sentiment} />
           <RepeatedQuestions questions={data.repeatedQuestions} />
-          <div className="mt-auto flex items-center gap-2 rounded-lg bg-success/10 px-3 py-2 text-[11px] text-success">
+          <div className="mt-auto flex items-center gap-2 rounded-lg bg-success/10 px-3 py-2 text-caption text-success">
             <span className="size-1.5 rounded-full bg-success" />
             WebSocket 연결됨
           </div>

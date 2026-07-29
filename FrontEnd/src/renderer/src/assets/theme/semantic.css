@@ -1,0 +1,147 @@
+/*
+ * LAIVE — 2층: 의미 역할
+ *
+ * 1층(palette-studio-light.css)의 원시값을 "어디에 쓰는가"에 연결한다.
+ * 화면 코드는 이 파일의 이름(--primary, --success …)만 알면 되고,
+ * 1층이 바뀌어도 이 파일과 화면 코드는 그대로 둘 수 있다.
+ *
+ * [data-theme]로 전체 테마를, [data-surface]로 특정 영역만 다른 표면을
+ * 얹을 수 있다(예: 방송 오버레이 — 파일 하단 [data-surface='overlay*']).
+ *
+ * 값 출처: 기존 globals.css :root(studio-light)/.dark
+ * (구조만 재편 — 값은 한 글자도 바꾸지 않았다)
+ */
+:root,
+[data-theme='studio-light'] {
+  --radius: 0.875rem; /* 카드 14px 기준 */
+
+  --background: var(--laive-gray-100);
+  --foreground: var(--laive-gray-900);
+
+  --card: var(--laive-white);
+  --card-foreground: var(--laive-gray-900);
+
+  --popover: var(--laive-white);
+  --popover-foreground: var(--laive-gray-900);
+
+  --primary: var(--laive-indigo-600);
+  --primary-foreground: var(--laive-white);
+
+  --secondary: var(--laive-gray-200);
+  --secondary-foreground: var(--laive-gray-900);
+
+  --muted: var(--laive-gray-150);
+  --muted-foreground: var(--laive-gray-500);
+
+  --accent: var(--laive-indigo-100);
+  --accent-foreground: var(--laive-indigo-600);
+
+  --destructive: var(--laive-rose-600);
+  --destructive-foreground: var(--laive-white);
+
+  --success: var(--laive-green-600);
+  --success-foreground: var(--laive-white);
+
+  --warning: var(--laive-amber-600);
+  --warning-foreground: var(--laive-white);
+
+  --border: var(--laive-gray-300);
+  --input: var(--laive-gray-300);
+  --ring: var(--laive-indigo-600);
+
+  /* 데이터 시각화(Tremor 등) 대비 차트 색상 */
+  --chart-1: var(--laive-indigo-600);
+  --chart-2: var(--laive-green-600);
+  --chart-3: var(--laive-amber-600);
+  --chart-4: var(--laive-rose-600);
+  --chart-5: var(--laive-violet-600);
+}
+
+/*
+ * Studio Light는 라이트 전용이지만 shadcn 호환을 위해 최소 정의.
+ * ⚠️ 아래 값은 기존 .dark 블록을 그대로 옮긴 것으로, 실제로 켜서
+ * 검증된 적이 없다 — 후속 과제로 남겨 둔다(계획 문서 "후속" 참고).
+ */
+[data-theme='dark'] {
+  --background: var(--laive-navy-900);
+  --foreground: var(--laive-navy-100);
+
+  --card: var(--laive-gray-900);
+  --card-foreground: var(--laive-navy-100);
+
+  --popover: var(--laive-gray-900);
+  --popover-foreground: var(--laive-navy-100);
+
+  --primary: var(--laive-indigo-400);
+  --primary-foreground: var(--laive-white);
+
+  --secondary: var(--laive-navy-700);
+  --secondary-foreground: var(--laive-navy-100);
+
+  --muted: var(--laive-navy-700);
+  --muted-foreground: var(--laive-navy-400);
+
+  --accent: var(--laive-indigo-900);
+  --accent-foreground: var(--laive-indigo-200);
+
+  --destructive: var(--laive-rose-400);
+  --destructive-foreground: var(--laive-rose-950);
+
+  --success: var(--laive-green-400);
+  --success-foreground: var(--laive-green-950);
+
+  --warning: var(--laive-amber-400);
+  --warning-foreground: var(--laive-amber-950);
+
+  --border: var(--laive-navy-800);
+  --input: var(--laive-navy-800);
+  --ring: var(--laive-indigo-400);
+
+  --chart-1: var(--laive-indigo-400);
+  --chart-2: var(--laive-green-400);
+  --chart-3: var(--laive-amber-400);
+  --chart-4: var(--laive-rose-400);
+  --chart-5: var(--laive-violet-400);
+}
+
+/*
+ * 방송 오버레이 — 미니 위젯·OBS 오버레이처럼 방송 화면 위에 얹히는 표면.
+ * [data-theme]와는 별개 축이다: 앱 테마가 라이트든 다크든 이 표면은 늘
+ * 어둡다(밝은 배경 위에서도 알아보기 쉬워야 하므로). 스코프 안에서는
+ * bg-card·text-foreground 같은 평범한 유틸리티 클래스를 그대로 쓰면 된다.
+ */
+[data-surface='overlay'] {
+  --card: var(--laive-navy-900);
+  --card-foreground: var(--laive-navy-100);
+  --foreground: var(--laive-navy-100);
+  --muted-foreground: var(--laive-navy-500);
+  /* 브리핑 본문처럼 foreground보다 한 단계 낮은 강조의 텍스트 */
+  --secondary-foreground: var(--laive-navy-300);
+  --primary: var(--laive-cyan-400);
+  --primary-foreground: var(--laive-navy-950);
+
+  /* 브리핑 타입별 강조색 (미니 위젯 전용) */
+  --briefing-risk: var(--laive-rose-400);
+  --briefing-chat: var(--laive-cyan-300);
+  --briefing-faq: var(--laive-violet-300);
+  --briefing-promise: var(--laive-amber-300);
+
+  /* 미니 위젯 이전/다음 버튼처럼 muted-foreground보다 옅은 보조 아이콘 색 */
+  --overlay-icon: var(--laive-navy-450);
+
+  /* OBS 오버레이 호응도 게이지 그라디언트 (Tailwind 기본 팔레트 직접 참조 대체) */
+  --gauge-from: var(--laive-gauge-from);
+  --gauge-to: var(--laive-gauge-to);
+
+  /* OBS 오버레이의 반투명 유리 배경 (임의 방송 화면 위에 얹히므로 opacity와 함께 쓴다) */
+  --overlay-backdrop: var(--laive-obs-backdrop);
+}
+
+/* HIGH 위험 강조 상태의 미니 위젯 — overlay와 별도 팔레트를 쓰는 경고 변형 */
+[data-surface='overlay-alert'] {
+  --card: var(--laive-rose-950);
+  --card-foreground: var(--laive-rose-100);
+  --foreground: var(--laive-rose-100);
+  --muted-foreground: var(--laive-rose-300);
+  --accent-foreground: var(--laive-rose-400);
+}

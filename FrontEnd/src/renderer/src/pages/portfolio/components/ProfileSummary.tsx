@@ -30,7 +30,7 @@ export default function ProfileSummary({
       <div className="flex items-center gap-3">
         <Avatar src={profile.profileImageUrl} alt={`${profile.nickname} 프로필 이미지`} />
         <div className="flex min-w-0 flex-col gap-1">
-          <span className="truncate text-[15px] font-bold tracking-[-0.01em]">
+          <span className="truncate text-subtitle font-bold tracking-[-0.01em]">
             {profile.nickname}
           </span>
           <div className="flex flex-wrap gap-1.5">
@@ -67,7 +67,7 @@ export default function ProfileSummary({
     <Card className={className}>
       <CardHeader>
         <CardTitle className="text-sm font-semibold">프로필</CardTitle>
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           프로필과 플랫폼 계정은 연동 화면에서, 태그는 별도 경로로 관리됩니다.
         </p>
       </CardHeader>

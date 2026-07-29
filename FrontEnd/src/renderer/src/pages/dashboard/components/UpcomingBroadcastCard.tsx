@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { Play } from 'lucide-react'
 import { Card } from '@renderer/components/ui/card'
 import { Button } from '@renderer/components/ui/button'
-import EmptyState from '@renderer/components/common/EmptyState'
+import { EmptyState } from '@renderer/components/common/StateView'
 import { PATHS } from '@renderer/routes/paths'
 import { formatTime } from '@renderer/lib/format'
 import type { UpcomingBroadcast } from '@renderer/types/dashboard'
@@ -44,7 +44,8 @@ export default function UpcomingBroadcastCard({
         </div>
       ) : (
         <EmptyState
-          message="예정된 방송이 없어요"
+          title="예정된 방송이 없어요"
+          className="rounded-lg bg-muted/40 py-8"
           action={
             <Link to={PATHS.schedule} className="text-xs font-medium text-primary">
               일정 추가하기 →

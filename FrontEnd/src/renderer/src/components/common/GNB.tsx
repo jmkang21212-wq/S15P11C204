@@ -69,7 +69,7 @@ export default function GNB({ collapsed = false, live = false }: GNBProps): Reac
           )}
         >
           <span
-            className="size-2 rounded-full bg-destructive shadow-[0_0_0_3px_rgba(225,29,72,0.25)]"
+            className="size-2 rounded-full bg-destructive shadow-live-ring"
             aria-hidden
           />
           {!collapsed && <span>LIVE · 콘솔 열기</span>}

@@ -1,5 +1,5 @@
 import { Button } from '@renderer/components/ui/button'
-import EmptyState from '@renderer/components/common/EmptyState'
+import { EmptyState } from '@renderer/components/common/StateView'
 import { cn } from '@renderer/lib/utils'
 import { formatTime } from '@renderer/lib/format'
 import type { Briefing, BriefingType } from '@renderer/types/console'
@@ -23,11 +23,11 @@ function BriefingItem({ briefing }: { briefing: Briefing }): React.JSX.Element {
       )}
     >
       <div className="mb-1.5 flex items-center gap-2">
-        <span className={cn('rounded px-2 py-0.5 text-[10px] font-bold', meta.badge)}>
+        <span className={cn('rounded px-2 py-0.5 text-micro font-bold', meta.badge)}>
           {meta.label}
           {briefing.level ? ` · ${briefing.level}` : ''}
         </span>
-        <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+        <span className="ml-auto font-mono text-micro text-muted-foreground">
           {formatTime(briefing.createdAt)}
         </span>
       </div>
@@ -52,7 +52,7 @@ export default function BriefingFeed({ briefings }: { briefings: Briefing[] }): 
     <section className="flex flex-1 flex-col overflow-hidden p-5">
       <div className="mb-3 flex items-center justify-between">
         <span className="text-xs font-semibold text-muted-foreground">브리핑 피드</span>
-        <span className="text-[10px] text-muted-foreground">시간순 · 분당 최대 6건</span>
+        <span className="text-micro text-muted-foreground">시간순 · 분당 최대 6건</span>
       </div>
       {briefings.length > 0 ? (
         <ul className="flex flex-col gap-2.5 overflow-y-auto">
@@ -61,7 +61,7 @@ export default function BriefingFeed({ briefings }: { briefings: Briefing[] }): 
           ))}
         </ul>
       ) : (
-        <EmptyState message="아직 도착한 브리핑이 없어요" />
+        <EmptyState title="아직 도착한 브리핑이 없어요" className="rounded-lg bg-muted/40 py-8" />
       )}
     </section>
   )

@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Card } from '@renderer/components/ui/card'
-import EmptyState from '@renderer/components/common/EmptyState'
+import { EmptyState } from '@renderer/components/common/StateView'
 import { PATHS } from '@renderer/routes/paths'
 import { formatCount, formatMonthDay } from '@renderer/lib/format'
 import type { RecentSession } from '@renderer/types/dashboard'
@@ -49,7 +49,7 @@ export default function RecentSessionCard({ session }: RecentSessionCardProps): 
           </Link>
         </div>
       ) : (
-        <EmptyState message="아직 완료된 방송이 없어요" />
+        <EmptyState title="아직 완료된 방송이 없어요" className="rounded-lg bg-muted/40 py-8" />
       )}
     </Card>
   )

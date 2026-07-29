@@ -23,7 +23,7 @@ export default function BrowserChrome({
 }: BrowserChromeProps): React.JSX.Element {
   return (
     <div className="flex h-screen flex-col bg-muted/60 p-6">
-      <div className="mx-auto flex h-full w-full max-w-[1100px] flex-col overflow-hidden rounded-xl border bg-card shadow-[0_10px_34px_rgba(0,0,0,.09)]">
+      <div className="mx-auto flex h-full w-full max-w-[1100px] flex-col overflow-hidden rounded-xl border bg-card shadow-card">
         {/* 크롬 상단 바 */}
         <div className="flex shrink-0 items-center gap-3 border-b bg-muted/40 px-4 py-2.5">
           <div className="flex shrink-0 items-center gap-1.5" aria-hidden>
@@ -34,7 +34,7 @@ export default function BrowserChrome({
 
           <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-full bg-background px-3 py-1.5">
             <Lock className="size-[12px] shrink-0 text-success" strokeWidth={2} aria-hidden />
-            <span className="truncate font-mono text-[11px] text-muted-foreground">{url}</span>
+            <span className="truncate font-mono text-caption text-muted-foreground">{url}</span>
           </div>
 
           <Button type="button" variant="ghost" size="sm" onClick={onBack} className="shrink-0">

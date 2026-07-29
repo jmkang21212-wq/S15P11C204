@@ -74,7 +74,7 @@ export default function FeaturedHighlightsEditor({
     <Card>
       <CardHeader>
         <CardTitle className="text-sm font-semibold">대표 하이라이트</CardTitle>
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           공개 포트폴리오 상단에 이 순서대로 보여집니다.
         </p>
       </CardHeader>
@@ -201,7 +201,7 @@ export default function FeaturedHighlightsEditor({
                           src={candidate.thumbnailUrl}
                           alt={`${formatMs(candidate.startMs)} 구간 썸네일`}
                         />
-                        <span className="font-mono text-[11px]">
+                        <span className="font-mono text-caption">
                           {formatMs(candidate.startMs)} – {formatMs(candidate.endMs)}
                         </span>
                         <Button

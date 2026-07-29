@@ -186,7 +186,7 @@ export default function SessionReportDetailPage(): React.JSX.Element {
                 <CardTitle className="text-sm font-semibold">AI 요약</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-[13px] leading-relaxed text-muted-foreground">{summary}</p>
+                <p className="text-body leading-relaxed text-muted-foreground">{summary}</p>
               </CardContent>
             </Card>
           )}

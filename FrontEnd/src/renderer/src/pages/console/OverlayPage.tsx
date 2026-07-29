@@ -1,4 +1,6 @@
-import { useLiveSnapshot } from '@renderer/hooks/useLiveSnapshot'
+import { useCallback } from 'react'
+import { useAsyncData } from '@renderer/hooks/useAsyncData'
+import { getLiveSnapshot } from '@renderer/api/console'
 
 const DEFAULT_SESSION_ID = 9002
 
@@ -10,21 +12,22 @@ const DEFAULT_SESSION_ID = 9002
  *   호응도 값은 실제로는 WebSocket으로 실시간 갱신.
  */
 export default function OverlayPage(): React.JSX.Element {
-  const { data } = useLiveSnapshot(DEFAULT_SESSION_ID)
+  const loader = useCallback(() => getLiveSnapshot(DEFAULT_SESSION_ID), [])
+  const { data } = useAsyncData(loader)
   const engagement = data?.engagement ?? 0
 
   return (
-    <div className="relative h-screen w-screen bg-transparent">
+    <div data-surface="overlay" className="relative h-screen w-screen bg-transparent">
       {/* 호응도 게이지 — 우하단 고정 */}
-      <div className="absolute right-6 bottom-6 flex items-center gap-3 rounded-2xl border border-white/15 bg-[rgba(10,12,18,0.62)] px-4 py-2.5 backdrop-blur">
+      <div className="absolute right-6 bottom-6 flex items-center gap-3 rounded-2xl border border-white/15 bg-overlay-backdrop/62 px-4 py-2.5 backdrop-blur">
         <span className="text-2xl" style={{ filter: 'drop-shadow(0 0 6px rgba(251,146,60,.8))' }}>
           🔥
         </span>
         <div>
-          <div className="mb-1 text-[9.5px] font-semibold tracking-wider text-white/65">호응도</div>
+          <div className="mb-1 text-micro font-semibold tracking-wider text-white/65">호응도</div>
           <div className="h-2.5 w-[118px] overflow-hidden rounded-full bg-white/15">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-orange-400 to-rose-500"
+              className="h-full rounded-full bg-gradient-to-r from-gauge-from to-gauge-to"
               style={{ width: `${engagement}%` }}
             />
           </div>

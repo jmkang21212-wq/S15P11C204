@@ -1,22 +1,13 @@
 import { Link } from 'react-router-dom'
 import { Card } from '@renderer/components/ui/card'
-import EmptyState from '@renderer/components/common/EmptyState'
+import { EmptyState } from '@renderer/components/common/StateView'
+import DeltaText from '@renderer/components/common/DeltaText'
 import { PATHS } from '@renderer/routes/paths'
-import { formatCount, formatPercent, formatMonthDay } from '@renderer/lib/format'
-import { cn } from '@renderer/lib/utils'
+import { formatCount, formatMonthDay } from '@renderer/lib/format'
 import type { WeeklyMetrics } from '@renderer/types/dashboard'
 
 interface WeeklyMetricsCardProps {
   metrics: WeeklyMetrics | null
-}
-
-function ChangeBadge({ rate }: { rate: number }): React.JSX.Element {
-  const up = rate >= 0
-  return (
-    <span className={cn('text-xs font-bold', up ? 'text-success' : 'text-destructive')}>
-      {up ? '▲' : '▼'} {formatPercent(Math.abs(rate))}
-    </span>
-  )
 }
 
 export default function WeeklyMetricsCard({ metrics }: WeeklyMetricsCardProps): React.JSX.Element {
@@ -40,7 +31,7 @@ export default function WeeklyMetricsCard({ metrics }: WeeklyMetricsCardProps): 
                 <span className="font-mono text-xl font-extrabold">
                   {formatCount(metrics.avgViewers)}
                 </span>
-                <ChangeBadge rate={metrics.avgViewersChangeRate} />
+                <DeltaText delta={metrics.avgViewersChangeRate} digits={0} />
               </div>
             </div>
             <div>
@@ -49,7 +40,7 @@ export default function WeeklyMetricsCard({ metrics }: WeeklyMetricsCardProps): 
                 <span className="font-mono text-xl font-extrabold">
                   {formatCount(metrics.totalChat)}
                 </span>
-                <ChangeBadge rate={metrics.totalChatChangeRate} />
+                <DeltaText delta={metrics.totalChatChangeRate} digits={0} />
               </div>
             </div>
           </div>
@@ -79,7 +70,7 @@ export default function WeeklyMetricsCard({ metrics }: WeeklyMetricsCardProps): 
           </Link>
         </div>
       ) : (
-        <EmptyState message="주간 지표가 아직 없어요" />
+        <EmptyState title="주간 지표가 아직 없어요" className="rounded-lg bg-muted/40 py-8" />
       )}
     </Card>
   )

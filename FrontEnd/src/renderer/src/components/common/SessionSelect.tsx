@@ -42,8 +42,8 @@ export default function SessionSelect({
         {sessions.map((session) => (
           <SelectItem key={session.sessionId} value={String(session.sessionId)}>
             <span className="flex flex-col items-start">
-              <span className="text-[13px]">{session.title}</span>
-              <span className="font-mono text-[11px] text-muted-foreground">
+              <span className="text-body">{session.title}</span>
+              <span className="font-mono text-caption text-muted-foreground">
                 {formatDateTime(session.startedAt)}
               </span>
             </span>

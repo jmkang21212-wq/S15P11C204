@@ -46,7 +46,7 @@ export default function HighlightList({
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex min-w-0 flex-col">
                       <span className="truncate font-mono text-xs font-semibold">{range}</span>
-                      <span className="text-[11px] text-muted-foreground">
+                      <span className="text-caption text-muted-foreground">
                         {clipUrl === null
                           ? '클립 생성 중'
                           : formatClipLength(highlight.endMs - highlight.startMs)}

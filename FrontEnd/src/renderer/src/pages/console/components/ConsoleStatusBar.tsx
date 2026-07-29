@@ -28,7 +28,7 @@ export default function ConsoleStatusBar({
     <div className="flex items-center gap-5 border-b bg-card px-6 py-3">
       {/* LIVE + 경과 시간 */}
       <div className="flex items-center gap-2.5">
-        <span className="rounded bg-destructive px-2 py-0.5 text-[10px] font-bold tracking-wide text-white">
+        <span className="rounded bg-destructive px-2 py-0.5 text-micro font-bold tracking-wide text-white">
           ● LIVE
         </span>
         <span className="font-mono text-xl font-bold">{formatMs(session.elapsedSeconds * 1000)}</span>
@@ -36,7 +36,7 @@ export default function ConsoleStatusBar({
 
       {/* 현재 시청자 */}
       <div className="flex flex-col border-l pl-5">
-        <span className="text-[10px] text-muted-foreground">현재 시청자</span>
+        <span className="text-micro text-muted-foreground">현재 시청자</span>
         <span className="font-mono text-lg font-bold">{formatCount(session.currentViewers)}</span>
       </div>
 

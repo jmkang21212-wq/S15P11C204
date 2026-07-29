@@ -1,7 +1,7 @@
 import { Lightbulb } from 'lucide-react'
-import { Badge } from '@renderer/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@renderer/components/ui/card'
 import { Progress } from '@renderer/components/ui/progress'
+import StatusBadge, { type StatusTone } from '@renderer/components/common/StatusBadge'
 import { formatCount, formatPercent } from '@renderer/lib/format'
 import { cn } from '@renderer/lib/utils'
 import type { GoalStatus, GrowthGoal, MetricType } from '@renderer/types/growth'
@@ -27,10 +27,10 @@ const METRIC_UNIT: Record<MetricType, string> = {
   BROADCAST_MINUTES: '분'
 }
 
-const STATUS_STYLE: Record<GoalStatus, { label: string; className: string }> = {
-  ACTIVE: { label: '진행 중', className: 'border-border bg-muted text-muted-foreground' },
-  ACHIEVED: { label: '달성', className: 'border-success/25 bg-success/10 text-success' },
-  CANCELLED: { label: '중단', className: 'border-border bg-muted text-muted-foreground' }
+const STATUS_STYLE: Record<GoalStatus, { label: string; tone: StatusTone }> = {
+  ACTIVE: { label: '진행 중', tone: 'neutral' },
+  ACHIEVED: { label: '달성', tone: 'success' },
+  CANCELLED: { label: '중단', tone: 'neutral' }
 }
 
 interface GoalCardProps {
@@ -49,11 +49,9 @@ export default function GoalCard({ goal }: GoalCardProps): React.JSX.Element {
       <CardHeader>
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="text-sm font-semibold">{METRIC_LABEL[goal.metricType]}</CardTitle>
-          <Badge variant="outline" className={cn('shrink-0 font-semibold', status.className)}>
-            {status.label}
-          </Badge>
+          <StatusBadge tone={status.tone} label={status.label} className="shrink-0" />
         </div>
-        <p className="font-mono text-[11px] text-muted-foreground">
+        <p className="font-mono text-caption text-muted-foreground">
           {goal.periodStart} ~ {goal.periodEnd}
         </p>
       </CardHeader>
@@ -61,7 +59,7 @@ export default function GoalCard({ goal }: GoalCardProps): React.JSX.Element {
       <CardContent className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
           <div className="flex items-baseline justify-between gap-2">
-            <span className="font-mono text-[20px] leading-none font-extrabold tracking-[-0.02em]">
+            <span className="font-mono text-metric-sm leading-none font-extrabold tracking-[-0.02em]">
               {formatCount(goal.currentValue)}
               <span className="text-xs font-medium text-muted-foreground">
                 {' '}
@@ -86,7 +84,7 @@ export default function GoalCard({ goal }: GoalCardProps): React.JSX.Element {
         </div>
 
         <div className="flex flex-col gap-2">
-          <p className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
+          <p className="flex items-center gap-1.5 text-caption font-medium text-muted-foreground">
             <Lightbulb className="size-[14px]" strokeWidth={1.8} aria-hidden />
             AI 다음 액션
           </p>
@@ -96,7 +94,7 @@ export default function GoalCard({ goal }: GoalCardProps): React.JSX.Element {
             <ul className="flex flex-col gap-2.5">
               {goal.actions.map((action) => (
                 <li key={action.growthActionId} className="flex flex-col gap-0.5">
-                  <p className="text-[13px] font-semibold">{action.title}</p>
+                  <p className="text-body font-semibold">{action.title}</p>
                   <p className="text-xs leading-relaxed text-muted-foreground">{action.content}</p>
                 </li>
               ))}

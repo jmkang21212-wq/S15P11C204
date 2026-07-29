@@ -26,8 +26,8 @@ export default function DiscoverPage(): React.JSX.Element {
     <BrowserChrome url="streampilot.tv/discover" onBack={goBackToApp}>
       <div className="mx-auto flex max-w-[1100px] flex-col gap-6 p-8">
         <header className="flex flex-col gap-1">
-          <h1 className="text-[22px] font-extrabold tracking-[-0.02em]">스트리머 디렉터리</h1>
-          <p className="text-[13px] text-muted-foreground">
+          <h1 className="text-display font-extrabold tracking-[-0.02em]">스트리머 디렉터리</h1>
+          <p className="text-body text-muted-foreground">
             협업하거나 광고를 진행할 스트리머를 찾아보세요. 로그인 없이 둘러볼 수 있습니다.
           </p>
         </header>
