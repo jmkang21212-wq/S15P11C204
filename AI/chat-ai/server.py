@@ -19,10 +19,13 @@ from contextlib import asynccontextmanager
 
 import redis as redis_lib
 from fastapi import Depends, FastAPI, Header, HTTPException, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from chatai.classifier import LABELS, ChatClassifier
-from chatai.config import CHATAI_TOKEN, REDIS_URL
+from chatai.config import (CHATAI_TOKEN, GMS_BASE_URL, GMS_KEY, REDIS_URL,
+                           SUMMARY_MODEL, SUMMARY_REASONING)
+from chatai.summary import SummaryRejected, SummaryService
 from chatai.window import BroadcastWindow
 
 log = logging.getLogger('chatai')
@@ -33,11 +36,30 @@ USE_INT8 = os.getenv('CHATAI_INT8', '0') == '1'
 
 clf = None
 rdb = None
+summarizer = None
+
+
+def _make_llm_fn():
+    """GMS(OpenAI 호환 프록시) 호출 함수. 키가 없으면 None — /summary만 꺼진다."""
+    if not GMS_KEY:
+        return None
+    from openai import OpenAI
+    client = OpenAI(api_key=GMS_KEY, base_url=GMS_BASE_URL, timeout=20)
+
+    def call(prompt):
+        r = client.chat.completions.create(
+            model=SUMMARY_MODEL,
+            messages=[{'role': 'user', 'content': prompt}],
+            reasoning_effort=SUMMARY_REASONING,
+        )
+        return r.choices[0].message.content.strip()
+
+    return call
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global clf, rdb
+    global clf, rdb, summarizer
     clf = ChatClassifier(MODEL_DIR, quantized=USE_INT8)
     # decode_responses=False 통일 — window.py가 bytes/str 둘 다 처리한다
     rdb = redis_lib.Redis.from_url(REDIS_URL, socket_timeout=2, socket_connect_timeout=2)
@@ -48,6 +70,10 @@ async def lifespan(app: FastAPI):
         # 기동은 계속한다 — /classify·/aggregate는 Redis 없이도 동작해야 하고,
         # Redis가 늦게 떠도 ingest가 자동으로 회복된다.
         log.warning('Redis 접속 실패(%s) — /ingest는 503, 분류 API는 정상', REDIS_URL)
+    llm_fn = _make_llm_fn()
+    if llm_fn is None:
+        log.warning('GMS_KEY 없음 — /summary는 503, 나머지는 정상')
+    summarizer = SummaryService(rdb, llm_fn)
     yield
     rdb.close()
 
@@ -134,7 +160,8 @@ def ingest(broadcast_id: str, req: IngestRequest):
     if req.chats:
         preds = clf.predict([c.msg for c in req.chats])
         results = [{'label': p['label'], 'score': round(p['score'], 4)} for p in preds]
-        items = [(c.uid, [p['probs'][lab] for lab in LABELS])
+        # (uid, 원문, top-1 라벨, 확률8) — 원문·라벨은 /summary가 쓴다
+        items = [(c.uid, c.msg, p['label'], [p['probs'][lab] for lab in LABELS])
                  for c, p in zip(req.chats, preds)]
     else:
         results, items = [], []
@@ -147,6 +174,43 @@ def ingest(broadcast_id: str, req: IngestRequest):
         raise HTTPException(status_code=503, detail=f'redis unavailable: {type(e).__name__}')
 
     return {'results': results, 'window': window}
+
+
+class SummaryRequest(BaseModel):
+    mode: str = Field('AUTO', description='AUTO(3분 주기 스케줄러) | MANUAL(버튼). 규칙은 동일, 로그 구분용')
+
+
+@app.post('/broadcasts/{broadcast_id}/summary', dependencies=[Depends(require_token)])
+def summary_post(broadcast_id: str, req: SummaryRequest):
+    """
+    LLM 여론 요약 생성 (계약: ../CHAT_AI_API.md 2장).
+
+    가드: 채팅 30건 미만 422 · 쿨다운 60초 409 · 진행 중 409.
+    409 IN_FLIGHT를 받으면 잠시 후 GET으로 방금 생성된 요약을 받으면 된다.
+    """
+    log.info('summary 요청: broadcast=%s mode=%s', broadcast_id, req.mode)
+    try:
+        return summarizer.generate(broadcast_id, req.mode)
+    except SummaryRejected as e:
+        return JSONResponse(e.payload, status_code=e.status)
+    except redis_lib.RedisError as e:
+        raise HTTPException(status_code=503, detail=f'redis unavailable: {type(e).__name__}')
+    except Exception as e:
+        # LLM 호출 실패 (GMS 장애·타임아웃 등) — 락은 finally로 이미 해제됨
+        log.error('summary LLM 실패: %s', e)
+        raise HTTPException(status_code=502, detail=f'llm failed: {type(e).__name__}')
+
+
+@app.get('/broadcasts/{broadcast_id}/summary', dependencies=[Depends(require_token)])
+def summary_get(broadcast_id: str):
+    """마지막 요약 캐시 (LLM 미호출·쿨다운 무관). 새로고침·재입장용."""
+    try:
+        cached = summarizer.get_cached(broadcast_id)
+    except redis_lib.RedisError as e:
+        raise HTTPException(status_code=503, detail=f'redis unavailable: {type(e).__name__}')
+    if cached is None:
+        return JSONResponse({'reason': 'NO_SUMMARY'}, status_code=404)
+    return {k: v for k, v in cached.items() if not k.startswith('_')}
 
 
 @app.delete('/broadcasts/{broadcast_id}', status_code=204,

@@ -20,9 +20,10 @@
 
 시간 기준은 서버 도착 시각이다. 치지직 msgTime은 클라이언트 시계라 신뢰하지 않는다.
 """
+import json
 import time
 
-from .config import BUCKET_TTL, UID_TTL, WINDOW_SEC
+from .config import BUCKET_TTL, MSG_KEEP, UID_TTL, WINDOW_SEC
 from .labels import LABELS
 
 
@@ -34,6 +35,7 @@ class BroadcastWindow:
         self.bid = str(broadcast_id)
         self.key_u = f'chat:{self.bid}:u'
         self.key_v = f'chat:{self.bid}:v'
+        self.key_m = f'chat:{self.bid}:m'
 
     def _key_b(self, sec):
         return f'chat:{self.bid}:b:{sec}'
@@ -41,7 +43,8 @@ class BroadcastWindow:
     def add_batch(self, viewers, items, now_ms=None):
         """1초 배치를 반영하고 최신 윈도우 지표를 반환한다.
 
-        items  : [(uid, probs)] — probs는 LABELS 순서의 확률 8개
+        items  : [(uid, msg, label, probs)]
+                 msg/label은 /summary용 원문 보관, probs는 LABELS 순서 확률 8개
         viewers: None이면 이번 배치에 시청자값이 없다는 뜻 — 기존 값을 유지한다
         빈 배치여도 호출해야 한다. 윈도우가 시간에 따라 미끄러지고
         (조용해진 사람이 빠지고) viewers가 갱신되는 것이 이 호출에서 일어난다.
@@ -54,17 +57,22 @@ class BroadcastWindow:
 
         # ① 새 채팅 반영 — uid는 ZSET(마지막 활동 시각), 확률은 현재 초 버킷에 증분
         bucket = self._key_b(sec)
-        n_new = 0
-        for uid, probs in items:
+        raws = []
+        for uid, msg, label, probs in items:
             if uid:                       # uid 없는 메시지(익명 등)는 유니크에서 제외
                 pipe.zadd(self.key_u, {uid: now_ms})
             for i, p in enumerate(probs):
                 if p:
                     pipe.hincrbyfloat(bucket, f'e{i}', float(p))
-            n_new += 1
-        if n_new:
-            pipe.hincrby(bucket, 'n', n_new)
+            raws.append(json.dumps({'t': now_ms, 'm': msg, 'l': label},
+                                   ensure_ascii=False))
+        if raws:
+            pipe.hincrby(bucket, 'n', len(raws))
             pipe.expire(bucket, BUCKET_TTL)
+            # 원문 보관 (/summary가 LLM에 넘길 텍스트) — 최신이 왼쪽
+            pipe.lpush(self.key_m, *raws)
+            pipe.ltrim(self.key_m, 0, MSG_KEEP - 1)
+            pipe.expire(self.key_m, UID_TTL)
 
         # ② 윈도우 이탈 — 마지막 채팅이 3분 넘게 조용한 사람 제거
         pipe.zremrangebyscore(self.key_u, 0, cutoff)
@@ -76,6 +84,22 @@ class BroadcastWindow:
         pipe.execute()
 
         return self.metrics(now_ms)
+
+    def recent_texts(self, now_ms=None):
+        """윈도우 안 원문 [{'t','m','l'}] 을 시간순으로 반환 (/summary 재료)."""
+        now_ms = int(now_ms if now_ms is not None else time.time() * 1000)
+        cutoff = now_ms - WINDOW_SEC * 1000
+        out = []
+        for raw in self.r.lrange(self.key_m, 0, -1):
+            d = json.loads(raw)
+            if d['t'] >= cutoff:
+                out.append(d)
+        out.reverse()                     # LPUSH라 최신이 앞 → 시간순으로 뒤집기
+        return out
+
+    def exists(self):
+        """이 방송으로 ingest가 들어온 적 있는가 (404 판정용)."""
+        return self.r.exists(self.key_u, self.key_v, self.key_m) > 0
 
     def metrics(self, now_ms=None):
         """현재 윈도우 지표. BACKEND_API.md의 window 블록 그대로."""
