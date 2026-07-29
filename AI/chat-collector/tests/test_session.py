@@ -167,6 +167,7 @@ def test_시청자_수가_없으면_stale이다(session):
 
     assert snapshot['lastViewerCount'] is None
     assert snapshot['viewerStale'] is True
+    assert snapshot['viewerUsable'] is False
 
 
 def test_방금_받은_시청자_수는_stale이_아니다(session):
@@ -177,10 +178,27 @@ def test_방금_받은_시청자_수는_stale이_아니다(session):
 
     assert snapshot['lastViewerCount'] == 2417
     assert snapshot['viewerStale'] is False
+    assert snapshot['viewerUsable'] is True
 
 
 def test_5분_넘은_시청자_수는_stale이다(session):
     session._last_viewer_count = 2417
     session._last_viewer_at = time.time() - 301
 
-    assert session.snapshot()['viewerStale'] is True
+    snapshot = session.snapshot()
+
+    assert snapshot['viewerStale'] is True
+    assert snapshot['viewerUsable'] is False
+
+
+def test_방금_측정한_시청자_0명은_판정에_쓸_수_없다(session):
+    # 실측: 방송을 켜고 혼자 보면 concurrentUserCount가 0으로 온다.
+    # 폴링은 성공했으니 stale이 아니지만, engagement = uniq / viewers의
+    # 분모로 쓰면 0으로 나눈다(가드 4).
+    session._last_viewer_count = 0
+    session._last_viewer_at = time.time()
+
+    snapshot = session.snapshot()
+
+    assert snapshot['viewerStale'] is False
+    assert snapshot['viewerUsable'] is False

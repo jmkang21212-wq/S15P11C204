@@ -96,11 +96,18 @@ Spring이 종료 시각으로 닫는다. 저장 위치는 `collection_gaps`(V9)�
 그 나이를 상태로 노출해 판정이 같은 기준을 쓰게 한다.
 
 ```json
-{ "lastViewerCount": 2417, "lastViewerAgeSec": 12.4, "viewerStale": false }
+{ "lastViewerCount": 2417, "lastViewerAgeSec": 12.4, "viewerStale": false, "viewerUsable": true }
 ```
 
-`viewerStale`이 `true`면 판정을 생략해야 하는 상태다. 기준은
-`COLLECTOR_VIEWER_STALE_AFTER_SEC`(기본 300초)이며 가드 4의 5분과 같은 값이다.
+**판정에 쓸지는 `viewerUsable`로 판단한다.** `viewerStale`은 값이 낡았는지만 말하는데,
+가드 4는 낡은 값 금지와 "0으로 나누지 말 것"을 함께 요구한다.
+
+방송을 켜고 혼자 확인하면 치지직 `concurrentUserCount`가 **0으로 온다**(실측). 즉
+"방금 정상 측정했고 값은 0"인 상태가 드물지 않게 나오는데, `viewerStale`만 보고
+통과시키면 `engagement = uniq / viewers`가 0으로 나눈다.
+
+`viewerUsable`은 최근 `COLLECTOR_VIEWER_STALE_AFTER_SEC`(기본 300초, 가드 4의 5분)
+안에 측정됐고 **값이 0보다 클 때만** `true`다.
 
 ## 시청자 가명화
 

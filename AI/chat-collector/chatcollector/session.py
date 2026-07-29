@@ -143,8 +143,19 @@ class CollectorSession:
             'openGapStartedAt': None if gap_started_at is None else iso(gap_started_at),
             'lastViewerCount': last_viewer_count,
             'lastViewerAgeSec': viewer_age,
-            # HIGHLIGHT_SPEC 가드 4의 5분 기준을 판정 계층과 공유한다.
+            # 값이 너무 낡았는지만 본다. HIGHLIGHT_SPEC 가드 4의 5분 기준이다.
             'viewerStale': viewer_age is None or viewer_age > VIEWER_STALE_AFTER_SEC,
+            # 판정에 써도 되는지의 최종 답. 가드 4는 낡은 값 금지와 "0으로 나누지
+            # 말 것"을 함께 요구하는데, viewerStale만 보면 시청자 0명을 방금
+            # 정상 측정한 상태가 "쓸 수 있음"으로 통과해 engagement 계산이
+            # 0으로 나눈다. 실제로 방송을 켜고 혼자 확인하면 치지직
+            # concurrentUserCount가 0으로 오므로 드문 경우가 아니다.
+            'viewerUsable': (
+                last_viewer_count is not None
+                and last_viewer_count > 0
+                and viewer_age is not None
+                and viewer_age <= VIEWER_STALE_AFTER_SEC
+            ),
         }
 
     # --- 수집 루프 ---
