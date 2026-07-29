@@ -60,7 +60,11 @@ public class SessionRedisGateway {
         redisTemplate.expire(streamKey(sessionId), ttlMillis, TimeUnit.MILLISECONDS);
     }
 
-    private String stateKey(long sessionId) {
+    /**
+     * 세션 상태 Hash의 키다. 수집기 상태도 같은 Hash에 붙어 실시간 콘솔이 한 번에 읽는다(명세 10.6).
+     * 키 문자열이 두 곳에 복제되지 않도록 여기서만 만든다.
+     */
+    public static String stateKey(long sessionId) {
         return "session:" + sessionId + ":state";
     }
 

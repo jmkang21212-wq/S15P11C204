@@ -30,6 +30,9 @@ dependencies = [
     # 리플레이 시뮬레이터 (chat-ai/replay/)
     "aiohttp>=3.10",
     "websocket-client>=1.7",
+
+    # 치지직 채팅 수집기 (chat-collector/) — httpx·fastapi·uvicorn은 위와 공유
+    "python-socketio[client]>=5.11",  # 치지직 채팅 socket.io 연결
 ]
 
 [dependency-groups]

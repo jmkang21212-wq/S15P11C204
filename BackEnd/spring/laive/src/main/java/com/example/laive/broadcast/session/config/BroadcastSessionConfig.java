@@ -2,7 +2,6 @@ package com.example.laive.broadcast.session.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.example.laive.broadcast.session.integration.AiSessionGateway;
-import com.example.laive.broadcast.session.integration.ChatCollectorGateway;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -23,13 +22,8 @@ public class BroadcastSessionConfig {
         return new ObjectMapper().findAndRegisterModules();
     }
 
-    @Bean
-    @ConditionalOnMissingBean
-    ChatCollectorGateway chatCollectorGateway() {
-        // 실제 치지직 채팅 수집기가 연결되기 전에도 세션 생명주기를 검증할 수 있는 안전한 기본 Port다.
-        return new ChatCollectorGateway() {
-        };
-    }
+    // ChatCollectorGateway는 CollectorConfig가 등록한다. base-url 설정 여부에 따라
+    // 실제 제어 Adapter와 no-op 중 하나를 고른다.
 
     @Bean
     @ConditionalOnMissingBean
