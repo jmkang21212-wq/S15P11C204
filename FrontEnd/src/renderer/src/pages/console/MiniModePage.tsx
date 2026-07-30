@@ -29,6 +29,8 @@ export default function MiniModePage(): React.JSX.Element {
   const liveBriefings = useLiveBriefings()
   /** 강조 시간이 지난 HIGH 브리핑 id — 강조를 끄는 쪽만 상태로 둔다. */
   const [expiredHighId, setExpiredHighId] = useState<number | null>(null)
+  /** 답변 완료를 누른 질문 — 다음 스냅샷이 반영될 때까지 낙관적으로 숨긴다. */
+  const [dismissed, setDismissed] = useState<number[]>([])
 
   const newestHighId = liveBriefings.find(
     (briefing) => briefing.briefingType === 'RISK' && briefing.level === 'HIGH'
@@ -44,11 +46,26 @@ export default function MiniModePage(): React.JSX.Element {
   const isHigh =
     params.get('state') === 'high' || (newestHighId !== undefined && newestHighId !== expiredHighId)
 
+  // 콘솔 패널과 같은 규칙 — CONTEXT는 화면 맥락이 필요한 질문이라 제외한다.
+  // 답변 완료를 누른 질문은 다음 스냅샷이 올 때까지 여기서 먼저 숨긴다.
+  const questions = (data?.repeatedQuestions ?? []).filter(
+    (question) => question.type !== 'CONTEXT' && !dismissed.includes(question.questionId)
+  )
+
+  const handleDismissQuestion = (questionId: number): void => {
+    if (sessionId === null) return
+    setDismissed((prev) => [...prev, questionId])
+    // 이 창은 토큰이 없다 — 인증을 가진 콘솔 창이 대신 API를 호출한다.
+    window.api.question.requestDismiss(sessionId, questionId)
+  }
+
   return (
     <div className="h-screen w-screen">
       <MiniWidget
         data={data}
         briefings={[...liveBriefings, ...(data?.briefings ?? [])]}
+        questions={questions}
+        onDismissQuestion={handleDismissQuestion}
         isHigh={isHigh}
         onGoConsole={() => window.api.focusMainWindow()}
         onClose={() => window.api.closeMiniWindow()}

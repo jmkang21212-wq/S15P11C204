@@ -71,6 +71,19 @@ const api = {
       ipcRenderer.on('snapshot:state', listener)
       return () => ipcRenderer.removeListener('snapshot:state', listener)
     }
+  },
+  /**
+   * 반복 질문 답변 완료 요청 — 미니 창은 토큰이 없어 API를 직접 부를 수 없으므로
+   * 인증을 가진 콘솔 창이 대신 호출하도록 요청만 넘긴다 (릴레이 방향이 반대다).
+   */
+  question: {
+    requestDismiss: (sessionId: number, questionId: number): void =>
+      ipcRenderer.send('question:dismiss-request', { sessionId, questionId }),
+    onDismissRequest: (callback: (payload: unknown) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, payload: unknown): void => callback(payload)
+      ipcRenderer.on('question:dismiss-request', listener)
+      return () => ipcRenderer.removeListener('question:dismiss-request', listener)
+    }
   }
 }
 

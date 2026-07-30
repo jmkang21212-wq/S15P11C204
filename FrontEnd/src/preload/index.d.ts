@@ -43,6 +43,26 @@ export interface LaiveApi {
   session: SessionBridge
   /** 실시간 콘솔 스냅샷 릴레이 (콘솔 창 → 미니·오버레이 창). */
   snapshot: SnapshotBridge
+  /** 반복 질문 답변 완료 요청 릴레이 (미니 창 → 콘솔 창). */
+  question: QuestionBridge
+}
+
+/** 반복 질문 dismiss 요청 payload. */
+export interface DismissQuestionRequest {
+  sessionId: number
+  questionId: number
+}
+
+/**
+ * 반복 질문 답변 완료 요청 릴레이.
+ * 미니 창은 인증 토큰이 없어 dismiss API를 직접 부를 수 없다 — 콘솔 창(owner)이
+ * 요청을 받아 대신 호출한다. 다른 릴레이와 방향이 반대다.
+ */
+export interface QuestionBridge {
+  /** 미니 창에서 호출 — 콘솔 창에 처리를 요청한다. */
+  requestDismiss: (sessionId: number, questionId: number) => void
+  /** 콘솔 창에서 구독 — 반환 함수 호출로 구독 해제. */
+  onDismissRequest: (callback: (payload: DismissQuestionRequest) => void) => () => void
 }
 
 export interface OAuthBridge {

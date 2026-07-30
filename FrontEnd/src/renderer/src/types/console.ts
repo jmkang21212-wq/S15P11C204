@@ -62,10 +62,29 @@ export interface Sentiment {
   distribution: Partial<Record<SentimentLabel, number>> | null
 }
 
+/**
+ * 답할 수 있는 질문인지 (AI/CHAT_AI_API.md §3).
+ * - `FAQ`: 화면을 안 봐도 답할 수 있다
+ * - `CONTEXT`: 화면 맥락이 있어야 답할 수 있다 → 일괄 답변 목록에서 제외한다
+ * - `null`: 아직 판정 전
+ */
+export type QuestionType = 'FAQ' | 'CONTEXT' | null
+
+/** 방송 전체에서 묶인 반복 질문 (여론의 3분 윈도우와 달리 누적 집계다). */
 export interface RepeatedQuestion {
+  /** 폴링해도 바뀌지 않고 재사용되지 않는 불투명 식별자 (BIGINT) */
   questionId: number
-  question: string
-  occurrenceCount: number
+  /** 그 묶음에서 가장 많이 쓰인 표현 */
+  text: string
+  type: QuestionType
+  /** 몇 명이 물었나 (유니크). 정렬 기준이자 화면에 표시할 숫자 */
+  askers: number
+  /** 총 메시지 수. askers와 크게 벌어지면 한 명의 도배다 */
+  messages: number
+  /** 답변 완료 후 다시 늘어 재노출된 질문 */
+  reasked: boolean
+  firstAskedAt: string
+  lastAskedAt: string
 }
 
 export interface LiveSnapshot {

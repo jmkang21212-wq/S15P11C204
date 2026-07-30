@@ -41,7 +41,7 @@ export default function BroadcastConsolePage(): React.JSX.Element {
   const sid = sessionId ? Number(sessionId) : (currentSession?.sessionId ?? null)
 
   const { snapshot: data, loading, error } = useLiveSnapshot(sid, 'owner')
-  const audio = useAudioStream(`session${sid}`)
+  const audio = useAudioStream(`session${sid}`, sid)
 
   if (sessionId === undefined && currentLoading) {
     return (
@@ -104,7 +104,7 @@ export default function BroadcastConsolePage(): React.JSX.Element {
           {data ? (
             <>
               <SentimentPanel sentiment={data.sentiment} />
-              <RepeatedQuestions questions={data.repeatedQuestions} />
+              <RepeatedQuestions sessionId={sid} questions={data.repeatedQuestions} />
               {/* 폴링이 일시적으로 실패하면 직전 값을 유지하고 갱신 실패만 알린다 */}
               {error && <p className="text-caption text-warning">최신 정보로 갱신하지 못했어요</p>}
             </>
