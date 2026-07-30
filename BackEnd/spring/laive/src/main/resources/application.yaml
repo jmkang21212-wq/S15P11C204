@@ -24,6 +24,17 @@ spring:
       connect-timeout: 2s
       timeout: 2s
 
+  ai:
+    model:
+      chat: "${REPORT_AI_MODEL_ENABLED:none}"
+    openai:
+      api-key: "${REPORT_AI_API_KEY:disabled}"
+      base-url: "${REPORT_AI_BASE_URL:https://api.openai.com}"
+      chat:
+        options:
+          model: "${REPORT_AI_MODEL:gpt-4o-mini}"
+          temperature: 0.2
+
 mybatis:
   mapper-locations: classpath:/mapper/**/*.xml
   type-aliases-package: com.example.laive.domain
@@ -117,6 +128,14 @@ laive:
     min-window-chats: 10   # 저활동 틱 판정 생략 (가드 3)
     mad-epsilon: 0.001     # MAD 하한 (가드 2)
     tick-interval: 1s
+
+  report:
+    ai:
+      enabled: "${REPORT_AI_ENABLED:false}"
+      max-input-chars: 24000
+      max-output-tokens: 1200
+      min-sentiment-coverage: 0.8
+      max-highlights: 5
 
   # Spring이 치지직 채팅 수집기 제어 서비스를 호출할 때 쓰는 설정
   collector:
