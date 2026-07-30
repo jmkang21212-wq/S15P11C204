@@ -1096,6 +1096,8 @@ AI가 약속 발언을 감지하면 `PROMISES`에 `DETECTED` 상태로 저장하
 ```
 
 - `PROCESSING`이면 `202 Accepted`와 진행 상태만 반환한다.
+- `PROCESSING` 진행률은 통계 확정 20%, 트리거 분석 50%, 최종 요약 30%로
+  계산한다. 트리거가 없는 세션은 트리거 분석 단계를 즉시 충족한다.
 - LLM 분석이 실패해도 집계 지표와 트리거 구간은 `PARTIAL` 상태로 반환한다. 트리거는 방송 중에 이미 확정되므로 리포트 생성 실패와 무관하게 남아 있고, `narrative`만 `null`이 된다.
 - `metrics.distribution`과 `triggers[].distribution`은 저장된 8종 건수를 `analyzedChat`으로 나눈 값이다. DB에는 비율이 아니라 건수가 들어 있다(13.7).
 - **프론트는 건수 상위 3종만 노출한다.** 서버는 8종을 모두 내려보내고 선택은 화면에서 한다. 세션 전체 분포와 트리거 구간 분포에 같은 규칙을 쓴다.
@@ -1227,6 +1229,9 @@ AI가 약속 발언을 감지하면 `PROMISES`에 `DETECTED` 상태로 저장하
 `GET /broadcast-sessions/{sessionId}/highlights`
 
 반환 필드는 `highlightId`, `triggerId`, `startMs`, `endMs`, `clipUrl`, `thumbnailUrl`이다.
+정렬은 `startMs ASC, highlightId ASC`이며 세션당 최대 5개를 생성하므로
+페이지네이션하지 않는다. 완료된 리포트에 하이라이트가 없으면 빈 배열을
+반환하고, 리포트 생성 중이면 `REPORT_GENERATING(409)`를 반환한다.
 
 ### 11.5 하이라이트 채팅 리플레이
 
@@ -1935,6 +1940,8 @@ ERD가 스트리머 중심으로 수정되었으므로 `ADVERTISER` 역할과 �
 | `PROMISE_NOT_FOUND` | 404 | 약속 없음 |
 | `PROMISE_STATE_CONFLICT` | 409 | 현재 약속 상태에서 확정·무시·상태 변경 불가 |
 | `REPORT_FAILED` | 500 | 리포트 생성 최종 실패 |
+| `REPORT_NOT_FOUND` | 404 | 종료 전이거나 리포트가 존재하지 않음 |
+| `REPORT_GENERATING` | 409 | 생성 중인 리포트의 완료 결과 조회 |
 | `GROWTH_GOAL_NOT_FOUND` | 404 | 성장 목표 없음 |
 | `INVALID_GROWTH_GOAL` | 400 | 성장 목표값·기간·단위 조합 오류 |
 | `GROWTH_GOAL_STATE_CONFLICT` | 409 | 성장 목표 상태 전이 또는 활성 기간 중복 |
