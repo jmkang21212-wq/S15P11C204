@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.laive.report.repository.mybatis.SessionReportMapper">
+    <select id="existsOwnedSession" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1 FROM broadcast_sessions
+             WHERE id = #{sessionId} AND streamer_id = #{streamerId}
+        )
+    </select>
+
+    <select id="findReport"
+            resultType="com.example.laive.report.repository.mybatis.SessionReportRow">
+        SELECT r.id AS report_id, s.id AS session_id, s.title, s.started_at, s.ended_at,
+               r.status, r.summary, r.avg_viewers, r.peak_viewers, r.total_chat,
+               r.analyzed_chat, r.joy_count, r.excitement_count, r.support_count,
+               r.surprise_count, r.sadness_count, r.anger_count, r.confusion_count,
+               r.neutral_count, r.generated_at
+          FROM broadcast_sessions s
+          JOIN reports r ON r.session_id = s.id
+         WHERE s.id = #{sessionId}
+           AND s.streamer_id = #{streamerId}
+    </select>
+
+    <select id="findViewerTimeline"
+            resultType="com.example.laive.report.domain.ViewerTimelinePoint">
+        SELECT measured_at, viewer_count
+          FROM viewer_metrics
+         WHERE session_id = #{sessionId}
+         ORDER BY measured_at ASC
+    </select>
+
+    <select id="findTriggers"
+            resultType="com.example.laive.report.repository.mybatis.ReportTriggerRow">
+        SELECT id AS trigger_id, session_id, trigger_type, transcript_id, start_ms, end_ms,
+               peak_z, peak_engagement, avg_viewers, chat_count, unique_chatters,
+               analyzed_chat, joy_count, excitement_count, support_count, surprise_count,
+               sadness_count, anger_count, confusion_count, neutral_count,
+               narrative, screen_context, analysis_status
+          FROM triggers
+         WHERE session_id = #{sessionId}
+         ORDER BY start_ms ASC, id ASC
+    </select>
+
+    <select id="findInsights"
+            resultType="com.example.laive.report.domain.ReportInsight">
+        SELECT id AS insight_id, report_id, title, content
+          FROM report_insights
+         WHERE report_id = #{reportId}
+         ORDER BY id ASC
+    </select>
+
+    <select id="findHighlights"
+            resultType="com.example.laive.report.domain.SessionHighlight">
+        SELECT id AS highlight_id, report_id, trigger_id, start_ms, end_ms,
+               clip_url, thumbnail_url
+          FROM highlights
+         WHERE report_id = #{reportId}
+         ORDER BY start_ms ASC, id ASC
+    </select>
+</mapper>
