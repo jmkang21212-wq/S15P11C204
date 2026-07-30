@@ -80,31 +80,27 @@ function buildViewerTimeline(
 const SEGMENTS: ReportSegment[] = [
   {
     reportSegmentId: 401,
-    transcriptId: 701,
     startMs: 46 * MINUTE_MS,
     endMs: 96 * MINUTE_MS,
-    segmentType: 'VIEWER_INFLOW'
+    segmentType: 'CHAT_SURGE'
   },
   {
     reportSegmentId: 402,
-    transcriptId: 742,
     startMs: 87 * MINUTE_MS,
     endMs: 91 * MINUTE_MS,
-    segmentType: 'CHAT_PEAK'
+    segmentType: 'CHAT_SURGE'
   },
   {
     reportSegmentId: 403,
-    transcriptId: null,
     startMs: 150 * MINUTE_MS,
     endMs: 165 * MINUTE_MS,
-    segmentType: 'VIEWER_OUTFLOW'
+    segmentType: 'CHAT_SURGE'
   },
   {
     reportSegmentId: 404,
-    transcriptId: 810,
     startMs: 120 * MINUTE_MS,
     endMs: 122 * MINUTE_MS,
-    segmentType: 'HIGHLIGHT'
+    segmentType: 'CHAT_SURGE'
   }
 ]
 
@@ -132,7 +128,7 @@ const INSIGHTS: ReportInsight[] = [
 const HIGHLIGHTS: ReportHighlight[] = [
   {
     highlightId: 71,
-    reportSegmentId: 402,
+    triggerId: 402,
     startMs: 87 * MINUTE_MS,
     endMs: 87 * MINUTE_MS + 41_000,
     clipUrl: 'https://cdn.example.com/clips/71.mp4',
@@ -140,7 +136,7 @@ const HIGHLIGHTS: ReportHighlight[] = [
   },
   {
     highlightId: 72,
-    reportSegmentId: 402,
+    triggerId: 402,
     startMs: 89 * MINUTE_MS,
     endMs: 89 * MINUTE_MS + 55_000,
     clipUrl: 'https://cdn.example.com/clips/72.mp4',
@@ -148,7 +144,7 @@ const HIGHLIGHTS: ReportHighlight[] = [
   },
   {
     highlightId: 73,
-    reportSegmentId: 404,
+    triggerId: 404,
     startMs: 120 * MINUTE_MS,
     endMs: 120 * MINUTE_MS + 68_000,
     clipUrl: 'https://cdn.example.com/clips/73.mp4',
@@ -156,7 +152,7 @@ const HIGHLIGHTS: ReportHighlight[] = [
   },
   {
     highlightId: 74,
-    reportSegmentId: 401,
+    triggerId: 401,
     startMs: 62 * MINUTE_MS,
     endMs: 62 * MINUTE_MS + 52_000,
     clipUrl: 'https://cdn.example.com/clips/74.mp4',
