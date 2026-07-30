@@ -182,6 +182,30 @@ class AnalysisIngestIntegrationTest {
         assertThat(briefingTypes(sessionId)).containsExactly("PROMISE");
     }
 
+    /**
+     * 기한을 UTC로 자르면 스트리머가 기대한 날짜보다 하루 빨라진다.
+     *
+     * <p>2026-08-03T16:00:00Z는 한국 시각으로 8월 4일 새벽 1시다. 자정을 넘겨 방송하며
+     * "2주 안에" 같은 약속을 하면 이 구간에 떨어진다. 위 테스트가 12:00Z를 쓰는 바람에
+     * UTC·KST 날짜가 같아 이 결함을 잡지 못했다.
+     */
+    @Test
+    void 기한은_한국_시각_기준_날짜로_저장한다() {
+        long sessionId = createSession();
+
+        long promiseId = service.appendPromise(sessionId, new PromiseDetection(
+                "심야 약속",
+                "2주 안으로 할게요",
+                Instant.parse("2026-08-03T16:00:00Z"),
+                STARTED_AT.plusSeconds(80)
+        ));
+
+        assertThat(((java.sql.Date) jdbcTemplate.queryForMap(
+                "SELECT due_date FROM promises WHERE id = ?", promiseId).get("due_date"))
+                .toLocalDate())
+                .isEqualTo(LocalDate.of(2026, 8, 4));
+    }
+
     @Test
     void 기한이_없는_약속은_due_date가_비어_있다() {
         long sessionId = createSession();
