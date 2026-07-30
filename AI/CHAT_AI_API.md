@@ -5,12 +5,13 @@
 > 음성은 AI가 Spring을 호출하지만, **채팅은 Spring이 AI를 호출한다.**
 
 채팅 수집·저장·하이라이트 판정은 Spring 몫이다. AI 서버(chat-ai, 포트 **8001**)는
-두 가지만 한다:
+세 가지만 한다:
 
 | 무엇 | 언제 | 방식 |
 |---|---|---|
 | **감정 분류 + 실시간 지표** (호응도·여론 분포) | 1초마다 | Spring이 배치 POST |
 | **LLM 여론 요약** | 3분 주기 + 수동 버튼 | Spring이 POST |
+| **반복 질문 Top N** (§3) | 10~30초 주기 | Spring이 GET 폴링 |
 
 ```
 치지직 ──채팅(WS)──> Spring ──①1초 배치──> chat-ai ──감정·지표──┐
@@ -22,6 +23,20 @@
 AI 서버는 치지직에 직접 접속하지 않는다. 채팅과 시청자 수는 전부 Spring이
 실어서 보내준다. **AI 서버가 죽어도 채팅 수집·저장·하이라이트는 계속되어야
 한다** — 그래서 이 방향으로 설계했다 (아래 '반드시 볼 것' 1번).
+
+## 구현 현황 (2026-07-30)
+
+| 구간 | 상태 |
+|---|---|
+| §1 ingest + §4 DELETE | **양측 구현·E2E 검증 완료.** 배치 도착 시 중계는 Spring `CollectionRelayService`, 채팅 없는 초의 빈 배치 보충은 `RealtimeTicker`(1초), 어댑터·라벨 변환은 `HttpChatAiGateway`(`broadcast/realtime` 패키지). 라벨 저장 → Redis window → live-snapshot → 종료 DELETE까지 확인 |
+| §2 summary | AI측 구현 완료(`server.py`). **Spring 호출부(3분 스케줄러·수동 버튼) 미구현** — API 명세서 §13.6 보류 |
+| §3 questions | **양측 미구현.** 계약만 확정된 상태 — AI측 라우트·임베딩 클러스터링, Spring측 폴링·저장 모두 없음 |
+
+> **⚠ "파이프라인이 없다"는 오해 주의.** Spring은 `CHATAI_BASE_URL`이 비어 있으면
+> 기동 시 경고 로그 한 줄만 남기고 **no-op 게이트웨이**로 대체한다 — AI 호출이
+> 조용히 생략되고 채팅은 `sentiment_label = NULL`로 저장되며 콘솔의 `services.ai`가
+> `STOPPED`로 남는다. 코드가 없는 게 아니라 설정이 없는 것이다. 로컬에서도
+> `BackEnd/spring/laive/.env`에 `CHATAI_BASE_URL=http://127.0.0.1:8001`을 넣어야 동작한다.
 
 ---
 
