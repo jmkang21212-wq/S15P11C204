@@ -33,8 +33,12 @@ async function rawFetch(path: string, options: ApiOptions): Promise<Response> {
 
 let refreshPromise: Promise<boolean> | null = null
 
-/** Refresh Token 쿠키로 Access Token을 재발급받는다 (동시 호출은 1회로 합침). */
-async function tryRefresh(): Promise<boolean> {
+/**
+ * Refresh Token 쿠키로 Access Token을 재발급받아 authStore에 저장한다.
+ * 부팅 세션 복구와 401 자동 재시도가 모두 이 함수를 거치며, 동시 호출은 1회 요청으로 합쳐진다.
+ * (Refresh Token은 1회용 회전 방식이라 중복 호출이 서로를 무효화할 수 있다)
+ */
+export async function refreshSession(): Promise<boolean> {
   if (!refreshPromise) {
     refreshPromise = (async () => {
       try {
@@ -69,7 +73,7 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
   let res = await rawFetch(path, options)
 
   if (res.status === 401 && options.auth !== false) {
-    const refreshed = await tryRefresh()
+    const refreshed = await refreshSession()
     if (refreshed) {
       res = await rawFetch(path, options)
     } else {
