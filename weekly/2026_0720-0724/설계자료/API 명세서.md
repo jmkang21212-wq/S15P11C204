@@ -125,7 +125,7 @@ ERD의 관계와 API의 단일 리소스 식별 규칙을 실제 DDL에서도 �
 | --- | --- |
 | SC-01 로그인 / 플랫폼 연동 | 이메일·소셜 Auth API, Password API, Platform Account API |
 | SC-02 대시보드 | `GET /dashboard`, `GET /promises` |
-| SC-03 방송 콘솔 | Broadcast Session API, Live Snapshot API, WebSocket, 약속 확정·무시 API |
+| SC-03 방송 콘솔 | Broadcast Session API, Live Snapshot 폴링(2~3초 주기), 약속 확정·무시 API |
 | SC-04 일정 캘린더 | Calendar Event API, Schedule Announcement API |
 | SC-06 세션 리포트 | `GET /broadcast-sessions/{sessionId}/report` |
 | SC-07 하이라이트 / 클립 | 하이라이트 목록, 채팅 리플레이 API |
@@ -260,8 +260,8 @@ ERD의 관계와 API의 단일 리소스 식별 규칙을 실제 DDL에서도 �
 | Session | GET | `/broadcast-sessions/current` | 진행 중 방송 조회 |
 | Session | GET | `/broadcast-sessions/{sessionId}` | 방송 세션 상세 |
 | Session | POST | `/broadcast-sessions/{sessionId}/end` | 방송 분석 세션 종료 |
-| Live | GET | `/broadcast-sessions/{sessionId}/live-snapshot` | 콘솔 상태 복구 |
-| Live | POST | `/broadcast-sessions/{sessionId}/ws-ticket` | WebSocket 티켓 발급 |
+| Live | GET | `/broadcast-sessions/{sessionId}/live-snapshot` | 콘솔 실시간 상태 (프론트가 2~3초 폴링) |
+| Live | POST | `/broadcast-sessions/{sessionId}/ws-ticket` | WebSocket 티켓 발급(보류 — 10.7 참조) |
 | Promise | GET | `/promises` | 약속 전체 목록 |
 | Promise | POST | `/promises/{promiseId}/confirm` | 감지 약속 확정 |
 | Promise | POST | `/promises/{promiseId}/dismiss` | 감지 약속 무시 |
@@ -812,7 +812,9 @@ Access Token과 Refresh Token은 `PLATFORM_ACCOUNTS`에 암호화하여 저장�
 
 `GET /broadcast-sessions/{sessionId}/live-snapshot`
 
-새로고침과 WebSocket 재연결 후 화면을 복구할 때 사용한다.
+> **2026-07-29 개정.** 실시간 콘솔의 전달 방식을 WebSocket 푸시에서 **이 스냅샷의 폴링(2~3초 주기)**으로 바꾼다. 콘솔은 클라이언트→서버 메시지가 없고 접속자가 스트리머 본인 창 2~3개뿐이라, 티켓·재연결 재생 배관의 비용이 푸시로 얻는 지연 단축을 넘는다. 원래 설계에서도 여론·시청자 수는 재생 없이 스냅샷 복구가 정본이었으므로 폴링은 그 부분집합이다. WebSocket(10.7)은 보류로 남긴다.
+
+프론트는 콘솔 진입 시부터 이 응답 하나로 화면 전체를 그리고, 새로고침·재입장 복구도 같은 호출로 끝난다.
 
 ```json
 {
@@ -863,19 +865,28 @@ Access Token과 Refresh Token은 `PLATFORM_ACCOUNTS`에 암호화하여 저장�
 
 `briefings[].createdAt`은 `LIVE_BRIEFINGS.created_at`을 반환한다. `created_at`은 `NOT NULL`이며 브리핑 레코드가 생성된 시각이다.
 
-`services.collector`는 치지직 채팅 수집기의 연결 상태다. 수집기는 자동 재연결이 불가능해 재핸드셰이크 루프로 복구하며, 그 사이의 채팅은 영구 유실된다. 수집이 멈춘 것을 스트리머가 알아야 하므로 화면에 노출한다.
+`services`의 각 필드 판정 기준 (2026-07-29 구현 기준):
 
-`sentiment`는 13.6 채팅 분류 응답의 최근 윈도우 지표를 그대로 중계한 값이며 별도 테이블에 보관하지 않는다. 재연결 복구를 위해 최신 1건만 Redis에 스냅샷으로 유지한다.
+- `microphone`, `stt` — 음성 파이프라인 구현 전까지 각각 `DISCONNECTED`, `STOPPED` 고정. 미구현 기능을 정상으로 표시하지 않는다.
+- `ai` — 채팅 감정 분류 파이프라인의 생사. 여론 스냅샷이 최근 10초 안에 갱신됐으면 `RUNNING`. 방송 중에는 채팅이 없어도 Spring이 매초 빈 배치를 중계하므로(13.6) 정상일 때 항상 신선하다.
+- `collector` — 치지직 채팅 수집기의 연결 상태(하트비트 기반, 30초 초과 시 `STOPPED` 강등). 수집기는 자동 재연결이 불가능해 재핸드셰이크 루프로 복구하며, 그 사이의 채팅은 영구 유실된다. 수집이 멈춘 것을 스트리머가 알아야 하므로 화면에 노출한다.
+
+`sentiment`는 13.6 채팅 분류 응답의 최근 윈도우 지표를 그대로 중계한 값이며 별도 테이블에 보관하지 않는다. 복구를 위해 최신 1건만 Redis에 스냅샷으로 유지한다.
 
 - **8종을 모두 내려보내고 상위 3종 선택은 프론트가 한다.** 표시 규칙이나 정렬 기준이 바뀌어도 서버 배포가 필요 없고, 8개 실수를 더 보내는 비용이 없다.
 - `distribution`의 합은 1.0이다. 프론트가 상위 3종만 그리면 합이 1보다 작아지므로, 나머지를 "기타"로 묶든 상위 3종을 재정규화하든 화면에서 정한다.
 - `analyzedChat`이 0이면 `dominant`와 `distribution`은 `null`이다. 채팅이 없거나 분류 호출이 계속 실패한 상태다.
+- `engagement`는 시청자 수를 알 수 없는 동안 `null`일 수 있다(예시의 `0.214`처럼 항상 숫자가 아니다). 프론트는 null을 처리해야 한다.
 
-`lastEventId`는 해당 세션 Redis Stream의 최신 이벤트 ID다. 아직 생성된 이벤트가 없으면 `"0-0"`을 반환한다.
+`briefings`와 `repeatedQuestions`는 위험 발언·반복 질문 파이프라인(13.4~13.5) 구현 전까지 **항상 빈 배열**이다. 필드를 미리 두는 이유는 프론트가 스키마를 한 번만 맞추면 되기 때문이다.
+
+`lastEventId`는 해당 세션 Redis Stream의 최신 이벤트 ID다. 아직 생성된 이벤트가 없으면 `"0-0"`을 반환한다. 폴링 체제에서는 소비자가 없지만, WebSocket(10.7)을 되살릴 때 프론트 스키마가 바뀌지 않도록 유지한다.
 
 스냅샷에는 `moderationQueue` 또는 모더레이션 관련 필드를 포함하지 않는다.
 
-### 10.7 WebSocket 연결
+### 10.7 WebSocket 연결 (보류 — 2026-07-29)
+
+> **이 절 전체는 보류다.** 실시간 콘솔은 10.6 스냅샷 폴링으로 대체했고 `ws-ticket`을 포함해 이 절의 어떤 것도 구현되어 있지 않다. 보류 근거는 10.6의 개정 주석에 있다. 아래 명세는 삭제하지 않고 남긴다 — 시청자 수가 많은 화면(오버레이 외부 공개 등)이 생겨 푸시가 필요해지면 이 설계에서 다시 시작한다. 단, `SESSION_STATUS_CHANGED`의 Redis Stream(`ws:session:{sessionId}:events`) 발행은 현재도 동작하므로 `lastEventId`와 Stream 보관 규칙은 유효하다.
 
 티켓 발급:
 
@@ -1426,7 +1437,7 @@ SC-11의 채널명·태그 검색, 카테고리 필터, 규모 필터를 지원�
 | Spring → FastAPI | POST | `/internal/v1/ai/stt` | 음성 청크 STT 변환 |
 | Spring → FastAPI | POST | `/internal/v1/ai/risk-speech` | 위험 발언 분류와 조언 생성 |
 | Spring → 채팅 AI | POST | `/broadcasts/{sessionId}/ingest` | 1초 배치 채팅 분류와 실시간 윈도우 지표 |
-| Spring → 채팅 AI | POST | `/broadcasts/{sessionId}/summary` | LLM 여론 요약 |
+| Spring → 채팅 AI | POST | `/broadcasts/{sessionId}/summary` | LLM 여론 요약(보류 — 채팅 AI 미구현) |
 | Spring → 채팅 AI | DELETE | `/broadcasts/{sessionId}` | 방송 종료 시 윈도우·요약 캐시 정리 |
 | Spring → FastAPI | POST | `/internal/v1/ai/repeated-questions` | 반복 질문 추출 |
 | Spring → FastAPI | POST | `/internal/v1/ai/promise-detection` | STT에서 약속 후보 추출 |
@@ -1720,9 +1731,11 @@ Spring의 처리는 두 갈래다.
 
 라벨 집합은 채팅 분류 모델 버전에 묶여 있다. 모델을 교체해 라벨이 바뀌면 이 표와 `CHAT_MESSAGES`·`REPORTS`·`TRIGGERS`의 컬럼을 함께 마이그레이션해야 한다.
 
-LLM 여론 요약:
+LLM 여론 요약 (보류 — 2026-07-29):
 
 `POST /broadcasts/{sessionId}/summary`
+
+> **보류.** chat-ai 서버에 `/summary` Endpoint가 아직 구현되어 있지 않아 Spring 쪽 스케줄러·저장 경로도 만들지 않았다. AI 서버 구현이 끝나면 아래 규칙대로 잇는다.
 
 3분 주기 스케줄러는 `{"mode":"AUTO"}`, 프론트 버튼은 `{"mode":"MANUAL"}`로 호출한다. Spring은 성공 응답의 `summary`로 `LIVE_BRIEFINGS(CHAT_SUMMARY)`를 생성한다. 윈도우 채팅 부족(`422`)과 쿨다운·중복 호출(`409`)은 정상 거절이므로 오류로 기록하지 않는다.
 
@@ -1763,6 +1776,8 @@ LLM은 OpenAI 호환 Endpoint로 호출한다. 프롬프트는 Java 문자열이
 #### 트리거 앵커
 
 리포트의 기준점은 방송 중 확정된 트리거다. 하이라이트 판정은 Spring이 자체 수행하며(알고리즘 명세는 `AI/chat-ai/HIGHLIGHT_SPEC.md`), 구간이 확정될 때마다 `TRIGGERS`에 한 행을 남긴다.
+
+> **구현 현황 (2026-07-29).** 판정과 `TRIGGERS` 기록까지 구현됐다(`broadcast/realtime` 패키지). 확정 시 구간 내 통계를 단일 SQL로 집계해 저장하므로 8종 감정 건수 합 == `analyzed_chat` CHECK가 구조적으로 성립한다. `narrative`·`REPORT_INSIGHTS` 생성과 `TRIGGER_ANALYSIS_REQUESTED` Outbox 발행은 리포트 생성 단계(이 절의 "생성 흐름")에서 후속 구현한다. 판정 파라미터는 백테스트 미검증 초기값으로 `laive.highlight.*` 설정에 있다.
 
 | 컬럼 | 내용 |
 | --- | --- |

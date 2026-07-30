@@ -100,7 +100,8 @@ class PlatformLinkStateServiceTest {
         return new AuthProperties(
                 new AuthProperties.Naver("", "", "", "", "", ""),
                 new AuthProperties.Jwt("01234567890123456789012345678901", Duration.ofMinutes(30), "laive"),
-                new AuthProperties.RefreshCookie("laive_refresh", Duration.ofDays(14), false),
+                new AuthProperties.RefreshCookie(
+                        "laive_refresh", Duration.ofDays(14), false, Duration.ofSeconds(60)),
                 List.of(RETURN_URI),
                 Duration.ofMinutes(5)
         );

@@ -30,7 +30,8 @@ class NaverOAuthClientTest {
                 new AuthProperties.RefreshCookie(
                         "laive_refresh",
                         Duration.ofDays(14),
-                        false
+                        false,
+                        Duration.ofSeconds(60)
                 ),
                 List.of("http://localhost:3000/oauth/callback"),
                 Duration.ofMinutes(5)
