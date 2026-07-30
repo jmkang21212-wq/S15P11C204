@@ -1,9 +1,12 @@
 import { useState } from 'react'
 import { formatCount, formatTime } from '@renderer/lib/format'
-import type { BriefingType, LiveSnapshot } from '@renderer/types/console'
+import type { Briefing, BriefingType, LiveSnapshot } from '@renderer/types/console'
 
 interface MiniWidgetProps {
+  /** 세션·여론 등 스냅샷 지표 */
   data: LiveSnapshot
+  /** 표시할 브리핑 (실시간 + 스냅샷, 최신순) */
+  briefings: Briefing[]
   /** HIGH 위험 강조 상태로 렌더 */
   isHigh: boolean
   /** "콘솔로" — 메인 콘솔 창 포커스 */
@@ -19,6 +22,13 @@ const TYPE_META: Record<BriefingType, { label: string; accent: string }> = {
   PROMISE: { label: '약속 감지', accent: 'text-briefing-promise' }
 }
 
+/**
+ * 미니 모드는 카테고리 4칸을 고정해두고 각 칸에 그 카테고리의 최신 알림만 보여준다.
+ * 좁은 창에서 이벤트를 계속 누적하면 방금 무슨 일이 있었는지 파악하기 어렵다.
+ * 상세 이력은 콘솔의 브리핑 피드가 담당한다.
+ */
+const MINI_CATEGORIES: BriefingType[] = ['RISK', 'CHAT_SUMMARY', 'FAQ', 'PROMISE']
+
 // 프레임 없는 창을 잡아 끌 수 있게 하는 영역 / 그 위 조작 요소는 끌기 제외
 const DRAG = '[-webkit-app-region:drag]'
 const NO_DRAG = '[-webkit-app-region:no-drag]'
@@ -29,12 +39,12 @@ const NO_DRAG = '[-webkit-app-region:no-drag]'
  */
 export default function MiniWidget({
   data,
+  briefings,
   isHigh,
   onGoConsole,
   onClose
 }: MiniWidgetProps): React.JSX.Element {
-  const briefings = data.briefings
-  const total = briefings.length
+  const total = MINI_CATEGORIES.length
   const [idx, setIdx] = useState(0)
 
   const highBriefing = briefings.find((b) => b.briefingType === 'RISK' && b.level === 'HIGH')
@@ -65,6 +75,9 @@ export default function MiniWidget({
         </div>
         <div className="flex-1 overflow-y-auto rounded-lg border border-destructive/35 bg-destructive/15 p-3 text-caption leading-relaxed">
           {highBriefing.message}
+          {highBriefing.quote && (
+            <span className="mt-1 block text-muted-foreground">“{highBriefing.quote}”</span>
+          )}
         </div>
         <div className="mt-3 flex items-center gap-2">
           <span className="text-caption text-muted-foreground">사운드 알림 재생됨</span>
@@ -80,10 +93,12 @@ export default function MiniWidget({
     )
   }
 
-  const safeIdx = total > 0 ? idx % total : 0
-  const current = briefings[safeIdx]
-  const meta = current ? TYPE_META[current.briefingType] : null
-  const isRisk = current?.briefingType === 'RISK'
+  const safeIdx = idx % total
+  const category = MINI_CATEGORIES[safeIdx]
+  const meta = TYPE_META[category]
+  // briefings는 최신순이고 실시간이 스냅샷보다 앞에 있어, 첫 일치가 그 카테고리의 최신이다.
+  const current = briefings.find((briefing) => briefing.briefingType === category)
+  const isRisk = category === 'RISK' && current !== undefined
 
   const prev = (): void => setIdx((i) => (i - 1 + total) % total)
   const next = (): void => setIdx((i) => (i + 1) % total)
@@ -129,24 +144,33 @@ export default function MiniWidget({
           isRisk ? 'bg-destructive/15 ring-1 ring-destructive/40' : 'bg-white/5'
         }`}
       >
-        {current && meta && (
+        {/* 카테고리 헤더는 알림이 없어도 고정으로 보여준다 */}
+        <div className="mb-1 flex items-center gap-1.5">
+          {isRisk && (
+            <span className="flex size-4 items-center justify-center rounded bg-destructive text-micro font-extrabold text-white">
+              !
+            </span>
+          )}
+          <span className={`text-micro font-bold ${meta.accent}`}>
+            {meta.label}
+            {current?.level ? ` (${current.level})` : ''}
+          </span>
+          {current && (
+            <span className="ml-auto font-mono text-micro text-muted-foreground">
+              {formatTime(current.createdAt)}
+            </span>
+          )}
+        </div>
+
+        {current ? (
           <>
-            <div className="mb-1 flex items-center gap-1.5">
-              {isRisk && (
-                <span className="flex size-4 items-center justify-center rounded bg-destructive text-micro font-extrabold text-white">
-                  !
-                </span>
-              )}
-              <span className={`text-micro font-bold ${meta.accent}`}>
-                {meta.label}
-                {current.level ? ` (${current.level})` : ''}
-              </span>
-              <span className="ml-auto font-mono text-micro text-muted-foreground">
-                {formatTime(current.createdAt)}
-              </span>
-            </div>
             <span className="text-secondary-foreground">{current.message}</span>
+            {current.quote && (
+              <span className="mt-1 block text-muted-foreground">“{current.quote}”</span>
+            )}
           </>
+        ) : (
+          <span className="text-muted-foreground">아직 도착한 알림이 없어요</span>
         )}
       </div>
 
@@ -155,21 +179,19 @@ export default function MiniWidget({
         <button
           type="button"
           onClick={prev}
-          disabled={total <= 1}
-          className={`flex size-6 items-center justify-center rounded-full bg-white/10 text-overlay-icon disabled:opacity-40 ${NO_DRAG}`}
-          aria-label="이전 브리핑"
+          className={`flex size-6 items-center justify-center rounded-full bg-white/10 text-overlay-icon ${NO_DRAG}`}
+          aria-label="이전 카테고리"
         >
           ‹
         </button>
         <span className="font-mono text-micro text-muted-foreground">
-          {total > 0 ? safeIdx + 1 : 0}/{total}
+          {safeIdx + 1}/{total}
         </span>
         <button
           type="button"
           onClick={next}
-          disabled={total <= 1}
-          className={`flex size-6 items-center justify-center rounded-full bg-white/10 text-overlay-icon disabled:opacity-40 ${NO_DRAG}`}
-          aria-label="다음 브리핑"
+          className={`flex size-6 items-center justify-center rounded-full bg-white/10 text-overlay-icon ${NO_DRAG}`}
+          aria-label="다음 카테고리"
         >
           ›
         </button>

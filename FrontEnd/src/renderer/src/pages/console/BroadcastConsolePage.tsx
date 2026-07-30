@@ -2,9 +2,11 @@ import { useCallback } from 'react'
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
 import { MonitorPlay } from 'lucide-react'
 import { useAsyncData } from '@renderer/hooks/useAsyncData'
+import { useAudioStream } from '@renderer/hooks/useAudioStream'
 import type { CurrentSessionContext } from '@renderer/hooks/useCurrentSession'
 import { getLiveSnapshot } from '@renderer/api/console'
 import { Skeleton } from '@renderer/components/ui/skeleton'
+import { cn } from '@renderer/lib/utils'
 import { Button } from '@renderer/components/ui/button'
 import { EmptyState, ErrorState } from '@renderer/components/common/StateView'
 import { PATHS } from '@renderer/routes/paths'
@@ -13,11 +15,18 @@ import BriefingFeed from './components/BriefingFeed'
 import SentimentPanel from './components/SentimentPanel'
 import RepeatedQuestions from './components/RepeatedQuestions'
 
+const AUDIO_STATUS_LABEL = {
+  IDLE: '음성 분석 대기',
+  CONNECTING: 'AI 서버 연결 중…',
+  STREAMING: 'AI 서버 연결됨 · 음성 분석 중',
+  ERROR: 'AI 서버 연결 끊김'
+} as const
+
 /**
- * SC-03 방송 콘솔 (정적 껍데기).
- * 현재는 mock 스냅샷으로 렌더한다.
- * TODO: 실제 연동 시 WebSocket(`/ws/v1/broadcast-sessions/{id}`)으로
- *  briefings·sentiment·repeatedQuestions·viewers를 실시간 갱신.
+ * SC-03 방송 콘솔.
+ * 지표·여론·반복 질문은 아직 mock 스냅샷이고, 위험 발언·약속 브리핑은
+ * AI 서버 음성 스트리밍(useAudioStream)에서 실시간으로 들어온다.
+ * TODO: 나머지 항목도 WebSocket(`/ws/v1/broadcast-sessions/{id}`)으로 실시간 갱신.
  */
 export default function BroadcastConsolePage(): React.JSX.Element {
   const navigate = useNavigate()
@@ -33,6 +42,7 @@ export default function BroadcastConsolePage(): React.JSX.Element {
     return getLiveSnapshot(sid)
   }, [sid])
   const { data, loading, error, refetch } = useAsyncData(loader)
+  const audio = useAudioStream(`session${sid}`)
 
   if (sessionId === undefined && currentLoading) {
     return (
@@ -82,25 +92,45 @@ export default function BroadcastConsolePage(): React.JSX.Element {
     )
   }
 
+  const streaming = audio.status === 'STREAMING'
+
   return (
     <div className="flex h-full flex-col">
       <ConsoleStatusBar
         session={data.session}
-        services={data.services}
         onOpenMini={() => window.api.openMiniWindow()}
+        audio={audio}
       />
 
       <div className="flex flex-1 overflow-hidden">
-        {/* 좌: 브리핑 피드 */}
-        <BriefingFeed briefings={data.briefings} />
+        {/* 좌: 브리핑 피드 — 실시간 이벤트를 스냅샷 위에 최신순으로 쌓는다 */}
+        <BriefingFeed briefings={[...audio.briefings, ...data.briefings]} />
 
         {/* 우: 여론 · 반복 질문 · 연결 상태 */}
         <aside className="flex w-[328px] shrink-0 flex-col gap-4 border-l bg-card p-5">
           <SentimentPanel sentiment={data.sentiment} />
           <RepeatedQuestions questions={data.repeatedQuestions} />
-          <div className="mt-auto flex items-center gap-2 rounded-lg bg-success/10 px-3 py-2 text-caption text-success">
-            <span className="size-1.5 rounded-full bg-success" />
-            WebSocket 연결됨
+          <div
+            className={cn(
+              'mt-auto flex items-center gap-2 rounded-lg px-3 py-2 text-caption',
+              streaming
+                ? 'bg-success/10 text-success'
+                : audio.status === 'ERROR'
+                  ? 'bg-destructive/10 text-destructive'
+                  : 'bg-muted text-muted-foreground'
+            )}
+          >
+            <span
+              className={cn(
+                'size-1.5 rounded-full',
+                streaming
+                  ? 'bg-success'
+                  : audio.status === 'ERROR'
+                    ? 'bg-destructive'
+                    : 'bg-muted-foreground'
+              )}
+            />
+            {AUDIO_STATUS_LABEL[audio.status]}
           </div>
         </aside>
       </div>

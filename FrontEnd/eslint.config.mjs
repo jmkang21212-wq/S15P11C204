@@ -7,6 +7,9 @@ import eslintPluginReactRefresh from 'eslint-plugin-react-refresh'
 
 export default defineConfig(
   { ignores: ['**/node_modules', '**/dist', '**/out'] },
+  // public/의 정적 자산(AudioWorklet 등)은 번들러·TS 변환을 거치지 않고 그대로 서빙된다.
+  // AudioWorkletGlobalScope에서 도는 평범한 JS라 프로젝트 TS 규칙을 적용하지 않는다.
+  { ignores: ['src/renderer/public/**'] },
   tseslint.configs.recommended,
   eslintPluginReact.configs.flat.recommended,
   eslintPluginReact.configs.flat['jsx-runtime'],

@@ -11,13 +11,24 @@ const STATUS_LABEL: Record<ObsConnStatus, string> = {
   CONNECTED: '연결됨'
 }
 
+interface ObsControlProps {
+  /** 방송 시작 시 함께 시작할 동작 (음성 스트리밍) */
+  onBroadcastStart?: () => void
+  /** 방송 종료 시 함께 정지할 동작 */
+  onBroadcastStop?: () => void
+}
+
 /**
  * 콘솔 상태줄의 OBS 연결·송출 제어.
- * "송출 시작/중단" 버튼이 obs-websocket으로 OBS 송출(StartStream/StopStream)만 제어한다.
+ * "송출 시작/중단" 버튼이 obs-websocket으로 OBS 송출(StartStream/StopStream)을 제어하고,
+ * 같은 시점에 음성 스트리밍도 함께 켜고 끈다.
  * LAIVE 분석 세션 시작/종료(POST /broadcast-sessions)는 별개다 — 그건 SessionControl이 맡는다.
  * 두 개념을 한 라벨로 섞으면 "방송 종료"를 눌렀는데 분석은 계속 도는 상황을 오해하기 쉽다.
  */
-export default function ObsControl(): React.JSX.Element {
+export default function ObsControl({
+  onBroadcastStart,
+  onBroadcastStop
+}: ObsControlProps): React.JSX.Element {
   const obs = useObs()
   const [showForm, setShowForm] = useState(false)
   const [url, setUrl] = useState('ws://127.0.0.1:4455')
@@ -42,8 +53,14 @@ export default function ObsControl(): React.JSX.Element {
 
   const handleStreamToggle = async (): Promise<void> => {
     setError(null)
+    const stopping = obs.streaming
+
+    // 음성 분석은 OBS 송출과 독립이다. OBS가 실패해도 분석은 계속 돌아야 하므로 먼저 반영한다.
+    if (stopping) onBroadcastStop?.()
+    else onBroadcastStart?.()
+
     try {
-      if (obs.streaming) await obs.stopStream()
+      if (stopping) await obs.stopStream()
       else await obs.startStream()
     } catch (e) {
       setError(e instanceof Error ? e.message : '요청에 실패했어요')

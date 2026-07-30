@@ -35,6 +35,17 @@ const api = {
     open: (startUrl: string, returnUriPrefix: string): Promise<string | null> =>
       ipcRenderer.invoke('oauth:open', { startUrl, returnUriPrefix })
   },
+  /** 실시간 브리핑 중계 — 콘솔이 받은 경고·약속을 미니 창에도 보여준다. */
+  briefing: {
+    publish: (briefing: unknown): void => ipcRenderer.send('briefing:publish', briefing),
+    recent: (): Promise<unknown[]> => ipcRenderer.invoke('briefing:recent'),
+    /** 중계된 브리핑 구독. 반환 함수를 호출하면 구독 해제. */
+    onNew: (callback: (briefing: unknown) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, briefing: unknown): void => callback(briefing)
+      ipcRenderer.on('briefing:new', listener)
+      return () => ipcRenderer.removeListener('briefing:new', listener)
+    }
+  },
   /**
    * 진행 중 방송 세션 상태 릴레이. main은 값을 검사하지 않고 그대로 전달하므로
    * 여기서는 unknown으로 받고, 실제 타입은 preload/index.d.ts의 SessionBridge가 정의한다.

@@ -4,6 +4,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { registerObsIpc } from './obs'
 import { registerOAuthIpc } from './oauth'
+import { registerBriefingIpc } from './briefing'
 import { registerSessionIpc } from './session'
 
 /**
@@ -154,6 +155,9 @@ app.whenReady().then(() => {
 
   // ── OAuth 인앱 창 (네이버 로그인 · 플랫폼 연동 공용) ──
   registerOAuthIpc()
+
+  // ── 실시간 브리핑 중계 (콘솔 → 미니 창) ──
+  registerBriefingIpc()
 
   // ── 현재 방송 세션 상태 릴레이 (메인 창 → 미니·오버레이 창) ──
   registerSessionIpc()

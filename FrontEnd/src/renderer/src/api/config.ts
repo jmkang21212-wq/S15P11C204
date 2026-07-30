@@ -15,3 +15,9 @@ export const API_BASE_URL = `${API_ORIGIN}/api/v1`
  * ⚠️ 백엔드 `laive.auth.allowedReturnUris`에 이 값(origin 포함)이 등록돼 있어야 CORS·복귀가 동작한다.
  */
 export const OAUTH_RETURN_URI = env.VITE_OAUTH_RETURN_URI ?? 'http://localhost:5173/oauth/callback'
+
+/**
+ * 음성 스트리밍용 AI 서버 WebSocket (AI/FRONTEND_API.md).
+ * CSP connect-src에 이 주소가 있어야 연결된다.
+ */
+export const AI_WS_URL = env.VITE_AI_WS_URL ?? 'ws://localhost:8000/ws/audio'
