@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.laive.report.repository.mybatis.SessionReportGenerationMapper">
+    <select id="findGenerationContext"
+            resultType="com.example.laive.report.repository.mybatis.ReportGenerationContextRow">
+        SELECT r.id AS report_id, s.id AS session_id, s.title,
+               s.started_at, s.ended_at, r.status, r.summary, r.avg_viewers,
+               r.peak_viewers, r.total_chat, r.analyzed_chat, r.joy_count,
+               r.excitement_count, r.support_count, r.surprise_count, r.sadness_count,
+               r.anger_count, r.confusion_count, r.neutral_count, r.generated_at,
+               s.category, s.language,
+               GREATEST(0, floor(extract(epoch FROM (s.ended_at - s.started_at)) / 60))::bigint
+                   AS duration_minutes,
+               EXISTS (SELECT 1 FROM collection_gaps g WHERE g.session_id = s.id)
+                   AS has_collection_gap
+          FROM reports r
+          JOIN broadcast_sessions s ON s.id = r.session_id
+         WHERE r.id = #{reportId}
+           AND s.id = #{sessionId}
+    </select>
+
+    <select id="findTrigger"
+            resultType="com.example.laive.report.repository.mybatis.ReportTriggerRow">
+        SELECT id AS trigger_id, session_id, trigger_type, transcript_id, start_ms, end_ms,
+               peak_z, peak_engagement, avg_viewers, chat_count, unique_chatters,
+               analyzed_chat, joy_count, excitement_count, support_count, surprise_count,
+               sadness_count, anger_count, confusion_count, neutral_count,
+               narrative, screen_context, analysis_status
+          FROM triggers
+         WHERE id = #{triggerId}
+    </select>
+
+    <select id="findTranscripts"
+            resultType="com.example.laive.report.domain.TranscriptExcerpt">
+        SELECT start_ms, end_ms, transcript AS text
+          FROM transcripts
+         WHERE session_id = #{sessionId}
+           AND start_ms &lt; #{endMs}
+           AND end_ms &gt; #{startMs}
+         ORDER BY start_ms ASC, id ASC
+    </select>
+
+    <select id="findChats" resultType="com.example.laive.report.domain.ChatExcerpt">
+        SELECT sent_at, message AS text, sentiment_label
+          FROM chat_messages
+         WHERE session_id = #{sessionId}
+           AND sent_at &gt;= #{startedAt}
+           AND sent_at &lt; #{endedAt}
+         ORDER BY sent_at ASC, id ASC
+    </select>
+
+    <select id="findRisks" resultType="com.example.laive.report.domain.RiskExcerpt">
+        SELECT detected_at, risk_level AS level, risk_category AS category, advice
+          FROM risk_events
+         WHERE session_id = #{sessionId}
+           AND detected_at &gt;= #{startedAt}
+           AND detected_at &lt; #{endedAt}
+         ORDER BY detected_at ASC, id ASC
+    </select>
+
+    <select id="markTriggersPending" resultType="long" affectData="true" flushCache="true">
+        UPDATE triggers
+           SET analysis_status = 'PENDING', analysis_error = NULL
+         WHERE session_id = #{sessionId}
+           AND analysis_status = 'NOT_REQUESTED'
+        RETURNING id
+    </select>
+
+    <update id="completeTrigger">
+        UPDATE triggers
+           SET narrative = #{narrative}, analyzed_at = #{analyzedAt},
+               analysis_status = 'COMPLETED', analysis_error = NULL
+         WHERE id = #{triggerId}
+           AND analysis_status = 'PENDING'
+    </update>
+
+    <update id="failTrigger">
+        UPDATE triggers
+           SET analyzed_at = #{analyzedAt}, analysis_status = 'FAILED',
+               analysis_error = #{error}
+         WHERE id = #{triggerId}
+           AND analysis_status IN ('PENDING', 'NOT_REQUESTED')
+    </update>
+
+    <select id="allTriggersFinished" resultType="boolean">
+        SELECT NOT EXISTS (
+            SELECT 1 FROM triggers
+             WHERE session_id = #{sessionId}
+               AND analysis_status NOT IN ('COMPLETED', 'FAILED')
+        )
+    </select>
+
+    <select id="findRiskTriggerIds" resultType="long">
+        SELECT DISTINCT t.id
+          FROM triggers t
+          JOIN risk_events r
+            ON r.session_id = t.session_id
+           AND r.detected_at &gt;= t.started_at
+           AND r.detected_at &lt; t.ended_at
+         WHERE t.session_id = #{sessionId}
+    </select>
+
+    <delete id="deleteInsights">
+        DELETE FROM report_insights WHERE report_id = #{reportId}
+    </delete>
+
+    <insert id="insertInsight">
+        INSERT INTO report_insights (report_id, title, content)
+        VALUES (#{reportId}, #{insight.title}, #{insight.content})
+    </insert>
+
+    <insert id="upsertHighlight">
+        INSERT INTO highlights (report_id, trigger_id, start_ms, end_ms)
+        VALUES (#{reportId}, #{highlight.triggerId}, #{highlight.startMs}, #{highlight.endMs})
+        ON CONFLICT (report_id, trigger_id) WHERE trigger_id IS NOT NULL
+        DO UPDATE SET start_ms = EXCLUDED.start_ms, end_ms = EXCLUDED.end_ms
+    </insert>
+
+    <update id="completeReport">
+        UPDATE reports
+           SET status = 'COMPLETED', summary = #{summary}, generated_at = #{generatedAt}
+         WHERE id = #{reportId} AND status = 'PROCESSING'
+    </update>
+
+    <update id="partialReport">
+        UPDATE reports
+           SET status = 'PARTIAL', summary = #{summary}, generated_at = #{generatedAt}
+         WHERE id = #{reportId} AND status = 'PROCESSING'
+    </update>
+
+    <update id="failReport">
+        UPDATE reports SET status = 'FAILED'
+         WHERE id = #{reportId} AND status = 'PROCESSING'
+    </update>
+</mapper>
