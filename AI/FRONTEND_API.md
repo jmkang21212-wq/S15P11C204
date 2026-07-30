@@ -125,13 +125,35 @@ ws.send(out.buffer);
 | `source` | O | `"dictionary"` \| `"llm"` |
 | `seq` | O | 세션 내 발화 순번 |
 | `severity` | O | `high` \| `medium` \| `low` |
-| `category` | O | `profanity` `insult` `threat` `harassment` `discrimination` |
+| `category` | O | `profanity` `insult` `threat` `aggressive` `sexual` `harassment` `discrimination` |
 | `text` | O | 해당 발화 전문 |
 | `start_ts` `end_ts` | O | 발화 구간 (epoch 초) |
 | `hits` | dictionary만 | 걸린 단어 목록 |
 | `reason` | llm만 | 판정 근거 한 문장 |
 
 **`severity`는 두 종류 모두 같은 필드명이다.** `source`로 분기하지 않고 그냥 `m.severity`를 쓰면 된다.
+
+**`severity`는 "위험한지"가 아니라 "얼마나 심한지"다.** 위험이 아닌 발화는 애초에
+오지 않으므로, 도착한 alert는 전부 실제 감지 결과다. 화면 강조 수준을 나누는 데 쓰면 된다.
+
+| severity | 뜻 | 예 |
+|---|---|---|
+| `high` | 심한 욕설, 직접적 위협, 노골적 성적 표현 | 씨발, 개새끼, 죽여버린다 |
+| `medium` | 분명한 욕설·모욕 | 지랄, 등신, 미친놈 |
+| `low` | 가벼운 비속어나 거친 말 | 닥쳐, 꺼져 |
+
+`category`는 `source`에 따라 나오는 값이 다르다. 모르는 값이 와도 죽지 않게
+기본 처리를 두는 편이 안전하다.
+
+| category | dictionary | llm | 설명 |
+|---|---|---|---|
+| `profanity` | O | O | 비속어, 욕설 |
+| `insult` | O | O | 특정인을 향한 모욕 |
+| `threat` | O | O | 위협, 협박 |
+| `aggressive` | O | - | 공격적인 말투 |
+| `sexual` | O | O | 성적 표현, 성드립 |
+| `harassment` | - | O | 특정인을 향한 성희롱, 집요한 괴롭힘 |
+| `discrimination` | - | O | 차별 발언 |
 
 ### `source: "dictionary"` — 사전매칭
 

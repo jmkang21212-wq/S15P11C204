@@ -17,8 +17,18 @@ LLM_REASONING_EFFORT = "minimal"
 LLM_WORKERS = 2
 LLM_QUEUE_MAX = 16      
 LLM_MAX_RETRIES = 1
-LLM_CONTEXT_SEC = 10.0  
-LLM_MIN_TEXT_LEN = 2   
+LLM_CONTEXT_SEC = 10.0
+LLM_MIN_TEXT_LEN = 2
+
+# 이 등급 이상만 위험 발언으로 알린다.
+#
+# 등급은 '위험한지'가 아니라 '얼마나 심한지'를 뜻한다. 위험이 아니라는 판단은
+# none이 받고, low부터는 실제로 비속어가 있다는 뜻이다(프롬프트에 그렇게 명시했다).
+# 그래서 none만 걸러내면 된다.
+#
+# 이 구분이 없던 시절에는 LLM이 low를 "위험도 낮음(= 위험 아님)"으로 쓰는 바람에
+# 평범한 대화에 경고가 붙었다. category=none 방어와 함께 봐야 한다.
+LLM_ALERT_MIN_RISK = "low"
 
 # --- 오디오 ---
 SAMPLE_RATE = 16000

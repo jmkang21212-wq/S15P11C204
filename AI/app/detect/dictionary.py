@@ -5,6 +5,7 @@
 LLM을 기다릴 필요가 없는 명백한 비속어는 여기서 끝난다.
 """
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -16,6 +17,19 @@ from app.detect.normalize import normalize
 DEFAULT_PATH = Path(__file__).with_name("terms.yaml")
 
 _SEVERITY_RANK = {"low": 0, "medium": 1, "high": 2}
+
+# 매칭된 욕설 바로 뒤에 붙는 인용·전언 어미.
+# "병신이래요" "씨발이라고 한 사람" 처럼 남의 말을 옮기는 발화를 가려낸다.
+#
+# '이'를 선택으로 둔 이유: normalize가 "병신이래요"의 '이'를 늘여쓰기로 보고 지운다
+# ('신'의 모음이 ㅣ라서 뒤따르는 'ㅇ+ㅣ'가 반복으로 처리된다). 그래서 규칙은
+# "병신래요" 형태도 함께 받아야 한다.
+#
+# '대'만은 한 글자를 허용하지 않는다. 허용하면 "씨발대박" "좆대" "지랄대잔치"까지
+# 인용으로 보고 놓친다.
+_QUOTE_SUFFIX = re.compile(
+    r"^(이?라고|이?래|이?랬|이?란다|이?라네|이?라던|이?라니|이?대요|이?댔)"
+)
 
 
 @dataclass
@@ -82,11 +96,29 @@ class DictionaryMatcher:
             if any(bs <= start and end + 1 <= be for bs, be in blocked):
                 continue
             o_start, o_end = idx[start], idx[end] + 1
+
+            # 사전은 문맥을 모른다. 아래 두 경우는 단정하지 않고 버려서
+            # server.py가 LLM 판정으로 넘기게 한다.
+            if _crosses_whitespace(text, o_start, o_end):
+                continue
+            if _QUOTE_SUFFIX.match(norm[end + 1:]):
+                continue
+
             hits.append(Hit(term=term, matched=text[o_start:o_end],
                             severity=severity, category=category,
                             start=o_start, end=o_end))
 
         return _drop_contained(hits)
+
+
+def _crosses_whitespace(text: str, start: int, end: int) -> bool:
+    """매칭 구간이 원문의 띄어쓰기를 가로질렀는지 본다.
+
+    정규화가 공백을 지우는 탓에 "즉시 발동", "동시 발사", "제시 발표"에서 '시발'이
+    걸린다. 이런 단어 경계 매칭은 대부분 오탐이므로 사전이 단정하지 않는다.
+    음성인식 결과라 "씨 발"처럼 띄어 발음되는 경우는 드물고, 있더라도 LLM이 잡는다.
+    """
+    return any(ch.isspace() for ch in text[start:end])
 
 
 def _drop_contained(hits: list[Hit]) -> list[Hit]:
