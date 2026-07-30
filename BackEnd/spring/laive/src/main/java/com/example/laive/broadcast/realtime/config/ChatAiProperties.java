@@ -12,12 +12,17 @@ import java.time.Duration;
  * @param ingestTimeout ingest 호출 Timeout. 계약 권장값은 2초 — 이 시간은 수집기
  *                      배치 응답 지연에 그대로 더해지므로 늘릴 때는 수집기 쪽
  *                      HTTP Timeout도 함께 봐야 한다
+ * @param summaryTimeout 여론 요약(POST /summary) 호출 Timeout. LLM 생성이 수 초
+ *                       걸리므로 ingest와 같은 2초를 쓰면 생성 중간에 끊긴다 —
+ *                       chat-ai는 그래도 생성을 마치고 캐시하므로, 끊긴 요약은
+ *                       다음 AUTO 주기의 COOLDOWN 회수 경로가 되살린다
  */
 @ConfigurationProperties(prefix = "laive.chat-ai")
 public record ChatAiProperties(
         String baseUrl,
         String token,
-        Duration ingestTimeout
+        Duration ingestTimeout,
+        Duration summaryTimeout
 ) {
 
     public boolean isEnabled() {

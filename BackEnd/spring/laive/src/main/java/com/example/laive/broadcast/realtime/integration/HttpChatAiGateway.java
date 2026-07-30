@@ -3,9 +3,12 @@ package com.example.laive.broadcast.realtime.integration;
 import com.example.laive.broadcast.realtime.config.ChatAiProperties;
 import com.example.laive.broadcast.realtime.domain.ChatAiIngestResult;
 import com.example.laive.broadcast.realtime.domain.ChatAiQuestionsResult;
+import com.example.laive.broadcast.realtime.domain.ChatAiSummary;
+import com.example.laive.broadcast.realtime.domain.ChatAiSummaryCall;
 import com.example.laive.broadcast.realtime.domain.IngestChat;
 import com.example.laive.broadcast.realtime.domain.SentimentLabel;
 import com.example.laive.broadcast.realtime.domain.SentimentWindow;
+import com.example.laive.broadcast.realtime.domain.SummaryMode;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,10 +36,16 @@ public class HttpChatAiGateway implements ChatAiGateway {
     private static final Logger log = LoggerFactory.getLogger(HttpChatAiGateway.class);
 
     private final RestClient restClient;
+    private final RestClient summaryRestClient;
     private final ChatAiProperties properties;
 
-    public HttpChatAiGateway(RestClient restClient, ChatAiProperties properties) {
+    /**
+     * @param summaryRestClient 여론 요약 전용 클라이언트. LLM 생성이 수 초 걸려
+     *                          ingest의 2초 Timeout과 분리한다
+     */
+    public HttpChatAiGateway(RestClient restClient, RestClient summaryRestClient, ChatAiProperties properties) {
         this.restClient = restClient;
+        this.summaryRestClient = summaryRestClient;
         this.properties = properties;
     }
 
@@ -125,6 +134,106 @@ public class HttpChatAiGateway implements ChatAiGateway {
         ));
     }
 
+    /**
+     * 여론 요약을 새로 생성한다(계약 §2).
+     *
+     * <p>retrieve() 대신 exchange()를 쓰는 이유: 409(COOLDOWN·IN_FLIGHT)와
+     * 422(NOT_ENOUGH_CHATS)는 본문(retryAfterSec 등)을 가진 정상 거절이라 예외로
+     * 흘리면 안 되고, 수동 버튼이 그 본문으로 카운트다운을 그린다. 계약이 "409·422는
+     * 오류가 아니다 — 로그에 에러로 찍지 말 것"을 요구하므로 debug로만 남긴다.
+     */
+    @Override
+    public ChatAiSummaryCall requestSummary(long sessionId, SummaryMode mode) {
+        try {
+            return summaryRestClient.post()
+                    .uri("/broadcasts/{sessionId}/summary", sessionId)
+                    .headers(this::authorize)
+                    .body(new SummaryModeBody(mode.name()))
+                    .exchange((request, response) -> {
+                        if (response.getStatusCode().is2xxSuccessful()) {
+                            SummaryResponseBody body = response.bodyTo(SummaryResponseBody.class);
+                            if (body == null || body.summary() == null) {
+                                log.warn("chat-ai summary 응답에 본문이 없습니다: sessionId={}", sessionId);
+                                return new ChatAiSummaryCall.Failure();
+                            }
+                            return new ChatAiSummaryCall.Success(toSummary(body));
+                        }
+                        return toRejection(sessionId, response.bodyTo(SummaryRejectionBody.class),
+                                response.getStatusCode().value());
+                    });
+        } catch (RestClientException exception) {
+            // AUTO 주기마다 반복될 수 있는 실패라 원인 클래스만 남긴다(ingest와 동일).
+            log.warn("chat-ai summary 생성 실패, 다음 주기에 다시 시도합니다: sessionId={} mode={} cause={}",
+                    sessionId, mode, exception.getClass().getSimpleName());
+            return new ChatAiSummaryCall.Failure();
+        }
+    }
+
+    /** 거절 본문의 reason으로 분기한다. 모르는 reason·5xx(LLM 미설정/실패)는 Failure다. */
+    private ChatAiSummaryCall toRejection(long sessionId, SummaryRejectionBody body, int status) {
+        String reason = body == null ? null : body.reason();
+        if (reason == null) {
+            log.warn("chat-ai summary 비정상 응답: sessionId={} status={}", sessionId, status);
+            return new ChatAiSummaryCall.Failure();
+        }
+        return switch (reason) {
+            case "COOLDOWN" -> {
+                log.debug("chat-ai summary 쿨다운(정상 거절): sessionId={} retryAfterSec={}",
+                        sessionId, body.retryAfterSec());
+                yield new ChatAiSummaryCall.Cooldown(
+                        body.retryAfterSec() == null ? 0 : body.retryAfterSec(),
+                        body.lastSummaryAt());
+            }
+            case "IN_FLIGHT" -> {
+                log.debug("chat-ai summary 생성 진행 중(정상 거절): sessionId={}", sessionId);
+                yield new ChatAiSummaryCall.InFlight();
+            }
+            case "NOT_ENOUGH_CHATS" -> {
+                log.debug("chat-ai summary 채팅 부족(정상 거절): sessionId={} chatCount={} required={}",
+                        sessionId, body.chatCount(), body.required());
+                yield new ChatAiSummaryCall.NotEnoughChats(
+                        body.chatCount() == null ? 0 : body.chatCount(),
+                        body.required() == null ? 0 : body.required());
+            }
+            case "UNKNOWN_BROADCAST" -> {
+                // 계약: ingest가 들어온 적 없는 방송. PREPARING 폴링의 정상 경로다.
+                log.debug("chat-ai summary 404(ingest 이력 없음): sessionId={}", sessionId);
+                yield new ChatAiSummaryCall.UnknownBroadcast();
+            }
+            default -> {
+                log.warn("chat-ai summary 거절 사유를 모릅니다(계약 버전 확인 필요): sessionId={} reason={} status={}",
+                        sessionId, reason, status);
+                yield new ChatAiSummaryCall.Failure();
+            }
+        };
+    }
+
+    /** 마지막 요약을 캐시에서 다시 읽는다(계약 §2 — LLM 호출 없음). */
+    @Override
+    public Optional<ChatAiSummary> getSummary(long sessionId) {
+        SummaryResponseBody response;
+        try {
+            response = summaryRestClient.get()
+                    .uri("/broadcasts/{sessionId}/summary", sessionId)
+                    .headers(this::authorize)
+                    .retrieve()
+                    .body(SummaryResponseBody.class);
+        } catch (HttpClientErrorException.NotFound notFound) {
+            // 계약: 404 = 아직 생성된 요약이 없음(NO_SUMMARY). 정상 경로다.
+            log.debug("chat-ai summary 404(생성된 요약 없음): sessionId={}", sessionId);
+            return Optional.empty();
+        } catch (RestClientException exception) {
+            log.warn("chat-ai summary 조회 실패, 이번 회수를 건너뜁니다: sessionId={} cause={}",
+                    sessionId, exception.getClass().getSimpleName());
+            return Optional.empty();
+        }
+        if (response == null || response.summary() == null) {
+            log.warn("chat-ai summary 조회 응답이 비어 있습니다: sessionId={}", sessionId);
+            return Optional.empty();
+        }
+        return Optional.of(toSummary(response));
+    }
+
     @Override
     public void endBroadcast(long sessionId) {
         try {
@@ -207,6 +316,33 @@ public class HttpChatAiGateway implements ChatAiGateway {
 
     private int orDefaultWindowSec(WindowBody window) {
         return window.windowSec() == null ? 180 : window.windowSec();
+    }
+
+    /**
+     * 요약 응답을 코드 라벨 스키마로 바꾼다. 라벨 변환 규칙은 {@link #toWindow}와
+     * 같다 — 모르는 라벨은 warn 후 버린다(모델 버전 확인 신호).
+     */
+    private ChatAiSummary toSummary(SummaryResponseBody body) {
+        Map<String, Double> distribution = new LinkedHashMap<>();
+        if (body.distribution() != null) {
+            body.distribution().forEach((korean, ratio) ->
+                    SentimentLabel.fromKorean(korean).ifPresentOrElse(
+                            label -> distribution.put(label.name(), ratio),
+                            () -> log.warn("모르는 감정 라벨입니다(모델 버전 확인 필요): {}", korean)
+                    ));
+        }
+        String dominant = body.dominant() == null
+                ? null
+                : SentimentLabel.fromKorean(body.dominant()).map(Enum::name).orElse(null);
+        return new ChatAiSummary(
+                body.summary(),
+                dominant,
+                distribution.isEmpty() ? null : Map.copyOf(distribution),
+                body.chatCount() == null ? 0 : body.chatCount(),
+                body.windowSec() == null ? 180 : body.windowSec(),
+                body.generatedAt(),
+                body.nextAvailableAt()
+        );
     }
 
     /**
@@ -298,6 +434,32 @@ public class HttpChatAiGateway implements ChatAiGateway {
             Integer messages,
             Long firstAskedAt,
             Long lastAskedAt
+    ) {
+    }
+
+    record SummaryModeBody(String mode) {
+    }
+
+    // generatedAt·nextAvailableAt은 ISO-8601 문자열("...Z")이라 Instant로 바로 바인딩된다.
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record SummaryResponseBody(
+            String summary,
+            String dominant,
+            Map<String, Double> distribution,
+            Long chatCount,
+            Integer windowSec,
+            Instant generatedAt,
+            Instant nextAvailableAt
+    ) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record SummaryRejectionBody(
+            String reason,
+            Integer retryAfterSec,
+            Instant lastSummaryAt,
+            Long chatCount,
+            Integer required
     ) {
     }
 }

@@ -12,4 +12,17 @@
          LIMIT 1
     </select>
 
+    <!-- created_at 동률(같은 초의 연속 저장) 대비 id 보조 정렬로 순서 흔들림을 막는다. -->
+    <select id="findRecentBriefings"
+            resultType="com.example.laive.broadcast.live.repository.mybatis.LiveBriefingRow">
+        SELECT id AS briefing_id,
+               briefing_type,
+               message,
+               created_at
+          FROM live_briefings
+         WHERE session_id = #{sessionId}
+         ORDER BY created_at DESC, id DESC
+         LIMIT #{limit}
+    </select>
+
 </mapper>

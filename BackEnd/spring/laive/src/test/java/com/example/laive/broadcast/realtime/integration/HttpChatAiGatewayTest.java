@@ -3,7 +3,10 @@ package com.example.laive.broadcast.realtime.integration;
 import com.example.laive.broadcast.realtime.config.ChatAiProperties;
 import com.example.laive.broadcast.realtime.domain.ChatAiIngestResult;
 import com.example.laive.broadcast.realtime.domain.ChatAiQuestionsResult;
+import com.example.laive.broadcast.realtime.domain.ChatAiSummary;
+import com.example.laive.broadcast.realtime.domain.ChatAiSummaryCall;
 import com.example.laive.broadcast.realtime.domain.IngestChat;
+import com.example.laive.broadcast.realtime.domain.SummaryMode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
@@ -40,9 +43,12 @@ class HttpChatAiGatewayTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder().baseUrl("http://chat-ai:8001");
         server = MockRestServiceServer.bindTo(builder).build();
+        RestClient restClient = builder.build();
         gateway = new HttpChatAiGateway(
-                builder.build(),
-                new ChatAiProperties("http://chat-ai:8001", "test-token", Duration.ofSeconds(2))
+                restClient,
+                restClient, // 테스트에서는 Timeout 차이가 없으므로 같은 클라이언트를 쓴다
+                new ChatAiProperties("http://chat-ai:8001", "test-token",
+                        Duration.ofSeconds(2), Duration.ofSeconds(15))
         );
     }
 
@@ -238,6 +244,136 @@ class HttpChatAiGatewayTest {
     }
 
     @Test
+    void summarySuccessMapsKoreanLabelsAndInstants() {
+        server.expect(requestTo("http://chat-ai:8001/broadcasts/9002/summary"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(header("Authorization", "Bearer test-token"))
+                .andExpect(jsonPath("$.mode").value("MANUAL"))
+                .andRespond(withSuccess("""
+                        {
+                          "summary": "신곡 무대에 환호가 집중되고 있습니다.",
+                          "dominant": "환호/감탄",
+                          "distribution": {"환호/감탄": 0.34, "웃음/재미": 0.22},
+                          "chatCount": 4210,
+                          "windowSec": 180,
+                          "generatedAt": "2026-07-29T21:03:00Z",
+                          "nextAvailableAt": "2026-07-29T21:04:00Z"
+                        }
+                        """, MediaType.APPLICATION_JSON));
+
+        ChatAiSummaryCall call = gateway.requestSummary(9002L, SummaryMode.MANUAL);
+
+        ChatAiSummary summary = ((ChatAiSummaryCall.Success) call).summary();
+        assertThat(summary.summary()).isEqualTo("신곡 무대에 환호가 집중되고 있습니다.");
+        assertThat(summary.dominant()).isEqualTo("EXCITEMENT");
+        assertThat(summary.distribution())
+                .containsEntry("EXCITEMENT", 0.34)
+                .containsEntry("JOY", 0.22);
+        assertThat(summary.chatCount()).isEqualTo(4210);
+        assertThat(summary.generatedAt()).isEqualTo(Instant.parse("2026-07-29T21:03:00Z"));
+        assertThat(summary.nextAvailableAt()).isEqualTo(Instant.parse("2026-07-29T21:04:00Z"));
+    }
+
+    @Test
+    void summaryCooldownRejectionCarriesRetryAfter() {
+        // 계약: 409 COOLDOWN은 오류가 아니라 본문을 가진 정상 거절이다.
+        server.expect(requestTo("http://chat-ai:8001/broadcasts/1/summary"))
+                .andExpect(jsonPath("$.mode").value("AUTO"))
+                .andRespond(withStatus(HttpStatus.CONFLICT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("""
+                                {"reason": "COOLDOWN", "retryAfterSec": 42,
+                                 "lastSummaryAt": "2026-07-29T21:03:00Z"}
+                                """));
+
+        ChatAiSummaryCall call = gateway.requestSummary(1L, SummaryMode.AUTO);
+
+        ChatAiSummaryCall.Cooldown cooldown = (ChatAiSummaryCall.Cooldown) call;
+        assertThat(cooldown.retryAfterSec()).isEqualTo(42);
+        assertThat(cooldown.lastSummaryAt()).isEqualTo(Instant.parse("2026-07-29T21:03:00Z"));
+    }
+
+    @Test
+    void summaryInFlightRejectionBecomesInFlight() {
+        server.expect(requestTo("http://chat-ai:8001/broadcasts/1/summary"))
+                .andRespond(withStatus(HttpStatus.CONFLICT)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"reason\": \"IN_FLIGHT\"}"));
+
+        assertThat(gateway.requestSummary(1L, SummaryMode.MANUAL))
+                .isInstanceOf(ChatAiSummaryCall.InFlight.class);
+    }
+
+    @Test
+    void summaryNotEnoughChatsCarriesCounts() {
+        server.expect(requestTo("http://chat-ai:8001/broadcasts/1/summary"))
+                .andRespond(withStatus(HttpStatus.UNPROCESSABLE_ENTITY)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"reason\": \"NOT_ENOUGH_CHATS\", \"chatCount\": 12, \"required\": 30}"));
+
+        ChatAiSummaryCall call = gateway.requestSummary(1L, SummaryMode.AUTO);
+
+        ChatAiSummaryCall.NotEnoughChats notEnough = (ChatAiSummaryCall.NotEnoughChats) call;
+        assertThat(notEnough.chatCount()).isEqualTo(12);
+        assertThat(notEnough.required()).isEqualTo(30);
+    }
+
+    @Test
+    void summaryUnknownBroadcastBecomesUnknown() {
+        server.expect(requestTo("http://chat-ai:8001/broadcasts/1/summary"))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"reason\": \"UNKNOWN_BROADCAST\"}"));
+
+        assertThat(gateway.requestSummary(1L, SummaryMode.AUTO))
+                .isInstanceOf(ChatAiSummaryCall.UnknownBroadcast.class);
+    }
+
+    @Test
+    void summaryServerErrorBecomesFailureInsteadOfThrowing() {
+        // 503 LLM_UNCONFIGURED·502 LLM 실패 — 전송 실패와 같은 Failure로 눌러쓴다.
+        server.expect(requestTo("http://chat-ai:8001/broadcasts/1/summary"))
+                .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"reason\": \"LLM_UNCONFIGURED\", \"detail\": \"GMS_KEY가 설정되지 않았습니다\"}"));
+
+        assertThat(gateway.requestSummary(1L, SummaryMode.MANUAL))
+                .isInstanceOf(ChatAiSummaryCall.Failure.class);
+    }
+
+    @Test
+    void getSummaryReturnsCachedSummary() {
+        server.expect(requestTo("http://chat-ai:8001/broadcasts/9002/summary"))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header("Authorization", "Bearer test-token"))
+                .andRespond(withSuccess("""
+                        {
+                          "summary": "음향 문제를 지적하는 반응이 이어집니다.",
+                          "dominant": "분노/불만",
+                          "distribution": {"분노/불만": 0.4},
+                          "chatCount": 900,
+                          "windowSec": 180,
+                          "generatedAt": "2026-07-29T21:03:00Z",
+                          "nextAvailableAt": "2026-07-29T21:04:00Z"
+                        }
+                        """, MediaType.APPLICATION_JSON));
+
+        ChatAiSummary summary = gateway.getSummary(9002L).orElseThrow();
+
+        assertThat(summary.summary()).isEqualTo("음향 문제를 지적하는 반응이 이어집니다.");
+        assertThat(summary.dominant()).isEqualTo("ANGER");
+    }
+
+    @Test
+    void getSummaryNotFoundMeansNoSummaryYetAndReturnsEmpty() {
+        // 계약: 404 NO_SUMMARY = 아직 생성된 요약이 없음(정상 경로).
+        server.expect(requestTo("http://chat-ai:8001/broadcasts/1/summary"))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+        assertThat(gateway.getSummary(1L)).isEmpty();
+    }
+
+    @Test
     void endBroadcastSwallowsFailure() {
         server.expect(requestTo("http://chat-ai:8001/broadcasts/9002"))
                 .andExpect(method(HttpMethod.DELETE))
@@ -246,7 +382,7 @@ class HttpChatAiGatewayTest {
         gateway.endBroadcast(9002L); // 예외가 새지 않아야 한다
     }
 
-    private static org.springframework.test.web.client.ResponseCreator withStatus(HttpStatus status) {
+    private static org.springframework.test.web.client.response.DefaultResponseCreator withStatus(HttpStatus status) {
         return org.springframework.test.web.client.response.MockRestResponseCreators.withStatus(status);
     }
 }

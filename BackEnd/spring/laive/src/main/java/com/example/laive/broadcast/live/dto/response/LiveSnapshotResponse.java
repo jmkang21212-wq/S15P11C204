@@ -10,8 +10,8 @@ import java.util.Map;
  * <p>프론트가 2~3초 주기로 폴링해 콘솔 화면 전체를 이 응답으로 그린다
  * (2026-07-29 결정 — WebSocket 대신 폴링).
  *
- * <p>briefings는 STT 파이프라인이 아직 없어 항상 빈 배열이다. 필드를 미리 두는
- * 이유: 프론트가 스키마를 한 번만 맞추면 된다.
+ * <p>briefings는 live_briefings의 최근 20건(최신순)이다 — AI 분석이 저장하는
+ * RISK·PROMISE와 여론 요약 CHAT_SUMMARY가 실린다.
  */
 public record LiveSnapshotResponse(
         Session session,
