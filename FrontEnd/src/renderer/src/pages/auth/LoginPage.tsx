@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { PATHS } from '@renderer/routes/paths'
 import { Button } from '@renderer/components/ui/button'
@@ -6,7 +6,8 @@ import { Input } from '@renderer/components/ui/input'
 import { Label } from '@renderer/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@renderer/components/ui/card'
 import { NAVER_GREEN } from '@renderer/lib/brand'
-import { loginWithNaver } from '@renderer/api/auth'
+import { loginWithDevAccount, loginWithNaver } from '@renderer/api/auth'
+import { authStore } from '@renderer/auth/authStore'
 
 /**
  * SC-01a 로그인 화면.
@@ -18,6 +19,12 @@ export default function LoginPage(): React.JSX.Element {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [naverLoading, setNaverLoading] = useState(false)
+  const [devLoading, setDevLoading] = useState(false)
+
+  // 부팅 시 App이 Refresh 쿠키로 세션을 복구해 두었으면 로그인 화면을 건너뛴다.
+  useEffect(() => {
+    if (authStore.getToken()) navigate(PATHS.dashboard, { replace: true })
+  }, [navigate])
 
   const handleSubmit = (e: React.FormEvent): void => {
     e.preventDefault()
@@ -32,6 +39,17 @@ export default function LoginPage(): React.JSX.Element {
       if (ok) navigate(PATHS.platformConnect)
     } finally {
       setNaverLoading(false)
+    }
+  }
+
+  // 개발 편의용 — 온보딩을 건너뛰고 바로 대시보드로 간다.
+  const handleDevLogin = async (): Promise<void> => {
+    setDevLoading(true)
+    try {
+      const ok = await loginWithDevAccount()
+      if (ok) navigate(PATHS.dashboard)
+    } finally {
+      setDevLoading(false)
     }
   }
 
@@ -98,6 +116,20 @@ export default function LoginPage(): React.JSX.Element {
             <Button type="button" variant="outline" size="lg" className="w-full">
               Google로 계속하기
             </Button>
+
+            {/* 개발 빌드 전용 — 백엔드 DEV_LOGIN_ENABLED=true 필요 (프로덕션 번들에서 제거됨) */}
+            {import.meta.env.DEV && (
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="w-full border-dashed text-muted-foreground"
+                disabled={devLoading}
+                onClick={() => void handleDevLogin()}
+              >
+                {devLoading ? '로그인 중…' : '개발용 계정으로 로그인'}
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>

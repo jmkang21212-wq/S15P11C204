@@ -47,6 +47,8 @@ public class RefreshTokenService {
 
     /**
      * 기존 토큰 행을 잠근 뒤 폐기하고 새 토큰으로 교체해 재사용 공격을 차단한다.
+     * 이미 폐기된 토큰이라도 폐기 후 유예 기간 안이면 회전을 허용한다 —
+     * 여러 창(메인·미니 모드)이 같은 쿠키로 거의 동시에 refresh를 보내는 경우를 위해서다.
      */
     @Transactional
     public RotatedRefreshToken rotate(String rawToken) {
@@ -56,10 +58,11 @@ public class RefreshTokenService {
 
         Instant now = clock.instant();
         RefreshTokenRecord current = authMapper.findRefreshTokenForUpdate(hash(rawToken))
-                .filter(token -> token.isUsableAt(now))
+                .filter(token -> token.isUsableAt(now, properties.refreshCookie().rotationGrace()))
                 .orElseThrow(AuthException::invalidCredentials);
 
-        if (authMapper.revokeRefreshToken(current.id(), now) != 1) {
+        // 유예 기간 내 재사용이면 이미 폐기된 상태이므로 다시 폐기하지 않는다.
+        if (current.revokedAt() == null && authMapper.revokeRefreshToken(current.id(), now) != 1) {
             throw AuthException.invalidCredentials();
         }
 

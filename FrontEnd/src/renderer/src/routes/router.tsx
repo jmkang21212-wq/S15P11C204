@@ -1,6 +1,7 @@
 import { createHashRouter, Navigate } from 'react-router-dom'
 import AppLayout from '@renderer/layouts/AppLayout'
 import ConsoleLayout from '@renderer/layouts/ConsoleLayout'
+import RequireAuth from '@renderer/auth/RequireAuth'
 import { PATHS } from './paths'
 import LoginPage from '@renderer/pages/auth/LoginPage'
 import PlatformConnectPage from '@renderer/pages/auth/PlatformConnectPage'
@@ -29,45 +30,53 @@ import NotFoundPage from '@renderer/pages/NotFoundPage'
  *   3) 알맞은 레이아웃의 children에 { path, element } 한 줄 추가
  */
 export const router = createHashRouter([
-  // 진입점: 지금은 로그인으로 (추후 인증 가드를 붙여 대시보드로 변경 예정)
-  { path: '/', element: <Navigate to={PATHS.login} replace /> },
+  // 진입점: 대시보드로. 세션이 없으면 RequireAuth가 로그인으로 돌려보낸다.
+  { path: '/', element: <Navigate to={PATHS.dashboard} replace /> },
 
   // ── 인증 / 온보딩: 레이아웃 없음 ──
   { path: PATHS.login, element: <LoginPage /> },
   { path: PATHS.platformConnect, element: <PlatformConnectPage /> },
 
   // ── 별도 창(레이아웃 없음): 미니 모드 · OBS 오버레이 ──
+  // 가드를 걸지 않는다 — 미니 모드는 340px 창이라 로그인 화면을 띄울 수 없고,
+  // OBS 오버레이는 브라우저 소스(무세션)에서 로드된다.
   { path: PATHS.consoleMini, element: <MiniModePage /> },
   { path: PATHS.overlay, element: <OverlayPage /> },
   // ── 공개 뷰: 인증도 GNB도 없다 (design.md §5.2). 브라우저 크롬은 페이지가 직접 씌운다 ──
   { path: PATHS.publicPortfolio, element: <PortfolioPublicPage /> },
   { path: PATHS.discover, element: <DiscoverPage /> },
 
-  // ── 앱 화면: GNB 레이아웃 ──
+  // ── 인증 필요 화면: 세션이 없거나 만료되면 로그인으로 ──
   {
-    element: <AppLayout />,
+    element: <RequireAuth />,
     children: [
-      { path: PATHS.dashboard, element: <DashboardPage /> },
-      { path: PATHS.sessionReport, element: <SessionReportListPage /> },
-      { path: PATHS.sessionReportDetail, element: <SessionReportDetailPage /> },
-      { path: PATHS.clips, element: <ClipsPage /> },
-      { path: PATHS.growth, element: <GrowthReportPage /> },
-      { path: PATHS.schedule, element: <SchedulePage /> },
-      { path: PATHS.portfolio, element: <PortfolioEditPage /> },
-      { path: PATHS.matching, element: <MatchingPage /> },
+      // ── 앱 화면: GNB 레이아웃 ──
+      {
+        element: <AppLayout />,
+        children: [
+          { path: PATHS.dashboard, element: <DashboardPage /> },
+          { path: PATHS.sessionReport, element: <SessionReportListPage /> },
+          { path: PATHS.sessionReportDetail, element: <SessionReportDetailPage /> },
+          { path: PATHS.clips, element: <ClipsPage /> },
+          { path: PATHS.growth, element: <GrowthReportPage /> },
+          { path: PATHS.schedule, element: <SchedulePage /> },
+          { path: PATHS.portfolio, element: <PortfolioEditPage /> },
+          { path: PATHS.matching, element: <MatchingPage /> },
 
-      // 아직 구현되지 않은 GNB 메뉴를 받는다. GNB는 남겨 두고 본문만 안내로 채운다.
-      // 담당자가 위에 라우트를 추가하면 자연히 대체된다.
-      { path: '*', element: <NotFoundPage /> }
-    ]
-  },
+          // 아직 구현되지 않은 GNB 메뉴를 받는다. GNB는 남겨 두고 본문만 안내로 채운다.
+          // 담당자가 위에 라우트를 추가하면 자연히 대체된다.
+          { path: '*', element: <NotFoundPage /> }
+        ]
+      },
 
-  // ── 방송 콘솔: 축소 레이아웃 ──
-  {
-    element: <ConsoleLayout />,
-    children: [
-      { path: PATHS.console, element: <BroadcastConsolePage /> },
-      { path: PATHS.consoleSession, element: <BroadcastConsolePage /> }
+      // ── 방송 콘솔: 축소 레이아웃 ──
+      {
+        element: <ConsoleLayout />,
+        children: [
+          { path: PATHS.console, element: <BroadcastConsolePage /> },
+          { path: PATHS.consoleSession, element: <BroadcastConsolePage /> }
+        ]
+      }
     ]
   }
 ])
