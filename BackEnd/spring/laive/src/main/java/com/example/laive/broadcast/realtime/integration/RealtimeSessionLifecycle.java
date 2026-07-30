@@ -1,5 +1,6 @@
 package com.example.laive.broadcast.realtime.integration;
 
+import com.example.laive.broadcast.questions.service.RepeatedQuestionPollService;
 import com.example.laive.broadcast.realtime.repository.mybatis.TriggerMapper;
 import com.example.laive.broadcast.realtime.service.RealtimeSessionRegistry;
 import com.example.laive.broadcast.realtime.service.TriggerRecorder;
@@ -30,6 +31,7 @@ public class RealtimeSessionLifecycle implements AiSessionGateway {
     private final TriggerRecorder triggerRecorder;
     private final TriggerMapper triggerMapper;
     private final ChatAiGateway chatAiGateway;
+    private final RepeatedQuestionPollService repeatedQuestionPollService;
     private final Clock clock;
 
     public RealtimeSessionLifecycle(
@@ -37,12 +39,14 @@ public class RealtimeSessionLifecycle implements AiSessionGateway {
             TriggerRecorder triggerRecorder,
             TriggerMapper triggerMapper,
             ChatAiGateway chatAiGateway,
+            RepeatedQuestionPollService repeatedQuestionPollService,
             Clock clock
     ) {
         this.registry = registry;
         this.triggerRecorder = triggerRecorder;
         this.triggerMapper = triggerMapper;
         this.chatAiGateway = chatAiGateway;
+        this.repeatedQuestionPollService = repeatedQuestionPollService;
         this.clock = clock;
     }
 
@@ -77,6 +81,16 @@ public class RealtimeSessionLifecycle implements AiSessionGateway {
         registry.finalizeAndRemove(sessionId, endedAt)
                 .ifPresent(finalized -> triggerRecorder.record(
                         sessionId, finalized.sessionStartedAt(), finalized.candidate()));
+        // 계약 §4: 캐시 정리(DELETE) 전에 반복 질문을 마지막으로 한 번 폴링해
+        // askers를 최종 수치로 마감한다 — 세션 리포트가 이 저장값을 쓴다.
+        // 실패가 종료 흐름을 막으면 안 된다: HTTP 실패는 게이트웨이가 빈 값으로
+        // 흡수하고, DB 반영 실패는 여기서 잡는다.
+        try {
+            repeatedQuestionPollService.pollOnce(sessionId);
+        } catch (RuntimeException exception) {
+            log.warn("반복 질문 종료 마감 실패(리포트가 마지막 폴링 값으로 남음): sessionId={}",
+                    sessionId, exception);
+        }
         chatAiGateway.endBroadcast(sessionId);
     }
 }

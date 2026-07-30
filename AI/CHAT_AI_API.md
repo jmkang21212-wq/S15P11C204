@@ -30,7 +30,7 @@ AI 서버는 치지직에 직접 접속하지 않는다. 채팅과 시청자 수
 |---|---|
 | §1 ingest + §4 DELETE | **양측 구현·E2E 검증 완료.** 배치 도착 시 중계는 Spring `CollectionRelayService`, 채팅 없는 초의 빈 배치 보충은 `RealtimeTicker`(1초), 어댑터·라벨 변환은 `HttpChatAiGateway`(`broadcast/realtime` 패키지). 라벨 저장 → Redis window → live-snapshot → 종료 DELETE까지 확인 |
 | §2 summary | AI측 구현 완료(`server.py`). **Spring 호출부(3분 스케줄러·수동 버튼) 미구현** — API 명세서 §13.6 보류 |
-| §3 questions | **양측 미구현.** 계약만 확정된 상태 — AI측 라우트·임베딩 클러스터링, Spring측 폴링·저장 모두 없음 |
+| §3 questions | **양측 구현 완료 (2026-07-30).** Spring측(`broadcast/questions` 패키지): 15초 폴링(`RepeatedQuestionPoller`) → 변경분만 UPSERT(V11 스키마, dismissed 보존) → 재질문 감지 ①②③(60초 유예·+10명 재노출·리셋 방어) → live-snapshot 노출 + dismiss API + 종료 시 DELETE 직전 마지막 `GET ?limit=50` 마감까지, 파라미터는 `laive.repeated-questions.*`. AI측(`chatai/questions.py`): 라우트 + 임베딩 클러스터링 + FAQ/CONTEXT 판정 + 세대 프리픽스 questionId('생성 규칙' 준수), 단위 테스트 통과. 양측 합동 E2E는 미실시 |
 
 > **⚠ "파이프라인이 없다"는 오해 주의.** Spring은 `CHATAI_BASE_URL`이 비어 있으면
 > 기동 시 경고 로그 한 줄만 남기고 **no-op 게이트웨이**로 대체한다 — AI 호출이

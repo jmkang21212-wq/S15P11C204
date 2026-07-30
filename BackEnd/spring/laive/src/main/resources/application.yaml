@@ -117,6 +117,21 @@ laive:
     # 늘릴 때는 수집기 쪽 HTTP Timeout도 함께 조정해야 한다.
     ingest-timeout: 2s
 
+  # 반복 질문 폴링·재질문 감지 (계약: AI/CHAT_AI_API.md §3)
+  repeated-questions:
+    # 계약 권장 10~30초. 변경분만 UPSERT라 짧게 잡아도 쓰기 부담이 없지만,
+    # 질문 목록 자체가 임베딩 배치(최대 30초 지연) 주기로 천천히 변한다.
+    poll-interval: 15s
+    # 계약 최대치. exclude 없이 전량 받는다 — 답변 완료(dismissed)는 DB가 기억하고
+    # 노출 단계에서 거른다. exclude로 걸러 받으면 세션 리포트에서 그 질문이 사라진다.
+    limit: 50
+    # 답변 직후에는 재질문 판정 기준(baseline)을 잡지 않는다: 송출 지연 4~5초에
+    # 시청자 인지·타이핑 중이던 사람들의 관성 유입까지 흡수하는 유예다.
+    dismiss-grace: 60s
+    # 답변 후 이만큼 더 물으면 다시 노출한다. 중간 규모 채널 실측 기준 —
+    # 시청자 수백 명대 채널에서는 도달하기 어려우니 규모별 조정 여지가 있다.
+    reexpose-threshold: 10
+
   # CHAT_SURGE 하이라이트 판정 파라미터 (알고리즘: AI/chat-ai/HIGHLIGHT_SPEC.md)
   # 전부 백테스트 미검증 초기값이다. 실방송 DEBUG 로그(ts, engagement, z, state)가 튜닝 근거다.
   highlight:

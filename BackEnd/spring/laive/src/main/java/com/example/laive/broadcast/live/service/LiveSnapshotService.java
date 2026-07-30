@@ -3,6 +3,8 @@ package com.example.laive.broadcast.live.service;
 import com.example.laive.broadcast.collect.integration.CollectorStatusStore;
 import com.example.laive.broadcast.live.dto.response.LiveSnapshotResponse;
 import com.example.laive.broadcast.live.repository.mybatis.LiveSnapshotMapper;
+import com.example.laive.broadcast.questions.config.RepeatedQuestionProperties;
+import com.example.laive.broadcast.questions.repository.mybatis.RepeatedQuestionMapper;
 import com.example.laive.broadcast.realtime.domain.SentimentWindow;
 import com.example.laive.broadcast.realtime.integration.SentimentSnapshotStore;
 import com.example.laive.broadcast.session.domain.BroadcastSessionDetail;
@@ -40,6 +42,8 @@ public class LiveSnapshotService {
     private final CollectorStatusStore collectorStatusStore;
     private final SentimentSnapshotStore sentimentSnapshotStore;
     private final LiveSnapshotMapper liveSnapshotMapper;
+    private final RepeatedQuestionMapper repeatedQuestionMapper;
+    private final RepeatedQuestionProperties repeatedQuestionProperties;
     private final StringRedisTemplate redisTemplate;
     private final Clock clock;
 
@@ -48,6 +52,8 @@ public class LiveSnapshotService {
             CollectorStatusStore collectorStatusStore,
             SentimentSnapshotStore sentimentSnapshotStore,
             LiveSnapshotMapper liveSnapshotMapper,
+            RepeatedQuestionMapper repeatedQuestionMapper,
+            RepeatedQuestionProperties repeatedQuestionProperties,
             StringRedisTemplate redisTemplate,
             Clock clock
     ) {
@@ -55,6 +61,8 @@ public class LiveSnapshotService {
         this.collectorStatusStore = collectorStatusStore;
         this.sentimentSnapshotStore = sentimentSnapshotStore;
         this.liveSnapshotMapper = liveSnapshotMapper;
+        this.repeatedQuestionMapper = repeatedQuestionMapper;
+        this.repeatedQuestionProperties = repeatedQuestionProperties;
         this.redisTemplate = redisTemplate;
         this.clock = clock;
     }
@@ -68,9 +76,29 @@ public class LiveSnapshotService {
                 services(sessionId, now),
                 List.of(),
                 sentiment(sessionId),
-                List.of(),
+                repeatedQuestions(sessionId),
                 lastEventId(sessionId)
         );
+    }
+
+    /**
+     * 노출 중(dismissed 아님) 질문을 askers 내림차순으로 저장 전량(≤50) 내려보낸다.
+     * 상위 N 컷과 "FAQ만" 필터는 프론트 몫이다 — FAQ는 소수라 서버가 5개로 자르면
+     * 필터 후 화면이 빈다(계약 §3의 limit=30 권고와 같은 이유).
+     */
+    private List<LiveSnapshotResponse.RepeatedQuestion> repeatedQuestions(long sessionId) {
+        return repeatedQuestionMapper.findVisible(sessionId, repeatedQuestionProperties.limit()).stream()
+                .map(view -> new LiveSnapshotResponse.RepeatedQuestion(
+                        view.questionId(),
+                        view.text(),
+                        view.type(),
+                        view.askers(),
+                        view.messages(),
+                        view.reasked(),
+                        view.firstAskedAt(),
+                        view.lastAskedAt()
+                ))
+                .toList();
     }
 
     private LiveSnapshotResponse.Session session(BroadcastSessionDetail detail, Instant now) {

@@ -22,12 +22,9 @@ from .config import (GMS_KEY, SUMMARY_COOLDOWN_SEC, SUMMARY_ENV_MIN,
                      SUMMARY_FOCUS_THRESH, SUMMARY_MIN_CHATS,
                      SUMMARY_NEUTRAL_QUOTA, SUMMARY_SAMPLE_MAX, UID_TTL, WINDOW_SEC)
 from .labels import LABELS
+from .reaction import is_reaction
 from .text_norm import normalize
 from .window import BroadcastWindow
-
-# 리액션 문자: 이것만으로 이뤄진 채팅은 "내용 없는 순수 반응"으로 본다.
-# 한글 자모(ㄱ-ㅣ, U+3131~U+3163) + 감탄 부호. 제거 후 2자 미만 남으면 리액션.
-_REACT_CHARS = set(chr(c) for c in range(0x3131, 0x3164)) | set('!?~.…,;^ㆍ-_ ')
 
 # 방송 환경 문제 안내 — 판정도 문장 생성도 전부 코드가 한다.
 # nano에게 맡겨본 결과: 예시문을 그대로 베끼고(문제 종류 무시), 칭찬("화면 예쁘다")을
@@ -52,12 +49,6 @@ def env_notice(groups):
         if n >= SUMMARY_ENV_MIN and (best is None or n > best[0]):
             best = (n, template)
     return best[1] if best else None
-
-
-def is_reaction(text):
-    """ㅋㅋㅋ·캬ㅑㅑ·네ㅔㅔ·ㄷㄷ → True / 개웃기네·왜 화면 멈춰요 → False"""
-    content = [ch for ch in text if ch not in _REACT_CHARS]
-    return len(content) < 2
 
 
 def _iso(ms):
