@@ -1,6 +1,7 @@
 package com.example.laive.broadcast.realtime.integration;
 
 import com.example.laive.broadcast.realtime.domain.ChatAiIngestResult;
+import com.example.laive.broadcast.realtime.domain.ChatAiQuestionsResult;
 import com.example.laive.broadcast.realtime.domain.IngestChat;
 
 import java.util.List;
@@ -22,6 +23,16 @@ public interface ChatAiGateway {
      * @param viewers 최신 시청자 수. 모르면 null (chat-ai가 기존 값을 유지한다)
      */
     default Optional<ChatAiIngestResult> ingest(long sessionId, Integer viewers, List<IngestChat> chats) {
+        return Optional.empty();
+    }
+
+    /**
+     * 반복 질문 Top N을 폴링한다(계약 §3). 실패·404(ingest 이력 없음)는 던지지 않고
+     * 비어 있다 — 호출자는 이번 주기를 건너뛰면 된다.
+     *
+     * @param limit 반환 개수. 계약 최대 50
+     */
+    default Optional<ChatAiQuestionsResult> getQuestions(long sessionId, int limit) {
         return Optional.empty();
     }
 

@@ -271,11 +271,24 @@ async def ws_audio(websocket: WebSocket) -> None:
     session = Session(session_id, websocket,
                       send_transcripts=bool(handshake.get("transcripts", False)))
     _registry.add(session)
+
+    # Spring 저장에는 broadcast_sessions.id가 필요하다. session_id는 프론트가 탭 충돌을
+    # 피하려고 만든 임의 문자열이라 그 역할을 못 한다. 프론트가 방송 시작 응답으로 이미
+    # 갖고 있는 번호를 핸드셰이크에 실어 보내면 여기서 묶는다. 없으면 감지와 프론트
+    # 전송은 그대로 돌고 Spring 저장만 건너뛴다.
+    broadcast_session_id = _parse_broadcast_session_id(handshake.get("broadcastSessionId"))
+    if _spring is not None and _spring.enabled:
+        if broadcast_session_id is None:
+            log.warning("broadcastSessionId가 없어 Spring 저장을 건너뜁니다: session_id=%s",
+                        session_id)
+        else:
+            _spring.bind_session(session_id, broadcast_session_id)
+
     await websocket.send_json({
         "type": "ready", "session_id": session_id,
         "sample_rate": SAMPLE_RATE, "chunk": CHUNK,
     })
-    log.info("세션 접속 %s", session_id)
+    log.info("세션 접속 %s (broadcastSessionId=%s)", session_id, broadcast_session_id)
 
     sender = asyncio.create_task(_send_loop(session))
     try:
@@ -295,7 +308,23 @@ async def ws_audio(websocket: WebSocket) -> None:
         _registry.remove(session_id)
         if _promise is not None:
             _promise.forget(session_id)
+        # 전사 배치가 아직 큐에 남아 있을 수 있어 바로 풀지 않는다.
+        # 남은 것을 다 보낸 뒤 정리한다.
+        if _spring is not None and _spring.enabled:
+            _spring.release_session_later(session_id)
         log.info("세션 종료 %s", session_id)
+
+
+def _parse_broadcast_session_id(value: object) -> int | None:
+    """핸드셰이크의 broadcastSessionId를 읽는다. 없거나 이상하면 None."""
+    if value is None:
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        log.warning("broadcastSessionId를 숫자로 읽을 수 없습니다: %r", value)
+        return None
+    return parsed if parsed > 0 else None
 
 
 async def _send_loop(session: Session) -> None:

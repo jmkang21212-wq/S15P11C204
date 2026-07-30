@@ -8,7 +8,8 @@ import sys
 import fakeredis
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from chatai.summary import SummaryRejected, SummaryService, is_reaction
+from chatai.reaction import is_reaction
+from chatai.summary import SummaryRejected, SummaryService
 from chatai.window import BroadcastWindow
 
 T0 = 1_700_000_000_000

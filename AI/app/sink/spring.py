@@ -74,6 +74,14 @@ class SpringSink:
         self.base_url = base_url
         self.enabled = bool(base_url)
 
+        # WS 세션 id(문자열) -> broadcast_sessions.id(숫자)
+        #
+        # 프론트가 만드는 세션 id는 탭 충돌을 피하려는 임의 문자열이라 Spring의
+        # 방송 세션과 아무 관계가 없다. 저장하려면 숫자 id가 필요한데 AI는 그 값을
+        # 알 방법이 없어서, 핸드셰이크에서 받아 여기에 묶어둔다.
+        self._session_ids: dict[str, int] = {}
+        self._session_lock = threading.Lock()
+
         self._transcripts: queue.Queue = queue.Queue(maxsize=SPRING_QUEUE_MAX)
         self._alerts: queue.Queue = queue.Queue(maxsize=SPRING_QUEUE_MAX)
         self._promises: queue.Queue = queue.Queue(maxsize=SPRING_QUEUE_MAX)
@@ -114,21 +122,46 @@ class SpringSink:
 
     # --- 외부에서 부르는 것 ---
 
+    def bind_session(self, session_id: str, broadcast_session_id: int) -> None:
+        """핸드셰이크에서 받은 Spring 방송 세션 번호를 묶는다."""
+        with self._session_lock:
+            self._session_ids[session_id] = broadcast_session_id
+
+    def unbind_session(self, session_id: str) -> None:
+        with self._session_lock:
+            self._session_ids.pop(session_id, None)
+
+    def release_session_later(self, session_id: str) -> None:
+        """세션이 끊긴 뒤 잠시 두었다가 정리한다.
+
+        끊는 즉시 풀면 아직 큐에 남아 있는 전사 배치가 보낼 URL을 잃는다.
+        배치 주기와 재시도 백오프를 합친 것보다 넉넉히 기다린다.
+        """
+        delay = SPRING_BATCH_SEC + SPRING_TIMEOUT * (SPRING_MAX_RETRIES + 1)
+        timer = threading.Timer(delay, self.unbind_session, args=(session_id,))
+        timer.daemon = True
+        timer.start()
+
+    def _broadcast_session_id(self, session_id: str) -> Optional[int]:
+        with self._session_lock:
+            return self._session_ids.get(session_id)
+
     def send_transcript(self, tr: Transcript) -> None:
-        self._offer(self._transcripts, {
-            "sessionId": tr.session_id,
-            "seq": tr.seq,
+        self._offer(self._transcripts, (tr.session_id, {
             "text": tr.text,
             "startedAt": _iso(tr.start_ts),
             "endedAt": _iso(tr.end_ts),
-            "forced": tr.forced,
-        })
+        }))
 
     def send_dictionary_alert(self, tr: Transcript, hits: list[Hit]) -> None:
+        """경고에 발화 원문을 함께 보낸다.
+
+        경고는 즉시 전송이고 전사는 배치라 경고가 자기 전사보다 먼저 도착한다.
+        Spring은 이 text로 전사를 Upsert한 뒤 위험 발언을 붙이므로, 두 스트림의
+        도착 순서를 맞출 필요가 없다.
+        """
         worst = max(hits, key=lambda h: h.rank)
-        self._offer(self._alerts, {
-            "sessionId": tr.session_id,
-            "seq": tr.seq,
+        self._offer(self._alerts, (tr.session_id, {
             "source": "DICTIONARY",
             "severity": worst.severity.upper(),
             "category": _risk_category(worst.category),
@@ -136,18 +169,10 @@ class SpringSink:
             "startedAt": _iso(tr.start_ts),
             "endedAt": _iso(tr.end_ts),
             "reason": None,
-            "matches": [
-                {"word": h.matched, "severity": h.severity.upper(),
-                 "category": _risk_category(h.category),
-                 "start": h.start, "end": h.end}
-                for h in hits
-            ],
-        })
+        }))
 
     def send_llm_alert(self, v: Verdict) -> None:
-        self._offer(self._alerts, {
-            "sessionId": v.session_id,
-            "seq": v.seq,
+        self._offer(self._alerts, (v.session_id, {
             "source": "LLM",
             "severity": v.risk.upper(),
             "category": _risk_category(v.category),
@@ -155,24 +180,18 @@ class SpringSink:
             "startedAt": _iso(v.start_ts),
             "endedAt": _iso(v.end_ts),
             "reason": v.reason,
-            "matches": [],
-        })
+        }))
 
     def send_promise(self, p: Promise) -> None:
         """약속은 경고와 같은 큐를 쓴다. 건수가 적고 유실되면 안 되는 점이 같다."""
-        self._offer(self._promises, {
-            "sessionId": p.session_id,
-            "seq": p.seq,
+        self._offer(self._promises, (p.session_id, {
             "content": p.content,
             "rawText": p.raw_text,
-            "deadlineText": p.deadline_text,
             # 한국어 기한 표현은 AI가 절대 시각으로 바꿔서 보낸다.
             # Spring이 "2주 안"을 파싱하게 두면 안 된다.
             "deadlineAt": _iso(p.deadline_at) if p.deadline_at else None,
-            "condition": p.condition,
-            "confidence": round(p.confidence, 3),
             "spokenAt": _iso(p.spoken_at),
-        })
+        }))
 
     def stop(self, timeout: float = 5.0) -> None:
         self._stopping.set()
@@ -183,7 +202,8 @@ class SpringSink:
 
     # --- 내부 ---
 
-    def _offer(self, q: queue.Queue, payload: dict) -> None:
+    def _offer(self, q: queue.Queue, payload: tuple) -> None:
+        """payload는 (WS 세션 id, 본문) 쌍이다. 세션 id는 보낼 URL을 정하는 데 쓴다."""
         if not self.enabled:
             return
         try:
@@ -199,7 +219,7 @@ class SpringSink:
 
     def _transcript_worker(self) -> None:
         """일정 개수가 모이거나 일정 시간이 지나면 묶어서 보낸다."""
-        batch: list[dict] = []
+        batch: list[tuple] = []
         last_flush = time.monotonic()
 
         while not self._stopping.is_set():
@@ -224,27 +244,50 @@ class SpringSink:
         if batch:
             self._flush_transcripts(batch)
 
-    def _flush_transcripts(self, batch: list[dict]) -> None:
-        if self._post(SPRING_TRANSCRIPT_PATH, {"items": batch}):
-            self.sent_transcripts += len(batch)
+    def _flush_transcripts(self, batch: list[tuple]) -> None:
+        """세션마다 URL이 다르므로 묶어서 세션별로 보낸다."""
+        by_session: dict[str, list[dict]] = {}
+        for session_id, item in batch:
+            by_session.setdefault(session_id, []).append(item)
+
+        for session_id, items in by_session.items():
+            path = self._path(SPRING_TRANSCRIPT_PATH, session_id)
+            if path and self._post(path, {"items": items}):
+                self.sent_transcripts += len(items)
 
     def _alert_worker(self) -> None:
         while not self._stopping.is_set():
             try:
-                payload = self._alerts.get(timeout=0.2)
+                session_id, payload = self._alerts.get(timeout=0.2)
             except queue.Empty:
                 continue
-            if self._post(SPRING_ALERT_PATH, payload):
+            path = self._path(SPRING_ALERT_PATH, session_id)
+            if path and self._post(path, payload):
                 self.sent_alerts += 1
 
     def _promise_worker(self) -> None:
         while not self._stopping.is_set():
             try:
-                payload = self._promises.get(timeout=0.2)
+                session_id, payload = self._promises.get(timeout=0.2)
             except queue.Empty:
                 continue
-            if self._post(SPRING_PROMISE_PATH, payload):
+            path = self._path(SPRING_PROMISE_PATH, session_id)
+            if path and self._post(path, payload):
                 self.sent_promises += 1
+
+    def _path(self, template: str, session_id: str) -> Optional[str]:
+        """방송 세션 번호가 묶여 있지 않으면 보낼 곳이 없다.
+
+        프론트가 핸드셰이크에 broadcastSessionId를 넣지 않은 경우다. 감지와 프론트
+        전송은 그대로 돌고 Spring 저장만 건너뛴다.
+        """
+        broadcast_session_id = self._broadcast_session_id(session_id)
+        if broadcast_session_id is None:
+            self.dropped += 1
+            log.warning("방송 세션 번호가 없어 Spring 전송을 건너뜁니다: session_id=%s",
+                        session_id)
+            return None
+        return template.format(session_id=broadcast_session_id)
 
     def _post(self, path: str, payload: dict) -> bool:
         for attempt in range(SPRING_MAX_RETRIES + 1):

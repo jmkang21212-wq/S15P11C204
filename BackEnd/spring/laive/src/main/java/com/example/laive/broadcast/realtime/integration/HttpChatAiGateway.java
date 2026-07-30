@@ -2,6 +2,7 @@ package com.example.laive.broadcast.realtime.integration;
 
 import com.example.laive.broadcast.realtime.config.ChatAiProperties;
 import com.example.laive.broadcast.realtime.domain.ChatAiIngestResult;
+import com.example.laive.broadcast.realtime.domain.ChatAiQuestionsResult;
 import com.example.laive.broadcast.realtime.domain.IngestChat;
 import com.example.laive.broadcast.realtime.domain.SentimentLabel;
 import com.example.laive.broadcast.realtime.domain.SentimentWindow;
@@ -9,9 +10,11 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -76,6 +79,49 @@ public class HttpChatAiGateway implements ChatAiGateway {
         return Optional.of(new ChatAiIngestResult(
                 toLabels(sessionId, chats.size(), response.results()),
                 toWindow(response.window())
+        ));
+    }
+
+    /**
+     * 반복 질문 Top N을 폴링한다(계약 §3).
+     *
+     * <p>exclude 파라미터는 쓰지 않는다 — DB에 저장하는 구성에서 exclude로 걸러 받으면
+     * 답변 완료한 질문이 응답에서 빠져 세션 리포트에서도 사라진다. 전량 받아
+     * UPSERT하고 노출은 DB에서 거른다.
+     */
+    @Override
+    public Optional<ChatAiQuestionsResult> getQuestions(long sessionId, int limit) {
+        QuestionsResponseBody response;
+        try {
+            response = restClient.get()
+                    .uri("/broadcasts/{sessionId}/questions?limit={limit}", sessionId, limit)
+                    .headers(this::authorize)
+                    .retrieve()
+                    .body(QuestionsResponseBody.class);
+        } catch (HttpClientErrorException.NotFound notFound) {
+            // 계약: 404 = ingest가 들어온 적 없는 방송. PREPARING 세션 폴링에서
+            // 매 주기 반복되는 정상 경로라 warn으로 남기면 로그가 도배된다.
+            log.debug("chat-ai questions 404(ingest 이력 없음): sessionId={}", sessionId);
+            return Optional.empty();
+        } catch (RestClientException exception) {
+            log.warn("chat-ai questions 폴링 실패, 이번 주기를 건너뜁니다: sessionId={} cause={}",
+                    sessionId, exception.getClass().getSimpleName());
+            return Optional.empty();
+        }
+        if (response == null) {
+            log.warn("chat-ai questions 응답이 비어 있습니다: sessionId={}", sessionId);
+            return Optional.empty();
+        }
+
+        if (response.pendingEmbedding() != null && response.pendingEmbedding() > 0) {
+            log.debug("chat-ai 질문 집계에 미반영 대기 건이 있습니다(다음 폴링이 따라잡음): sessionId={} pending={}",
+                    sessionId, response.pendingEmbedding());
+        }
+        return Optional.of(new ChatAiQuestionsResult(
+                toQuestions(sessionId, response.questions()),
+                response.totalQuestions() == null ? 0 : response.totalQuestions(),
+                response.pendingEmbedding() == null ? 0 : response.pendingEmbedding(),
+                response.updatedAt() == null ? null : Instant.ofEpochMilli(response.updatedAt())
         ));
     }
 
@@ -163,6 +209,43 @@ public class HttpChatAiGateway implements ChatAiGateway {
         return window.windowSec() == null ? 180 : window.windowSec();
     }
 
+    /**
+     * 질문 목록을 도메인 타입으로 바꾼다. 필수 필드가 빠진 항목은 그 항목만 버린다 —
+     * 목록 하나 때문에 나머지 49건의 반영을 막을 이유가 없다.
+     */
+    private List<ChatAiQuestionsResult.Question> toQuestions(long sessionId, List<QuestionBody> bodies) {
+        if (bodies == null) {
+            return List.of();
+        }
+        List<ChatAiQuestionsResult.Question> questions = new ArrayList<>(bodies.size());
+        for (QuestionBody body : bodies) {
+            if (body == null || body.questionId() == null || body.text() == null
+                    || body.askers() == null || body.firstAskedAt() == null || body.lastAskedAt() == null) {
+                log.warn("chat-ai 질문 항목에 필수 필드가 없어 버립니다: sessionId={} item={}", sessionId, body);
+                continue;
+            }
+            questions.add(new ChatAiQuestionsResult.Question(
+                    body.questionId(),
+                    body.text(),
+                    toQuestionType(body.type()),
+                    body.askers(),
+                    body.messages() == null ? body.askers() : body.messages(),
+                    Instant.ofEpochMilli(body.firstAskedAt()),
+                    Instant.ofEpochMilli(body.lastAskedAt())
+            ));
+        }
+        return questions;
+    }
+
+    /** FAQ/CONTEXT만 통과시킨다. 모르는 값은 "판정 전"과 같은 null로 눌러쓴다. */
+    private String toQuestionType(String type) {
+        if (type == null || type.equals("FAQ") || type.equals("CONTEXT")) {
+            return type;
+        }
+        log.warn("모르는 질문 타입입니다(계약 버전 확인 필요): {}", type);
+        return null;
+    }
+
     private void authorize(HttpHeaders headers) {
         if (properties.token() != null && !properties.token().isBlank()) {
             headers.setBearerAuth(properties.token());
@@ -194,6 +277,27 @@ public class HttpChatAiGateway implements ChatAiGateway {
             Double engagement,
             Map<String, Double> distribution,
             String dominant
+    ) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record QuestionsResponseBody(
+            List<QuestionBody> questions,
+            Long totalQuestions,
+            Long pendingEmbedding,
+            Long updatedAt
+    ) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record QuestionBody(
+            Long questionId,
+            String text,
+            String type,
+            Integer askers,
+            Integer messages,
+            Long firstAskedAt,
+            Long lastAskedAt
     ) {
     }
 }

@@ -853,9 +853,14 @@ Access Token과 Refresh Token은 `PLATFORM_ACCOUNTS`에 암호화하여 저장�
     },
     "repeatedQuestions": [
       {
-        "questionId": 81,
-        "question": "오늘 몇 시까지 하세요?",
-        "occurrenceCount": 42
+        "questionId": 1753690000000007,
+        "text": "오늘 몇 시까지 하세요?",
+        "type": "FAQ",
+        "askers": 42,
+        "messages": 51,
+        "reasked": false,
+        "firstAskedAt": "2026-07-21T12:06:40Z",
+        "lastAskedAt": "2026-07-21T13:03:20Z"
       }
     ],
     "lastEventId": "1753089600123-0"
@@ -878,7 +883,28 @@ Access Token과 Refresh Token은 `PLATFORM_ACCOUNTS`에 암호화하여 저장�
 - `analyzedChat`이 0이면 `dominant`와 `distribution`은 `null`이다. 채팅이 없거나 분류 호출이 계속 실패한 상태다.
 - `engagement`는 시청자 수를 알 수 없는 동안 `null`일 수 있다(예시의 `0.214`처럼 항상 숫자가 아니다). 프론트는 null을 처리해야 한다.
 
-`briefings`와 `repeatedQuestions`는 위험 발언 파이프라인(13.4~13.5)과 반복 질문 폴링(13.6) 구현 전까지 **항상 빈 배열**이다. 필드를 미리 두는 이유는 프론트가 스키마를 한 번만 맞추면 되기 때문이다.
+`briefings`는 위험 발언 파이프라인(13.4~13.5) 구현 전까지 **항상 빈 배열**이다. 필드를 미리 두는 이유는 프론트가 스키마를 한 번만 맞추면 되기 때문이다.
+
+`repeatedQuestions`는 13.6 폴링이 DB에 쌓은 것 중 **답변 완료(dismissed)가 아닌 질문을 askers 내림차순으로 최대 50건** 내려보낸다 (2026-07-30 Spring측 구현 — 단 AI측 라우트가 아직 없어 그 전까지는 빈 배열이다).
+
+- `questionId` — AI가 발급하는 불투명 식별자. **16자리 정수**이므로 프론트는 반드시 number 그대로 다루되 해석하지 말 것(JS Number 정밀도 2^53 안이다).
+- `text` — 질문 묶음의 대표 표현. 폴링마다 바뀔 수 있다.
+- `type` — `FAQ`(화면을 안 봐도 답할 수 있음) | `CONTEXT`(지금 화면이 필요함) | `null`(판정 전). **서버는 거르지 않는다** — "전체 / FAQ만" 토글은 프론트 몫이다. FAQ는 소수(실측 상위 30개 중 13개 정도)라 서버가 상위 5개만 내려보내면 필터 후 화면이 비므로 전량을 준다. 상위 N 컷도 프론트가 한다.
+- `askers` — 몇 명이 물었나(유니크). 화면에 표시할 숫자이자 정렬 기준.
+- `messages` — 총 메시지 수. `askers`와 크게 벌어지면 한 명의 도배다.
+- `reasked` — 답변 완료 처리 후 같은 질문이 임계(+10명) 이상 다시 늘어 재노출됐다. "답이 시청자에게 닿지 않았다"는 신호이므로 배지 등으로 구분 표시를 권장한다.
+
+**답변 완료 처리** (2026-07-30 구현):
+
+`POST /broadcast-sessions/{sessionId}/repeated-questions/{questionId}/dismiss`
+
+```json
+{ "success": true, "data": { "questionId": 1753690000000007, "dismissedAt": "2026-07-21T13:05:00Z" } }
+```
+
+- 처리된 질문은 다음 스냅샷부터 `repeatedQuestions`에서 사라진다. 이후 재질문 감지(13.6)로 되살아날 수 있다.
+- **멱등**이다. 이미 처리된 질문에 다시 호출해도 200이며 첫 처리 시각이 온다 — 중복 클릭이 재질문 판정 유예를 재시작하지 않는다.
+- `404` — 세션이 없거나 타인 세션이거나(존재를 숨긴다), 그 세션에 해당 `questionId`가 없다.
 
 `lastEventId`는 해당 세션 Redis Stream의 최신 이벤트 ID다. 아직 생성된 이벤트가 없으면 `"0-0"`을 반환한다. 폴링 체제에서는 소비자가 없지만, WebSocket(10.7)을 되살릴 때 프론트 스키마가 바뀌지 않도록 유지한다.
 
@@ -1444,7 +1470,7 @@ SC-11의 채널명·태그 검색, 카테고리 필터, 규모 필터를 지원�
 | Spring → 채팅 AI | POST | `/broadcasts/{sessionId}/ingest` | 1초 배치 채팅 분류와 실시간 윈도우 지표 (구현·검증 완료 — 13.6) |
 | Spring → 채팅 AI | POST | `/broadcasts/{sessionId}/summary` | LLM 여론 요약(보류 — AI측 구현됨, Spring 호출부 미구현) |
 | Spring → 채팅 AI | DELETE | `/broadcasts/{sessionId}` | 방송 종료 시 윈도우·요약 캐시 정리 (구현·검증 완료) |
-| Spring → 채팅 AI | GET | `/broadcasts/{sessionId}/questions` | 반복 질문 Top N 폴링(양측 미구현 — 계약은 `AI/CHAT_AI_API.md` §3) |
+| Spring → 채팅 AI | GET | `/broadcasts/{sessionId}/questions` | 반복 질문 Top N 폴링(Spring측 구현 완료, AI측 라우트 미구현 — 계약은 `AI/CHAT_AI_API.md` §3) |
 | Spring → FastAPI | POST | `/internal/v1/ai/promise-detection` | STT에서 약속 후보 추출 |
 | Spring → FastAPI | POST | `/internal/v1/ai/growth-actions` | 성장 목표의 다음 액션 제안 |
 
@@ -1746,18 +1772,20 @@ LLM 여론 요약 (보류 — 2026-07-29, 사유 갱신 2026-07-30):
 
 3분 주기 스케줄러는 `{"mode":"AUTO"}`, 프론트 버튼은 `{"mode":"MANUAL"}`로 호출한다. Spring은 성공 응답의 `summary`로 `LIVE_BRIEFINGS(CHAT_SUMMARY)`를 생성한다. 윈도우 채팅 부족(`422`)과 쿨다운·중복 호출(`409`)은 정상 거절이므로 오류로 기록하지 않는다.
 
-반복 질문 분석 (계약 개정 2026-07-30, 양측 미구현):
+반복 질문 분석 (계약 개정 2026-07-30, Spring측 구현 완료):
 
-`GET /broadcasts/{sessionId}/questions?limit=30`
+`GET /broadcasts/{sessionId}/questions?limit=50`
 
-> **개정.** 초안의 `POST /internal/v1/ai/repeated-questions`(Spring이 messages를 실어 보내고 `{question, occurrenceCount}`를 받는 방식)는 폐기됐다. 정본은 `AI/CHAT_AI_API.md` §3 — 채팅은 이미 1초 ingest로 AI에 흘러가고 있으므로 다시 실어 보낼 필요가 없고, **Spring이 10~30초 주기로 위 GET을 폴링**해 Top 질문 목록(`questionId`·`text`·`type`·`askers` 등)을 받는다. 현재 **AI측 라우트와 Spring측 폴링·저장 모두 미구현**이며 계약만 확정된 상태다. 10.6의 `repeatedQuestions`는 이 파이프라인이 붙기 전까지 항상 빈 배열이다.
+> **개정.** 초안의 `POST /internal/v1/ai/repeated-questions`(Spring이 messages를 실어 보내고 `{question, occurrenceCount}`를 받는 방식)는 폐기됐다. 정본은 `AI/CHAT_AI_API.md` §3 — 채팅은 이미 1초 ingest로 AI에 흘러가고 있으므로 다시 실어 보낼 필요가 없고, **Spring이 15초 주기로 위 GET을 폴링**해 Top 질문 목록(`questionId`·`text`·`type`·`askers` 등)을 받는다.
 
-Spring 저장 규칙(정본 §3의 요지):
+> **구현 현황 (2026-07-30).** Spring측은 구현 완료다(`broadcast/questions` 패키지) — 15초 폴링(`RepeatedQuestionPoller`, PREPARING·LIVE 세션 대상), 변경분만 UPSERT, dismiss API(10.6), 재질문 감지 ①②③, 방송 종료 시 `endBroadcast` 직전 마지막 `GET ?limit=50` 마감(`RealtimeSessionLifecycle.stopAndFlush`). **AI측 라우트·임베딩 클러스터링은 미구현**이라 그 전까지 폴링은 404를 받아 조용히 건너뛰고 10.6의 `repeatedQuestions`는 빈 배열이다. 파라미터는 `laive.repeated-questions.*` 설정(폴링 15s / limit 50 / 유예 60s / 임계 +10명)이다.
 
-- `REPEATED_QUESTIONS`는 이력 테이블이 아니라 세션의 현재 Top 질문 상태다. 단 **전량 교체(DELETE+INSERT)는 금지** — 답변 완료(dismissed) 표식이 날아간다. 전량 조회 후 `(session_id, question_id)`로 UPSERT하고, 화면에는 `dismissed = false`만 노출한다.
+Spring 저장 규칙(정본 §3의 요지, V11 스키마로 반영됨):
+
+- `REPEATED_QUESTIONS`는 이력 테이블이 아니라 세션의 현재 Top 질문 상태다. 단 **전량 교체(DELETE+INSERT)는 금지** — 답변 완료(dismissed) 표식이 날아간다. 전량 조회 후 `(session_id, question_id)`로 UPSERT하고, 화면에는 `dismissed_at IS NULL`만 노출한다. 쓰기 부담은 UPSERT의 `WHERE ... IS DISTINCT FROM`으로 값이 그대로인 행을 건드리지 않아 해소했다.
 - `questionId`는 AI가 만드는 **BIGINT 16자리**다(집계 시작 epoch초 × 1,000,000 + 시퀀스). INT 컬럼에 넣으면 넘친다.
-- 답변 완료는 Spring만 기억한다. AI는 dismissed를 모른 채 계속 세므로, 재질문 감지(답변 후 `askers` +10명 재노출, 답변 직후 60초 baseline 유예)는 §3의 3컬럼 알고리즘(`dismissed_at`·`askers_at_dismiss`·`baseline_askers`)을 따른다.
-- 방송 종료 시 `DELETE /broadcasts/{id}` **전에** `GET /questions?limit=50`을 마지막으로 한 번 호출해 최종 수치로 마감한다.
+- 답변 완료는 Spring만 기억한다. AI는 dismissed를 모른 채 계속 세므로, 재질문 감지(답변 후 `askers` +10명 재노출, 답변 직후 60초 baseline 유예, 집계 리셋 방어)는 §3의 3컬럼 알고리즘(`dismissed_at`·`askers_at_dismiss`·`baseline_askers`)을 따른다. 재노출 시 `dismissed_at`을 NULL로 되돌리고 `reexposed_at`을 남긴다 — 10.6의 `reasked`가 이 값이다.
+- 방송 종료 시 `DELETE /broadcasts/{id}` **전에** `GET /questions?limit=50`을 마지막으로 한 번 호출해 최종 수치로 마감한다. 세션 리포트는 이 저장값을 쓰며 **'종료 시점 상위 50개 기준'**이다(top-50 밖 질문은 마지막 목격 값으로 남는다).
 
 ### 13.7 방송 후 분석과 성장 액션
 
@@ -1983,7 +2011,8 @@ ERD가 스트리머 중심으로 수정되었으므로 `ADVERTISER` 역할과 �
 - [ ]  `profile.userRoleCode`와 `emojis`를 저장할 자리. 수집기가 읽고는 있으나 13.3.1 요청과 `CHAT_MESSAGES` 모두 컬럼이 없어 전달하지 못한다. 스트리머 본인 채팅을 여론 집계에서 제외하려면, 이모티콘 밀도를 쓰려면 요청 스키마와 테이블을 함께 늘려야 한다
 - [x]  수집 엔드포인트 2개 구현 (`chat-messages:batch`, `viewer-metrics:batch`). 서비스 토큰 필터 체인(`/internal/**`)과 `X-Request-Id` 멱등 가드를 함께 넣었다. 수집기 자격 발급·상태 보고·공백 보고 Endpoint 3개가 13.3에 추가됐다
 - [x]  **Spring → chat-ai 채팅 분류 파이프라인(13.6 ingest) 구현·E2E 검증 (2026-07-30).** 배치 중계(`CollectionRelayService`)·1초 빈 배치 보충(`RealtimeTicker`)·라벨 저장·Redis window·live-snapshot 중계·종료 DELETE까지 전 구간 확인했다. **주의: `CHATAI_BASE_URL` 미설정 시 경고 한 줄과 함께 no-op으로 기동해 라벨이 전부 NULL로 저장된다** — "파이프라인이 없다"로 오해된 원인이었으므로 로컬 `.env`에도 반드시 설정한다. chat-ai 기동 절차(모델 다운로드 포함)는 `AI/chat-ai/README.md`
-- [ ]  **반복 질문 파이프라인.** 계약은 `AI/CHAT_AI_API.md` §3으로 확정(13.6에 요지 반영)됐으나 AI측 `GET /broadcasts/{id}/questions` 라우트·임베딩 클러스터링과 Spring측 폴링·`REPEATED_QUESTIONS` UPSERT·dismissed 관리 모두 미구현이다
+- [x]  **반복 질문 파이프라인 Spring측 구현 (2026-07-30).** `broadcast/questions` 패키지 — 15초 폴링·변경분만 UPSERT(V11 스키마)·dismiss API·재질문 감지 3컬럼 알고리즘·방송 종료 마감 폴링·live-snapshot 노출(10.6 스키마 정본화)까지. 통합 테스트로 ①②③ 전 시나리오(유예·fallback·리셋 방어·재노출·재-dismiss) 검증 완료
+- [ ]  **반복 질문 파이프라인 AI측.** chat-ai의 `GET /broadcasts/{id}/questions` 라우트와 임베딩 배치 클러스터링이 미구현이다. 그 전까지 Spring 폴링은 404를 받아 조용히 건너뛴다
 - [ ]  **LLM 여론 요약 Spring 호출부.** chat-ai의 `/summary`는 구현이 끝났고(2026-07-30 확인) Spring의 3분 AUTO 스케줄러·수동 MANUAL API·`LIVE_BRIEFINGS(CHAT_SUMMARY)` 저장 경로가 남았다 (13.6 보류 주석 참조)
 - [ ]  Spring의 LLM 클라이언트 선택 — Spring AI의 Spring Boot 4 지원 버전 확인, 미지원 시 GMS OpenAI 호환 Endpoint 직접 호출
 - [ ]  트리거 구간 채팅 원문이 프롬프트 한도를 넘길 때의 압축 규칙 (반복 표현 접기, 표본 추출) 확정
