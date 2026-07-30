@@ -8,13 +8,17 @@ const DEFAULT_SESSION_ID = 9002
  * SC-03 부속: OBS 브라우저 소스용 투명 오버레이 (1920×1080 전제).
  * 시청자 노출용 — 호응도 게이지(FR-F-05)만 표시하고 스트리머 전용 정보는 절대 넣지 않는다.
  *
- * TODO(연동): OBS가 이 URL을 브라우저 소스로 로드. body 투명 배경 설정 필요.
- *   호응도 값은 실제로는 WebSocket으로 실시간 갱신.
+ * 현재 보류 상태다 — 호응도는 스트리머만 확인하기로 정해(2026-07-29) 시청자 노출을
+ * 진행하지 않는다. 타입 정합성만 유지한다.
+ *
+ * TODO(되살릴 때): OBS 브라우저 소스는 앱 밖의 CEF라 JWT·쿠키가 없어 live-snapshot을
+ *   호출할 수 없다. 토큰 기반 공개 엔드포인트가 백엔드에 필요하다.
  */
 export default function OverlayPage(): React.JSX.Element {
   const loader = useCallback(() => getLiveSnapshot(DEFAULT_SESSION_ID), [])
   const { data } = useAsyncData(loader)
-  const engagement = data?.engagement ?? 0
+  // engagement는 0~1 비율(유니크 채터 ÷ 시청자)이라 게이지용 0~100으로 바꾼다.
+  const engagement = Math.round((data?.sentiment.engagement ?? 0) * 100)
 
   return (
     <div data-surface="overlay" className="relative h-screen w-screen bg-transparent">

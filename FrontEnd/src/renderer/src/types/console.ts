@@ -15,10 +15,17 @@ export interface LiveSnapshotSession {
   currentViewers: number
 }
 
+/** 치지직 채팅 수집기 상태. RECONNECTING 구간의 채팅은 유실된다. */
+export type CollectorState = 'RUNNING' | 'RECONNECTING' | 'STOPPED'
+
 export interface ConsoleServices {
+  /** 백엔드는 음성 파이프라인이 없어 항상 DISCONNECTED — 실제 값은 프론트 음성 스트림이 안다. */
   microphone: 'CONNECTED' | 'DISCONNECTED'
+  /** 위와 동일하게 백엔드는 항상 STOPPED. */
   stt: 'RUNNING' | 'STOPPED'
+  /** 채팅 감정 분류 파이프라인 — 최근 여론 스냅샷 갱신 여부로 판단된다. */
   ai: 'RUNNING' | 'STOPPED'
+  collector: CollectorState
 }
 
 export interface Briefing {
@@ -35,10 +42,28 @@ export interface Briefing {
   advice?: string
 }
 
+/** 채팅 감정 8종 (백엔드 SentimentLabel과 동일한 ASCII 코드). */
+export type SentimentLabel =
+  | 'JOY'
+  | 'EXCITEMENT'
+  | 'SUPPORT'
+  | 'SURPRISE'
+  | 'SADNESS'
+  | 'ANGER'
+  | 'CONFUSION'
+  | 'NEUTRAL'
+
+/** chat-ai가 계산한 최근 윈도우(기본 180초)의 여론 지표. */
 export interface Sentiment {
-  positiveRatio: number
-  neutralRatio: number
-  negativeRatio: number
+  windowSec: number
+  /** 윈도우 안에서 분석된 채팅 수 */
+  analyzedChat: number
+  /** 유니크 채터 ÷ 시청자 (0~1). 시청자를 알 수 없으면 null */
+  engagement: number | null
+  /** 최다 감정. analyzedChat이 0이면 null */
+  dominant: SentimentLabel | null
+  /** 감정 코드 → 비율(합 1.0). analyzedChat이 0이면 null */
+  distribution: Partial<Record<SentimentLabel, number>> | null
 }
 
 export interface RepeatedQuestion {
@@ -53,7 +78,5 @@ export interface LiveSnapshot {
   briefings: Briefing[]
   sentiment: Sentiment
   repeatedQuestions: RepeatedQuestion[]
-  /** 실시간 호응도 0~100 (FR-F-05) — OBS 오버레이 노출용. 실제로는 WebSocket으로 갱신. */
-  engagement: number
   lastEventId: string
 }

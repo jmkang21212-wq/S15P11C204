@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { formatCount, formatTime } from '@renderer/lib/format'
+import { formatCount, formatPercent, formatTime } from '@renderer/lib/format'
+import { topSentiments } from '@renderer/lib/sentiment'
 import type { Briefing, BriefingType, LiveSnapshot } from '@renderer/types/console'
 
 interface MiniWidgetProps {
-  /** 세션·여론 등 스냅샷 지표 */
-  data: LiveSnapshot
+  /** 세션·여론 등 스냅샷 지표. 조회 실패 시 null이며 브리핑은 그대로 보여준다. */
+  data: LiveSnapshot | null
   /** 표시할 브리핑 (실시간 + 스냅샷, 최신순) */
   briefings: Briefing[]
   /** HIGH 위험 강조 상태로 렌더 */
@@ -99,6 +100,7 @@ export default function MiniWidget({
   // briefings는 최신순이고 실시간이 스냅샷보다 앞에 있어, 첫 일치가 그 카테고리의 최신이다.
   const current = briefings.find((briefing) => briefing.briefingType === category)
   const isRisk = category === 'RISK' && current !== undefined
+  const shares = data ? topSentiments(data.sentiment) : []
 
   const prev = (): void => setIdx((i) => (i - 1 + total) % total)
   const next = (): void => setIdx((i) => (i + 1) % total)
@@ -115,7 +117,9 @@ export default function MiniWidget({
         </span>
         <span className="flex items-center gap-1.5 text-sm font-bold">
           <span className="opacity-70">👁</span>
-          <span className="font-mono">{formatCount(data.session.currentViewers)}</span>
+          <span className="font-mono">
+            {data ? formatCount(data.session.currentViewers) : '-'}
+          </span>
         </span>
         <button
           type="button"
@@ -126,17 +130,23 @@ export default function MiniWidget({
           ✕
         </button>
       </div>
-      <div className="mb-2.5 flex h-1.5 overflow-hidden rounded-full">
-        <div className="bg-success" style={{ width: `${data.sentiment.positiveRatio * 100}%` }} />
-        <div
-          className="bg-muted-foreground/40"
-          style={{ width: `${data.sentiment.neutralRatio * 100}%` }}
-        />
-        <div
-          className="bg-destructive"
-          style={{ width: `${data.sentiment.negativeRatio * 100}%` }}
-        />
-      </div>
+      {/* 여론은 상위 3종 막대 + 최다 감정 한 줄만 — 상세는 콘솔의 몫이다 */}
+      {shares.length > 0 && (
+        <div className="mb-2.5">
+          <div className="mb-1 flex h-1.5 overflow-hidden rounded-full bg-white/10">
+            {shares.map((share) => (
+              <span
+                key={share.label}
+                className={share.barClass}
+                style={{ width: `${share.ratio * 100}%` }}
+              />
+            ))}
+          </div>
+          <span className="text-micro text-muted-foreground">
+            {shares[0].text} {formatPercent(shares[0].ratio)}
+          </span>
+        </div>
+      )}
 
       {/* 현재 브리핑 카드 (타입별) */}
       <div
