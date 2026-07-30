@@ -1,5 +1,5 @@
 """
-반복 질문 Top N (/questions) — 계약: ../CHAT_AI_API.md 4장
+반복 질문 Top N (/questions) — 계약: ../CHAT_AI_API.md 3장
 
 "같은 걸 묻는 사람이 몇 명인가"를 세어 스트리머에게 답할 거리를 알려준다.
 
@@ -32,7 +32,7 @@
 
 키 스키마 (전부 DB 1, TTL 12시간):
 
-    chat:{bid}:q:seq        STRING  questionId 발급 카운터 (INCR, 재사용 안 함)
+    chat:{bid}:q:idgen      HASH    questionId 발급기 (gen=집계 시작 epoch초, seq=세대 내 시퀀스)
     chat:{bid}:q:text       HASH    qid -> 대표 문장
     chat:{bid}:q:tc:{qid}   HASH    표현 -> 횟수 (대표 문장 산출용)
     chat:{bid}:q:msgs       HASH    qid -> 총 메시지 수
@@ -45,7 +45,9 @@
     chat:{bid}:q:lock       STRING  워커 싱글톤 락
 
 `questionId`는 절대 재사용하지 않는다. Spring이 "7번 지웠음"을 DB에 저장하므로
-ID가 흔들리면 엉뚱한 질문이 숨겨진다.
+ID가 흔들리면 엉뚱한 질문이 숨겨진다. 집계 자체가 TTL 기반이라 카운터도 같이
+사라질 수 있으므로, 단순 INCR 값이 아니라 세대 프리픽스를 섞는다 — 계약 3장
+"questionId 생성 규칙"과 `_next_qid` 참조.
 """
 import json
 import logging
@@ -152,7 +154,7 @@ class QuestionTracker:
 
     def top(self, bid, limit=5, exclude=()):
         """askers 상위 N. exclude된 qid는 제외하고 나서 상위를 뽑으므로
-        지운 자리를 다음 순위가 채운다 (계약 4장)."""
+        지운 자리를 다음 순위가 채운다 (계약 3장)."""
         exclude = {int(x) for x in exclude}
         # 여유분을 더 읽어야 exclude를 빼고도 limit개가 남는다
         raw = self.r.zrevrange(self._k(bid, 'rank'), 0, limit + len(exclude) + 20,
@@ -349,8 +351,7 @@ class QuestionTracker:
                     mat[best] = mat[best] + (v - mat[best]) / max(2, self._msgs(bid, qid) + 1)
                     mat[best] /= np.linalg.norm(mat[best]) + 1e-9
             if qid is None:
-                qid = int(self.r.incr(self._k(bid, 'seq')))
-                self.r.expire(self._k(bid, 'seq'), Q_TTL)
+                qid = self._next_qid(bid)
                 qids.append(qid)
                 mat = v[None, :] if not len(mat) else np.vstack([mat, v])
             self.r.hset(exact_key, norm, qid)
@@ -359,6 +360,26 @@ class QuestionTracker:
 
         self._centroids[bid] = (qids, mat)
         self._evict(bid)
+
+    def _next_qid(self, bid):
+        """questionId = 집계 시작 epoch초 × 1,000,000 + 세대 내 시퀀스 (계약 3장).
+
+        단순 INCR을 id로 쓰면 안 된다 — 집계가 TTL(12시간) 기반이라 Redis
+        유실·만료 후 카운터가 1부터 다시 시작하고, Spring DB에 dismissed로
+        기록된 id가 새 질문에 재부착된다. 세대(집계 시작 시각)를 프리픽스로
+        섞으면 새 집계는 항상 다른 id 공간에서 시작한다.
+
+        gen과 seq를 한 HASH에 두는 이유: 키가 둘이면 하나만 만료됐을 때
+        같은 세대에서 seq가 1부터 다시 시작해 세대 안에서 충돌한다.
+        """
+        key = self._k(bid, 'idgen')
+        pipe = self.r.pipeline(transaction=False)
+        pipe.hsetnx(key, 'gen', int(time.time()))   # 최초 발급 시점 = 집계 시작
+        pipe.hincrby(key, 'seq', 1)
+        pipe.hget(key, 'gen')
+        pipe.expire(key, Q_TTL)
+        _, seq, gen, _ = pipe.execute()
+        return int(gen) * 1_000_000 + int(seq)
 
     def _bump(self, bid, qid, uid, norm, ms):
         """한 건 반영. askers는 SADD 반환값으로 '신규 인원'일 때만 증가시킨다

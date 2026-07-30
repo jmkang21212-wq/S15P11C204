@@ -244,7 +244,7 @@ def summary_get(broadcast_id: str):
 @app.get('/broadcasts/{broadcast_id}/questions', dependencies=[Depends(require_token)])
 def questions_get(broadcast_id: str, limit: int = 5, exclude: str = ''):
     """
-    반복 질문 Top N (계약: ../CHAT_AI_API.md 4장).
+    반복 질문 Top N (계약: ../CHAT_AI_API.md 3장).
 
     exclude: 스트리머가 지운 questionId 목록(쉼표 구분). AI는 무엇이 지워졌는지
     기억하지 않는다 — Spring이 매 요청에 실어 보내고, AI는 제외한 뒤 상위를

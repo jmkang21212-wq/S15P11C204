@@ -104,11 +104,10 @@ def test_spam_counts_one_asker():
     tr = make()
     feed(tr, 'b', [('spammer', '오늘 몇 시까지 하세요?')] * 10)
     res = tr.top('b', limit=5, exclude=())
-    tr.r.zadd('chat:b:q:rank', {'1': 1})          # Q_MIN_ASKERS 우회용 확인
-    q = tr.top('b', limit=5, exclude=())['questions']
+    qid = int(next(iter(tr.r.hkeys('chat:b:q:text'))))
     assert res['totalQuestions'] == 1
-    assert tr.r.scard('chat:b:q:a:1') == 1
-    assert int(tr.r.hget('chat:b:q:msgs', 1)) == 10
+    assert tr.r.scard(f'chat:b:q:a:{qid}') == 1
+    assert int(tr.r.hget('chat:b:q:msgs', qid)) == 10
 
 
 def test_min_askers_hides_rare():
@@ -143,15 +142,81 @@ def test_qid_stable_across_changes():
 def test_qid_never_reused():
     tr = make()
     feed(tr, 'b', [('u1', '오늘 몇 시까지 하세요?')])
-    tr.r.hdel('chat:b:q:text', 1)                 # 클러스터 제거 흉내
+    qid = int(next(iter(tr.r.hkeys('chat:b:q:text'))))
+    tr.r.hdel('chat:b:q:text', qid)               # 클러스터 제거 흉내
     feed(tr, 'b', [('u2', '마우스 뭐 쓰세요?')])
-    assert int(tr.r.get('chat:b:q:seq')) == 2, '제거된 id를 재사용했다'
+    assert int(tr.r.hget('chat:b:q:idgen', 'seq')) == 2, '제거된 id를 재사용했다'
+
+
+def _at(epoch_sec):
+    """chatai.questions의 시계를 고정한다. 반환값은 원복용 원본 함수."""
+    import chatai.questions as qmod
+    real = qmod.time.time
+    qmod.time.time = lambda: float(epoch_sec)
+    return real
+
+
+def test_qid_follows_contract_format():
+    """계약 3장: questionId = 집계 시작 epoch초 × 1,000,000 + 세대 내 시퀀스."""
+    import chatai.questions as qmod
+    real = _at(1_753_690_000)
+    try:
+        tr = make()
+        feed(tr, 'b', [(f'u{i}', '오늘 몇 시까지 하세요?') for i in range(3)])
+        qid = tr.top('b', limit=5, exclude=())['questions'][0]['questionId']
+        assert qid == 1_753_690_000 * 1_000_000 + 1, qid
+    finally:
+        qmod.time.time = real
+
+
+def test_qid_generation_collision_avoided():
+    """Redis 유실 후 seq가 1부터 재시작해도 세대 프리픽스가 달라 이전 세대의
+    id와 충돌하지 않는다 — dismissed 기록이 새 질문을 숨기면 안 된다 (계약 3장)."""
+    import chatai.questions as qmod
+    real = _at(1_753_690_000)
+    try:
+        tr = make()
+        feed(tr, 'b', [(f'u{i}', '오늘 몇 시까지 하세요?') for i in range(3)])
+        old = tr.top('b', limit=5, exclude=())['questions'][0]['questionId']
+
+        tr.r.flushall()                            # TTL 만료·Redis 유실 흉내
+        tr._centroids.clear()
+        _at(1_753_690_060)                         # 새 집계는 나중 시각에 시작
+
+        feed(tr, 'b', [(f'v{i}', '내일도 방송해요?') for i in range(3)])
+        new = tr.top('b', limit=5, exclude=())['questions'][0]['questionId']
+        assert new != old, '유실 후 첫 질문에 이전 세대의 id가 재부착됐다'
+        assert new == 1_753_690_060 * 1_000_000 + 1, new
+    finally:
+        qmod.time.time = real
+
+
+def test_qid_generation_survives_restart():
+    """프로세스 재시작은 세대 교체가 아니다 — Redis에 남은 세대를 이어가야
+    폴링 중인 Spring이 같은 질문을 같은 id로 계속 본다."""
+    import chatai.questions as qmod
+    real = _at(1_753_690_000)
+    try:
+        tr = make()
+        feed(tr, 'b', [(f'u{i}', '오늘 몇 시까지 하세요?') for i in range(3)])
+
+        _at(1_753_693_600)                         # 1시간 뒤 재시작
+        tr2 = QuestionTracker(tr.r, fake_embed)    # 같은 Redis, 새 프로세스
+        feed(tr2, 'b', [(f'v{i}', '마우스 뭐 쓰세요?') for i in range(3)])
+
+        qids = {q['text']: q['questionId']
+                for q in tr2.top('b', limit=5, exclude=())['questions']}
+        assert qids['오늘 몇 시까지 하세요?'] == 1_753_690_000 * 1_000_000 + 1
+        assert qids['마우스 뭐 쓰세요?'] == 1_753_690_000 * 1_000_000 + 2, \
+            '재시작이 새 세대를 열었다 — 같은 집계는 같은 세대를 이어가야 한다'
+    finally:
+        qmod.time.time = real
 
 
 # ---------------------------------------------------------------- exclude
 
 def test_exclude_promotes_next():
-    """지운 자리를 다음 순위가 채워야 한다 (계약 4장)."""
+    """지운 자리를 다음 순위가 채워야 한다 (계약 3장)."""
     tr = make()
     for n, text in [(6, '언제 끝나요?'), (5, '마우스 뭐 쓰세요?'),
                     (4, '내일도 방송해요?'), (3, '합방 언제 해요?')]:
