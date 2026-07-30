@@ -38,6 +38,29 @@ from app.stt.groq_stt import Transcript
 
 log = logging.getLogger(__name__)
 
+# 감지기 카테고리 -> Spring RISK_EVENTS.risk_category
+#
+# 두 쪽의 어휘가 다르다. 감지기는 판정에 필요한 만큼 세분화하고(threat, aggressive),
+# Spring은 ck_risk_events_risk_category가 정한 6종만 받는다. 여기서 맞춰 보내지
+# 않으면 Spring이 INSERT에서 제약 위반으로 실패한다.
+#
+# 대응하는 값이 없는 것은 OTHER로 보낸다. 위험 자체를 버리는 것보다 낫고,
+# 원래 카테고리는 reason과 text에 남는다.
+_RISK_CATEGORY = {
+    "profanity": "PROFANITY",
+    "insult": "DEFAMATION",
+    "discrimination": "DISCRIMINATION",
+    "sexual": "SEXUAL",
+    "harassment": "SEXUAL",
+    "threat": "OTHER",
+    "aggressive": "OTHER",
+}
+
+
+def _risk_category(category: str) -> str:
+    """Spring이 받는 카테고리로 바꾼다. 모르는 값은 OTHER."""
+    return _RISK_CATEGORY.get((category or "").lower(), "OTHER")
+
 
 def _iso(ts: float) -> str:
     """epoch 초 -> ISO8601 UTC. Java의 Instant.parse()가 그대로 받는다."""
@@ -108,14 +131,15 @@ class SpringSink:
             "seq": tr.seq,
             "source": "DICTIONARY",
             "severity": worst.severity.upper(),
-            "category": worst.category,
+            "category": _risk_category(worst.category),
             "text": tr.text,
             "startedAt": _iso(tr.start_ts),
             "endedAt": _iso(tr.end_ts),
             "reason": None,
             "matches": [
                 {"word": h.matched, "severity": h.severity.upper(),
-                 "category": h.category, "start": h.start, "end": h.end}
+                 "category": _risk_category(h.category),
+                 "start": h.start, "end": h.end}
                 for h in hits
             ],
         })
@@ -126,7 +150,7 @@ class SpringSink:
             "seq": v.seq,
             "source": "LLM",
             "severity": v.risk.upper(),
-            "category": v.category,
+            "category": _risk_category(v.category),
             "text": v.text,
             "startedAt": _iso(v.start_ts),
             "endedAt": _iso(v.end_ts),
