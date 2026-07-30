@@ -8,6 +8,7 @@ import com.example.laive.calendar.service.CalendarEventCommandService;
 import com.example.laive.calendar.service.CalendarEventQueryService;
 import com.example.laive.common.api.ApiResponse;
 import com.example.laive.common.security.JwtStreamerIdExtractor;
+import com.example.laive.promise.service.PromiseQueryService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -34,27 +35,38 @@ public class CalendarEventController {
 
     private final CalendarEventCommandService commandService;
     private final CalendarEventQueryService queryService;
+    private final PromiseQueryService promiseQueryService;
     private final JwtStreamerIdExtractor streamerIdExtractor;
 
     public CalendarEventController(
             CalendarEventCommandService commandService,
             CalendarEventQueryService queryService,
+            PromiseQueryService promiseQueryService,
             JwtStreamerIdExtractor streamerIdExtractor
     ) {
         this.commandService = commandService;
         this.queryService = queryService;
+        this.promiseQueryService = promiseQueryService;
         this.streamerIdExtractor = streamerIdExtractor;
     }
 
-    /** 월간·주간 캘린더에 표시할 일정을 조회한다. 범위는 최대 62일이다. */
+    /**
+     * 월간·주간 캘린더에 표시할 일정과 약속을 조회한다. 범위는 최대 62일이다.
+     *
+     * <p>약속은 기한이 잡힌 진행 중(PENDING·ON_HOLD)인 것만 함께 실린다. 확정 전(DETECTED)
+     * 약속은 올리지 않는다 — 사람이 확정하며 날짜를 넣은 것만 일정으로 본다.
+     */
     @GetMapping
     public ResponseEntity<ApiResponse<CalendarEventListResponse>> list(
             @AuthenticationPrincipal Jwt jwt,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) Instant to
     ) {
-        var events = queryService.getEvents(streamerIdExtractor.extract(jwt), from, to);
-        return ResponseEntity.ok(ApiResponse.success(CalendarEventListResponse.from(events)));
+        long streamerId = streamerIdExtractor.extract(jwt);
+        var events = queryService.getEvents(streamerId, from, to);
+        var promises = promiseQueryService.getCalendarPromises(streamerId, from, to);
+        return ResponseEntity.ok(
+                ApiResponse.success(CalendarEventListResponse.from(events, promises)));
     }
 
     /** SCHEDULED 상태의 새 일정을 만든다. */
