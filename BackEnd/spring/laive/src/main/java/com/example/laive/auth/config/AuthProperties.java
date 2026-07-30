@@ -41,10 +41,11 @@ public record AuthProperties(
         }
     }
 
-    public record RefreshCookie(String name, Duration ttl, boolean secure) {
+    public record RefreshCookie(String name, Duration ttl, boolean secure, Duration rotationGrace) {
         public RefreshCookie {
             name = name == null || name.isBlank() ? "laive_refresh" : name;
             ttl = ttl == null ? Duration.ofDays(14) : ttl;
+            rotationGrace = rotationGrace == null ? Duration.ofSeconds(60) : rotationGrace;
         }
     }
 

@@ -49,8 +49,13 @@ laive:
       name: laive_refresh
       ttl: 14d
       secure: "${AUTH_COOKIE_SECURE:false}"
-    allowed-return-uris: "${OAUTH_ALLOWED_RETURN_URIS:http://localhost:3000/oauth/callback}"
+      # 회전(폐기) 직후 이 시간 안에 온 이전 토큰 재사용은 허용한다.
+      # 메인 창과 미니 모드 창이 같은 쿠키로 동시에 refresh할 때 한쪽이 로그아웃되는 것을 막는다.
+      rotation-grace: 60s
+    allowed-return-uris: "${OAUTH_ALLOWED_RETURN_URIS:http://localhost:5173/oauth/callback}"
     oauth-state-ttl: 5m
+    # 개발용 로그인(POST /api/v1/auth/dev/login). 로컬 개발에서만 true로 켠다.
+    dev-login-enabled: "${DEV_LOGIN_ENABLED:false}"
 
   platform:
     chzzk:
