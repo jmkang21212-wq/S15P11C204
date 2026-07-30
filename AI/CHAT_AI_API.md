@@ -164,7 +164,7 @@ GET /broadcasts/{broadcastId}/summary
 ## 3. 반복 질문 Top N
 
 ```
-GET /broadcasts/{broadcastId}/questions?limit=5&exclude=3,7,12
+GET /broadcasts/{broadcastId}/questions?limit=5&exclude=1753690000000003,1753690000000012
 ```
 
 **폴링 주기 10~30초를 권장한다.** `/ingest`(1초)와 달리 목록은 천천히 변한다.
@@ -172,12 +172,12 @@ GET /broadcasts/{broadcastId}/questions?limit=5&exclude=3,7,12
 | 파라미터 | 기본 | 설명 |
 |---|---|---|
 | `limit` | 5 | 반환 개수 (최대 50) |
-| `exclude` | — | **스트리머가 지운 `questionId`** 목록 (쉼표 구분) |
+| `exclude` | — | **스트리머가 지운 `questionId`** 목록 (쉼표 구분). ⚠ **DB에 저장하는 구성에서는 쓰지 말 것** — 아래 '필터링 방식' 참조 |
 
 ```json
 {
   "questions": [
-    { "questionId": 7, "text": "오늘 몇 시까지 하세요?", "type": "FAQ",
+    { "questionId": 1753690000000007, "text": "오늘 몇 시까지 하세요?", "type": "FAQ",
       "askers": 42, "messages": 51,
       "firstAskedAt": 1753690000123, "lastAskedAt": 1753693400555 }
   ],
@@ -189,7 +189,7 @@ GET /broadcasts/{broadcastId}/questions?limit=5&exclude=3,7,12
 
 | 필드 | 설명 |
 |---|---|
-| `questionId` | **폴링해도 안 바뀌고 재사용되지 않는다.** 삭제 기록의 기준 |
+| `questionId` | **long (BIGINT).** 폴링해도 안 바뀌고 재사용되지 않는다 — 아래 '생성 규칙' 참조. 삭제 기록의 기준 |
 | `text` | 그 묶음에서 가장 많이 쓰인 표현 |
 | `type` | `FAQ` \| `CONTEXT` \| `null`(아직 판정 전) — 아래 참조 |
 | `askers` | **몇 명이 물었나** (유니크 uid). 정렬 기준이자 화면에 표시할 숫자 |
@@ -197,6 +197,26 @@ GET /broadcasts/{broadcastId}/questions?limit=5&exclude=3,7,12
 | `pendingEmbedding` | 아직 반영 안 된 대기 건수. 0이 아니면 목록이 조금 늦은 상태 |
 
 집계 범위는 **방송 전체**다 (여론 요약의 3분 윈도우와 다르다).
+
+### `questionId` 생성 규칙 — 단순 INCR 카운터 금지
+
+"재사용되지 않는다"는 보장은 이 계약의 기둥이다 — Spring의 삭제 기록, UPSERT,
+재노출 판정이 전부 여기에 기댄다. 그런데 집계는 Redis(TTL 12시간)에 있으므로
+Redis INCR을 그대로 id로 쓰면 **Redis 유실·TTL 만료 후 카운터가 1부터 다시
+시작한다.** 같은 방송에서 이미 dismissed 처리된 id가 새 질문에 다시 붙고,
+Spring의 기록이 엉뚱한 질문을 숨기게 된다.
+
+따라서 id에는 **집계 세대가 바뀔 때마다 달라지는 프리픽스**를 섞는다:
+
+```
+questionId = 집계 시작 epoch초 × 1,000,000 + 세대 내 시퀀스
+예: 1753690000에 시작한 집계의 7번째 질문 → 1753690000000007
+```
+
+- Redis가 비워지고 집계가 다시 시작되면 epoch 프리픽스가 달라지므로 이전
+  세대의 id와 충돌하지 않는다
+- 타입은 **long (BIGINT)** — 위 예시처럼 16자리다. INT 컬럼에 넣으면 넘친다
+- Spring은 값을 해석하지 말고 불투명한 식별자로만 다룰 것 (형식은 바뀔 수 있다)
 
 ### `type` — 답할 수 있는 질문인가
 
@@ -244,21 +264,39 @@ T+15초  이미 타이핑 중이던 사람들이 엔터
 기준값은 유예가 끝난 뒤에 기록해야 한다.
 
 ```sql
-dismissed_at     TIMESTAMPTZ   -- 답변 처리 시각
-baseline_askers  INT           -- 유예 종료 후 기록 (NULL이면 아직 미확정)
+dismissed_at       TIMESTAMPTZ  -- 답변 처리 시각
+askers_at_dismiss  INT          -- 답변 시점 askers (②의 fallback)
+baseline_askers    INT          -- 유예 종료 후 기록 (NULL이면 아직 미확정)
 ```
 
 ```
-① 답변 완료      dismissed_at = now,  baseline_askers = NULL
+① 답변 완료      dismissed_at = now, askers_at_dismiss = 현재 askers,
+                 baseline_askers = NULL
 ② 폴링마다       if baseline_askers IS NULL and now - dismissed_at >= 60초:
-                     baseline_askers = 현재 askers      ← 여기서 확정
-③ 재노출 판정    if baseline_askers IS NOT NULL
-                    and 현재 askers - baseline_askers >= 10:
-                     다시 보여준다
+                     baseline_askers = 이번 응답의 askers   ← 여기서 확정
+                     (응답에 그 질문이 없으면 askers_at_dismiss로 확정)
+③ 재노출 판정    if baseline_askers IS NOT NULL:
+                     if 현재 askers < baseline_askers:      ← 집계 리셋 방어
+                         baseline_askers = 현재 askers      (이번 판정은 건너뜀)
+                     elif 현재 askers - baseline_askers >= 10:
+                         다시 보여준다
 ```
+
+**②의 fallback이 필요한 이유**: 답변 처리 후 질문이 top-N 밖으로 밀려나면 폴링
+응답에 안 나와서 baseline이 영영 NULL로 남는다. 그 상태로 두면 한참 뒤 재질문이
+불어나 top-N에 재진입한 시점의 — 이미 급증한 — askers가 baseline이 되어 **정작
+감지해야 할 급증을 놓친다.** `askers_at_dismiss`로 확정하면 유예 구간의 관성
+유입이 재질문으로 조금 과계산되지만, +10 임계가 흡수하고 놓치는 것보다 낫다.
+
+**③의 리셋 방어**: 집계가 리셋되면(Redis 유실, 키 만료 등) askers가 baseline보다
+작아질 수 있다. 그대로 빼면 음수 diff로 판정이 조용히 죽으므로 baseline을 현재
+값으로 재확정하고 넘어간다.
 
 유예 60초는 송출 지연(4~5초) + 인지 시간 + 타이핑 중이던 사람을 덮는 값이다.
 짧으면 오탐이 남고, 길어도 재노출 임계(+10명)를 넘으려면 어차피 시간이 걸린다.
+**유예 60초와 임계 +10명은 문서 끝 '파라미터 기본값' 표에 있다.** 특히 +10명은
+중간 규모 채널 실측 기준이라 **시청자 수백 명대 채널에서는 도달하기 어렵다** —
+규모별 조정(예: 시청자 수 비례)이 필요하면 협의할 것.
 
 #### 필터링 방식 — DB에 저장한다면
 
@@ -266,9 +304,9 @@ baseline_askers  INT           -- 유예 종료 후 기록 (NULL이면 아직 �
 저장한다면 쓰지 않는 편이 낫다.**
 
 ```
-GET /questions?limit=50&exclude=3,7   →  3·7번이 응답에 없음
-Spring이 전량 교체                     →  DB에서도 사라짐
-                                       →  답변해준 질문이 세션 리포트에서 누락
+GET /questions?limit=50&exclude=…03,…07   →  3·7번 질문이 응답에 없음
+Spring이 전량 교체                          →  DB에서도 사라짐
+                                            →  답변해준 질문이 세션 리포트에서 누락
 ```
 
 권장:
@@ -319,6 +357,12 @@ DELETE /broadcasts/{broadcastId}
 
 윈도우·요약 캐시·질문 집계를 정리한다. 방송 종료 시 호출해주면 되고,
 **깜빡해도 된다** — TTL이 알아서 정리한다 (윈도우 10분, 질문 집계 12시간).
+
+**질문을 DB에 저장한다면, DELETE 전에 `GET /questions?limit=50`을 마지막으로
+한 번 호출해 최종 수치로 마감할 것.** DB의 askers는 각 질문이 마지막으로
+폴링에 목격된 시점의 값이다 — 마감 없이 리포트를 만들면 상위권 질문조차 최대
+폴링 주기(30초)만큼 낡은 값으로 남는다. top-50 밖으로 밀려난 질문은 이 마감으로도
+갱신되지 않으므로, 세션 리포트에는 '종료 시점 상위 50개 기준'임을 밝혀 둘 것.
 
 ---
 
@@ -405,3 +449,5 @@ GET /health
 | 질문 노출 최소 인원 | 3명 | 〃 |
 | 질문 임베딩 주기 | 100건 또는 30초 | 〃 |
 | 질문 집계 보관 | 12시간 | 〃 |
+| 재질문 판정 유예 | 답변 후 60초 | Spring 상수 |
+| 재질문 재노출 임계 | +10명 | Spring 상수 (소규모 채널은 조정 필요) |
