@@ -1,5 +1,7 @@
 import { useCallback } from 'react'
 import { useAsyncData } from '@renderer/hooks/useAsyncData'
+import { usePrimaryPlatformAccount } from '@renderer/hooks/usePlatformAccounts'
+import { useAuth } from '@renderer/auth/authStore'
 import { getDashboard } from '@renderer/api/dashboard'
 import { ErrorState } from '@renderer/components/common/StateView'
 import UpcomingBroadcastCard from './components/UpcomingBroadcastCard'
@@ -27,7 +29,12 @@ export default function DashboardPage(): React.JSX.Element {
   const loader = useCallback(() => getDashboard(), [])
   const { data, loading, error, refetch } = useAsyncData(loader)
 
-  // TODO: 인사말의 이름은 GET /streamers/me 프로필에서 가져오기
+  // "지금 방송 시작" 버튼이 누르기 전에 활성/비활성을 판단할 수 있도록 미리 조회해 둔다.
+  // GNB 하단도 같은 저장소를 구독하므로 GET /platform-accounts는 화면 전체에서 1회만 나간다.
+  const { account: platformAccount, loading: platformAccountLoading } = usePrimaryPlatformAccount()
+  // 로그인 시 authStore에 이미 들어와 있는 값이라 별도 조회가 필요 없다(GNB 하단과 같은 소스).
+  const { streamer } = useAuth()
+
   const today = new Date().toLocaleDateString('ko-KR', {
     year: 'numeric',
     month: 'long',
@@ -38,7 +45,9 @@ export default function DashboardPage(): React.JSX.Element {
   return (
     <div className="flex flex-col gap-4 p-8">
       <header>
-        <h1 className="text-2xl font-bold tracking-tight">좋은 저녁이에요, 한별님</h1>
+        <h1 className="text-2xl font-bold tracking-tight">
+          좋은 저녁이에요, {streamer?.nickname ?? '스트리머'}님
+        </h1>
         <p className="mt-1 text-sm text-muted-foreground">{today}</p>
       </header>
 
@@ -51,7 +60,11 @@ export default function DashboardPage(): React.JSX.Element {
       {!loading && data && (
         <>
           <div className="grid grid-cols-2 gap-4">
-            <UpcomingBroadcastCard broadcast={data.upcomingBroadcast} />
+            <UpcomingBroadcastCard
+              broadcast={data.upcomingBroadcast}
+              platformAccount={platformAccount}
+              platformAccountLoading={platformAccountLoading}
+            />
             <RecentSessionCard session={data.recentSession} />
             <PendingPromisesCard promises={data.pendingPromises} count={data.pendingPromiseCount} />
             <WeeklyMetricsCard metrics={data.weeklyMetrics} />

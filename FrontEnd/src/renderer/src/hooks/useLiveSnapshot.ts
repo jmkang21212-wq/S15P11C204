@@ -1,55 +1,85 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { getLiveSnapshot } from '@renderer/api/console'
+import { useAsyncData } from '@renderer/hooks/useAsyncData'
 import type { LiveSnapshot } from '@renderer/types/console'
 
-/** 백엔드가 폴링을 전제로 설계한 주기(2~3초). */
-const POLL_INTERVAL_MS = 2500
+/**
+ * 실시간 콘솔 스냅샷 — `GET /broadcast-sessions/{id}/live-snapshot`.
+ *
+ * `useCurrentSession`과 같은 이유로 owner/follower를 나눈다 — 미니·오버레이 창은 별도
+ * BrowserWindow라 authStore(메모리 전용)를 공유하지 못해 인증된 조회를 할 수 없다.
+ * 'owner'(콘솔 창)만 BE가 설계한 대로 2~3초 폴링하고, 'follower'는 fetch 없이 main의
+ * IPC 릴레이(snapshot:state)만 구독한다.
+ */
+const POLL_INTERVAL_MS = 3_000
 
-interface UseLiveSnapshotResult {
-  data: LiveSnapshot | null
-  /** 첫 응답 전에만 true — 폴링 갱신 때 화면이 깜빡이지 않게 한다. */
+export interface LiveSnapshotResult {
+  snapshot: LiveSnapshot | null
   loading: boolean
   error: Error | null
+  refresh: () => void
 }
 
-/**
- * 실시간 콘솔 스냅샷을 주기적으로 폴링한다 (명세 10.6, WebSocket 대신 폴링).
- *
- * 실패해도 직전 data를 유지한다. 방송 중 한 번의 조회 실패로 화면이 비면
- * 스트리머는 방송이 끊긴 것으로 오해한다.
- */
-export function useLiveSnapshot(sessionId: number): UseLiveSnapshotResult {
-  const [data, setData] = useState<LiveSnapshot | null>(null)
-  const [error, setError] = useState<Error | null>(null)
+const hasSnapshotBridge = typeof window !== 'undefined' && Boolean(window.api?.snapshot)
+
+export function useLiveSnapshot(
+  sessionId: number | null,
+  mode: 'owner' | 'follower' = 'owner'
+): LiveSnapshotResult {
+  const isOwner = mode === 'owner'
+
+  // ── owner: 서버 폴링 ──
+  const loader = useCallback(
+    () => (isOwner && sessionId !== null ? getLiveSnapshot(sessionId) : Promise.resolve(null)),
+    [isOwner, sessionId]
+  )
+  const { data, loading: asyncLoading, error, refetch } = useAsyncData(loader)
+
+  // useAsyncData는 재조회 중 data를 null로 떨어뜨린다 — 3초 폴링과 조합하면 화면 전체가
+  // 계속 스켈레톤으로 깜빡이므로, 마지막 성공값을 렌더 중 조정으로 붙들어 그걸 반환한다.
+  const [lastGood, setLastGood] = useState<LiveSnapshot | null>(null)
+  if (isOwner && !asyncLoading && !error && data !== lastGood) {
+    setLastGood(data)
+  }
 
   useEffect(() => {
+    if (!isOwner || asyncLoading || error) return
+    window.api?.snapshot?.publish(data ?? null)
+  }, [isOwner, data, asyncLoading, error])
+
+  useEffect(() => {
+    if (!isOwner || sessionId === null) return
+    const id = window.setInterval(refetch, POLL_INTERVAL_MS)
+    return () => window.clearInterval(id)
+  }, [isOwner, sessionId, refetch])
+
+  // ── follower: main의 IPC 릴레이 구독 ──
+  const [followerSnapshot, setFollowerSnapshot] = useState<LiveSnapshot | null>(null)
+  const [followerLoading, setFollowerLoading] = useState(hasSnapshotBridge)
+
+  useEffect(() => {
+    if (isOwner || !window.api?.snapshot) return
     let active = true
-    let timer: number | null = null
-
-    const poll = async (): Promise<void> => {
-      try {
-        const snapshot = await getLiveSnapshot(sessionId)
-        if (!active) return
-        setData(snapshot)
-        setError(null)
-      } catch (e) {
-        if (!active) return
-        setError(e instanceof Error ? e : new Error('콘솔 상태를 불러오지 못했어요'))
-      } finally {
-        // 응답이 온 뒤에 다음 호출을 예약한다 — 느린 응답이 쌓이지 않게.
-        if (active) timer = window.setTimeout(() => void poll(), POLL_INTERVAL_MS)
+    window.api.snapshot.getState().then((s) => {
+      if (active) {
+        setFollowerSnapshot(s)
+        setFollowerLoading(false)
       }
-    }
-
-    void poll()
-
+    })
+    const off = window.api.snapshot.onState((s) => setFollowerSnapshot(s))
     return () => {
       active = false
-      if (timer !== null) window.clearTimeout(timer)
+      off()
     }
-  }, [sessionId])
+  }, [isOwner])
 
-  // 첫 응답(성공이든 실패든)이 오기 전까지만 로딩이다. 별도 state를 두지 않아
-  // effect에서 동기 setState를 하지 않는다.
-  return { data, loading: data === null && error === null, error }
+  if (isOwner) {
+    return {
+      snapshot: lastGood,
+      loading: asyncLoading && lastGood === null,
+      error,
+      refresh: refetch
+    }
+  }
+  return { snapshot: followerSnapshot, loading: followerLoading, error: null, refresh: () => {} }
 }

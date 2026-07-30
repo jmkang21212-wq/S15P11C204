@@ -9,9 +9,15 @@
  * UI에도 만들지 않는다.
  */
 
+import type { BroadcastSessionListItem } from '@renderer/types/broadcastSession'
+
 export type ReportStatus = 'PROCESSING' | 'COMPLETED' | 'PARTIAL' | 'FAILED'
 
-export type SegmentType = 'VIEWER_INFLOW' | 'VIEWER_OUTFLOW' | 'CHAT_PEAK' | 'HIGHLIGHT'
+/**
+ * 실제 백엔드(`TriggerType`)는 채팅 급증 감지 하나만 구현돼 있다 — 유입/이탈/하이라이트
+ * 구간은 애초에 명세서 초안에만 있던 값이라 응답에 나오지 않는다.
+ */
+export type SegmentType = 'CHAT_SURGE'
 
 export interface ReportSession {
   sessionId: number
@@ -37,8 +43,6 @@ export interface ViewerTimelinePoint {
 
 export interface ReportSegment {
   reportSegmentId: number
-  /** 매핑된 발화가 없을 수 있어 nullable (DDL상 transcript_id nullable) */
-  transcriptId: number | null
   /** 방송 시작 기준 밀리초 오프셋 */
   startMs: number
   endMs: number
@@ -53,7 +57,8 @@ export interface ReportInsight {
 
 export interface ReportHighlight {
   highlightId: number
-  reportSegmentId: number
+  /** 이 하이라이트를 만든 채팅 급증 구간. 구간 없이 만들어졌으면 null. */
+  triggerId: number | null
   startMs: number
   endMs: number
   /**
@@ -99,13 +104,9 @@ export function isProcessing(result: SessionReportResult): result is SessionRepo
 /**
  * 리포트 목록용 종료 세션 요약.
  * 출처: API 명세서 §10.1 `GET /broadcast-sessions?page&size&status=ENDED`
+ *
+ * @deprecated `BroadcastSessionListItem`(types/broadcastSession.ts)을 직접 쓴다.
+ * BE 응답에는 avgViewers/peakViewers가 없고 대신 category/thumbnailUrl/status가 있다 —
+ * 이 별칭은 기존 화면(SessionCard 등)을 단계적으로 옮기는 동안만 유지한다.
  */
-export interface EndedSessionSummary {
-  sessionId: number
-  title: string
-  startedAt: string
-  endedAt: string
-  avgViewers: number
-  peakViewers: number
-  reportStatus: ReportStatus
-}
+export type EndedSessionSummary = BroadcastSessionListItem

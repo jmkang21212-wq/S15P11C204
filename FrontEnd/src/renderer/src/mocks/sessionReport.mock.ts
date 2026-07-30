@@ -1,5 +1,4 @@
 import type {
-  EndedSessionSummary,
   ReportHighlight,
   ReportInsight,
   ReportSegment,
@@ -8,6 +7,7 @@ import type {
   SessionReportProcessing,
   ViewerTimelinePoint
 } from '@renderer/types/report'
+import type { BroadcastSessionListItem } from '@renderer/types/broadcastSession'
 
 /**
  * SC-06 세션 리포트 목 데이터.
@@ -80,31 +80,27 @@ function buildViewerTimeline(
 const SEGMENTS: ReportSegment[] = [
   {
     reportSegmentId: 401,
-    transcriptId: 701,
     startMs: 46 * MINUTE_MS,
     endMs: 96 * MINUTE_MS,
-    segmentType: 'VIEWER_INFLOW'
+    segmentType: 'CHAT_SURGE'
   },
   {
     reportSegmentId: 402,
-    transcriptId: 742,
     startMs: 87 * MINUTE_MS,
     endMs: 91 * MINUTE_MS,
-    segmentType: 'CHAT_PEAK'
+    segmentType: 'CHAT_SURGE'
   },
   {
     reportSegmentId: 403,
-    transcriptId: null,
     startMs: 150 * MINUTE_MS,
     endMs: 165 * MINUTE_MS,
-    segmentType: 'VIEWER_OUTFLOW'
+    segmentType: 'CHAT_SURGE'
   },
   {
     reportSegmentId: 404,
-    transcriptId: 810,
     startMs: 120 * MINUTE_MS,
     endMs: 122 * MINUTE_MS,
-    segmentType: 'HIGHLIGHT'
+    segmentType: 'CHAT_SURGE'
   }
 ]
 
@@ -132,7 +128,7 @@ const INSIGHTS: ReportInsight[] = [
 const HIGHLIGHTS: ReportHighlight[] = [
   {
     highlightId: 71,
-    reportSegmentId: 402,
+    triggerId: 402,
     startMs: 87 * MINUTE_MS,
     endMs: 87 * MINUTE_MS + 41_000,
     clipUrl: 'https://cdn.example.com/clips/71.mp4',
@@ -140,7 +136,7 @@ const HIGHLIGHTS: ReportHighlight[] = [
   },
   {
     highlightId: 72,
-    reportSegmentId: 402,
+    triggerId: 402,
     startMs: 89 * MINUTE_MS,
     endMs: 89 * MINUTE_MS + 55_000,
     clipUrl: 'https://cdn.example.com/clips/72.mp4',
@@ -148,7 +144,7 @@ const HIGHLIGHTS: ReportHighlight[] = [
   },
   {
     highlightId: 73,
-    reportSegmentId: 404,
+    triggerId: 404,
     startMs: 120 * MINUTE_MS,
     endMs: 120 * MINUTE_MS + 68_000,
     clipUrl: 'https://cdn.example.com/clips/73.mp4',
@@ -156,7 +152,7 @@ const HIGHLIGHTS: ReportHighlight[] = [
   },
   {
     highlightId: 74,
-    reportSegmentId: 401,
+    triggerId: 401,
     startMs: 62 * MINUTE_MS,
     endMs: 62 * MINUTE_MS + 52_000,
     clipUrl: 'https://cdn.example.com/clips/74.mp4',
@@ -328,11 +324,47 @@ export const MOCK_REPORTS: Record<number, SessionReport | SessionReportProcessin
 }
 
 /** 종료된 세션 목록 — 명세서 §10.1 `GET /broadcast-sessions?status=ENDED` 대응 */
-export const MOCK_ENDED_SESSIONS: EndedSessionSummary[] = [
-  { ...SESSIONS[9002], avgViewers: 0, peakViewers: 0, reportStatus: 'PROCESSING' },
-  { ...SESSIONS[9003], avgViewers: 1480, peakViewers: 2260, reportStatus: 'PARTIAL' },
-  { ...SESSIONS[9001], avgViewers: 2105, peakViewers: 3842, reportStatus: 'COMPLETED' },
-  { ...SESSIONS[9004], avgViewers: 0, peakViewers: 0, reportStatus: 'FAILED' },
-  { ...SESSIONS[9005], avgViewers: 1726, peakViewers: 3150, reportStatus: 'COMPLETED' },
-  { ...SESSIONS[9006], avgViewers: 2610, peakViewers: 4764, reportStatus: 'COMPLETED' }
+export const MOCK_ENDED_SESSIONS: BroadcastSessionListItem[] = [
+  {
+    ...SESSIONS[9002],
+    category: '로그라이크',
+    thumbnailUrl: null,
+    status: 'ENDED',
+    reportStatus: 'PROCESSING'
+  },
+  {
+    ...SESSIONS[9003],
+    category: '저챗',
+    thumbnailUrl: null,
+    status: 'ENDED',
+    reportStatus: 'PARTIAL'
+  },
+  {
+    ...SESSIONS[9001],
+    category: '롤토체스',
+    thumbnailUrl: null,
+    status: 'ENDED',
+    reportStatus: 'COMPLETED'
+  },
+  {
+    ...SESSIONS[9004],
+    category: '노래방',
+    thumbnailUrl: null,
+    status: 'ENDED',
+    reportStatus: 'FAILED'
+  },
+  {
+    ...SESSIONS[9005],
+    category: '저챗',
+    thumbnailUrl: null,
+    status: 'ENDED',
+    reportStatus: 'COMPLETED'
+  },
+  {
+    ...SESSIONS[9006],
+    category: '마리오카트',
+    thumbnailUrl: null,
+    status: 'ENDED',
+    reportStatus: 'COMPLETED'
+  }
 ]

@@ -19,7 +19,10 @@ export async function getDashboard(): Promise<DashboardData> {
 // ─── 아래는 mock 데이터 (실제 API 연동 시 제거) ───────────────────────────
 const MOCK_DASHBOARD: DashboardData = {
   upcomingBroadcast: {
-    calendarEventId: 44,
+    // 실제 calendar_events 테이블에 존재하지 않는 임의 값이면 세션 시작(POST /broadcast-sessions)이
+    // CALENDAR_EVENT_NOT_FOUND로 거부된다. 목 데이터일 뿐이라 실제 일정과 연결할 수 없으므로
+    // null로 둔다 — "일정 없이 즉석 시작"과 같은 경로라 세션 자체는 정상 생성된다.
+    calendarEventId: null,
     title: '발로란트 랭크 정복 Day 12',
     startAt: '2026-07-21T12:00:00Z',
     endAt: '2026-07-21T15:00:00Z',

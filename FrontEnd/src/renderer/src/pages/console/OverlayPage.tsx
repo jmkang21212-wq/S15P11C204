@@ -1,9 +1,3 @@
-import { useCallback } from 'react'
-import { useAsyncData } from '@renderer/hooks/useAsyncData'
-import { getLiveSnapshot } from '@renderer/api/console'
-
-const DEFAULT_SESSION_ID = 9002
-
 /**
  * SC-03 부속: OBS 브라우저 소스용 투명 오버레이 (1920×1080 전제).
  * 시청자 노출용 — 호응도 게이지(FR-F-05)만 표시하고 스트리머 전용 정보는 절대 넣지 않는다.
@@ -11,14 +5,13 @@ const DEFAULT_SESSION_ID = 9002
  * 현재 보류 상태다 — 호응도는 스트리머만 확인하기로 정해(2026-07-29) 시청자 노출을
  * 진행하지 않는다. 타입 정합성만 유지한다.
  *
- * TODO(되살릴 때): OBS 브라우저 소스는 앱 밖의 CEF라 JWT·쿠키가 없어 live-snapshot을
- *   호출할 수 없다. 토큰 기반 공개 엔드포인트가 백엔드에 필요하다.
+ * TODO(되살릴 때): OBS 브라우저 소스는 앱 밖의 CEF라 Electron preload(contextBridge)도,
+ *   JWT·쿠키도 없다 — 이 창이 미니 모드처럼 main의 IPC 릴레이를 구독하는 것도,
+ *   live-snapshot을 직접 호출하는 것도 불가능하다. 토큰 기반 공개 엔드포인트가
+ *   백엔드에 필요하다.
  */
 export default function OverlayPage(): React.JSX.Element {
-  const loader = useCallback(() => getLiveSnapshot(DEFAULT_SESSION_ID), [])
-  const { data } = useAsyncData(loader)
-  // engagement는 0~1 비율(유니크 채터 ÷ 시청자)이라 게이지용 0~100으로 바꾼다.
-  const engagement = Math.round((data?.sentiment.engagement ?? 0) * 100)
+  const engagement = 0
 
   return (
     <div data-surface="overlay" className="relative h-screen w-screen bg-transparent">

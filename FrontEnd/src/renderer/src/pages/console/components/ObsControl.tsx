@@ -20,9 +20,10 @@ interface ObsControlProps {
 
 /**
  * 콘솔 상태줄의 OBS 연결·송출 제어.
- * "방송 시작/종료" 버튼이 obs-websocket으로 OBS 송출(StartStream/StopStream)을 제어하고,
+ * "송출 시작/중단" 버튼이 obs-websocket으로 OBS 송출(StartStream/StopStream)을 제어하고,
  * 같은 시점에 음성 스트리밍도 함께 켜고 끈다.
- * (LAIVE 분석 세션 시작/종료 = POST /broadcast-sessions 는 백엔드 연동 ③에서 별도 처리)
+ * LAIVE 분석 세션 시작/종료(POST /broadcast-sessions)는 별개다 — 그건 SessionControl이 맡는다.
+ * 두 개념을 한 라벨로 섞으면 "방송 종료"를 눌렀는데 분석은 계속 도는 상황을 오해하기 쉽다.
  */
 export default function ObsControl({
   onBroadcastStart,
@@ -85,13 +86,13 @@ export default function ObsControl({
 
       {connected ? (
         <>
-          {/* 방송 시작/종료 = OBS 송출 제어 */}
+          {/* OBS 송출 제어 — LAIVE 분석 세션과는 별개(SessionControl 참고) */}
           <Button
             size="sm"
             variant={obs.streaming ? 'destructive' : 'default'}
             onClick={handleStreamToggle}
           >
-            {obs.streaming ? '방송 종료' : '방송 시작'}
+            {obs.streaming ? '송출 중단' : '송출 시작'}
           </Button>
           <Button size="sm" variant="ghost" onClick={() => obs.disconnect()}>
             연결 해제

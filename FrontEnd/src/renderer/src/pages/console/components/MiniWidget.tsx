@@ -117,9 +117,7 @@ export default function MiniWidget({
         </span>
         <span className="flex items-center gap-1.5 text-sm font-bold">
           <span className="opacity-70">👁</span>
-          <span className="font-mono">
-            {data ? formatCount(data.session.currentViewers) : '-'}
-          </span>
+          <span className="font-mono">{data ? formatCount(data.session.currentViewers) : '-'}</span>
         </span>
         <button
           type="button"

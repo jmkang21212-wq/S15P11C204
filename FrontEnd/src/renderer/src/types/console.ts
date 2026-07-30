@@ -3,7 +3,10 @@
  * 및 WebSocket 브리핑 이벤트 페이로드 기준.
  */
 
-export type SessionStatus = 'PREPARING' | 'LIVE' | 'ENDED' | 'FAILED'
+import type { BroadcastStatus } from '@renderer/types/broadcastSession'
+
+/** @deprecated `BroadcastStatus`(types/broadcastSession.ts)를 직접 쓴다. 기존 화면 호환용 별칭. */
+export type SessionStatus = BroadcastStatus
 export type BriefingType = 'RISK' | 'CHAT_SUMMARY' | 'FAQ' | 'PROMISE'
 export type RiskLevel = 'HIGH' | 'MEDIUM' | 'LOW'
 
@@ -44,14 +47,7 @@ export interface Briefing {
 
 /** 채팅 감정 8종 (백엔드 SentimentLabel과 동일한 ASCII 코드). */
 export type SentimentLabel =
-  | 'JOY'
-  | 'EXCITEMENT'
-  | 'SUPPORT'
-  | 'SURPRISE'
-  | 'SADNESS'
-  | 'ANGER'
-  | 'CONFUSION'
-  | 'NEUTRAL'
+  'JOY' | 'EXCITEMENT' | 'SUPPORT' | 'SURPRISE' | 'SADNESS' | 'ANGER' | 'CONFUSION' | 'NEUTRAL'
 
 /** chat-ai가 계산한 최근 윈도우(기본 180초)의 여론 지표. */
 export interface Sentiment {

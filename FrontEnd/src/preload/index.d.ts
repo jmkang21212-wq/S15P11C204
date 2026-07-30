@@ -1,4 +1,6 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
+import type { BroadcastSessionDetail } from '@renderer/types/broadcastSession'
+import type { LiveSnapshot } from '@renderer/types/console'
 
 export type ObsConnStatus = 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED'
 export interface ObsState {
@@ -37,6 +39,10 @@ export interface LaiveApi {
   oauth: OAuthBridge
   /** 실시간 브리핑 중계 (콘솔 → 미니 창). */
   briefing: BriefingBridge
+  /** 진행 중 방송 세션 상태 릴레이 (메인 창 → 미니·오버레이 창). */
+  session: SessionBridge
+  /** 실시간 콘솔 스냅샷 릴레이 (콘솔 창 → 미니·오버레이 창). */
+  snapshot: SnapshotBridge
 }
 
 export interface OAuthBridge {
@@ -56,6 +62,24 @@ export interface BriefingBridge {
   recent: () => Promise<unknown[]>
   /** 중계된 브리핑 구독. 반환 함수 호출로 구독 해제. */
   onNew: (callback: (briefing: unknown) => void) => () => void
+}
+
+export interface SessionBridge {
+  /** owner(메인) 창이 새로 조회한 세션 상태를 다른 창에 전파하도록 main에 넘긴다. */
+  publish: (session: BroadcastSessionDetail | null) => void
+  /** follower(미니·오버레이) 창이 열릴 때 초기값을 받는다. */
+  getState: () => Promise<BroadcastSessionDetail | null>
+  /** 상태 변경 구독. 반환 함수 호출로 구독 해제. */
+  onState: (callback: (session: BroadcastSessionDetail | null) => void) => () => void
+}
+
+export interface SnapshotBridge {
+  /** owner(콘솔) 창이 새로 조회한 스냅샷을 다른 창에 전파하도록 main에 넘긴다. */
+  publish: (snapshot: LiveSnapshot | null) => void
+  /** follower(미니·오버레이) 창이 열릴 때 초기값을 받는다. */
+  getState: () => Promise<LiveSnapshot | null>
+  /** 상태 변경 구독. 반환 함수 호출로 구독 해제. */
+  onState: (callback: (snapshot: LiveSnapshot | null) => void) => () => void
 }
 
 declare global {

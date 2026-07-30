@@ -4,9 +4,13 @@ import { formatMs, formatCount } from '@renderer/lib/format'
 import type { ConsoleServices, LiveSnapshotSession } from '@renderer/types/console'
 import type { UseAudioStreamResult } from '@renderer/hooks/useAudioStream'
 import ObsControl from './ObsControl'
+import SessionControl from './SessionControl'
 
 interface ConsoleStatusBarProps {
-  /** 스냅샷 조회 실패 시 null — 그래도 음성 제어는 계속 쓸 수 있어야 한다. */
+  /** "분석 종료"가 걸 세션 ID. 호출부가 라우트/현재 세션에서 이미 확정한 값이라
+   * 스냅샷 조회 성패와 무관하게 항상 있다. */
+  sessionId: number
+  /** 스냅샷 조회 실패 시 null — 그래도 음성 제어·분석 종료는 계속 쓸 수 있어야 한다. */
   session: LiveSnapshotSession | null
   services: ConsoleServices | null
   onOpenMini: () => void
@@ -31,6 +35,7 @@ function ServiceDot({ label, state }: { label: string; state: DotState }): React
 }
 
 export default function ConsoleStatusBar({
+  sessionId,
   session,
   services,
   onOpenMini,
@@ -51,10 +56,19 @@ export default function ConsoleStatusBar({
 
   return (
     <div className="flex items-center gap-4 border-b bg-card px-6 py-3">
-      {/* LIVE + 경과 시간 */}
+      {/* 상태 + 경과 시간 */}
       <div className="flex items-center gap-2.5">
-        <span className="rounded bg-destructive px-2 py-0.5 text-micro font-bold tracking-wide text-white">
-          ● LIVE
+        <span
+          className={cn(
+            'rounded px-2 py-0.5 text-micro font-bold tracking-wide text-white',
+            !session
+              ? 'bg-muted-foreground'
+              : session.status === 'PREPARING'
+                ? 'bg-warning'
+                : 'bg-destructive'
+          )}
+        >
+          {session ? (session.status === 'PREPARING' ? '● 준비 중' : '● LIVE') : '●'}
         </span>
         <span className="font-mono text-xl font-bold">
           {session ? formatMs(session.elapsedSeconds * 1000) : '--:--'}
@@ -97,7 +111,10 @@ export default function ConsoleStatusBar({
         미니 모드
       </Button>
 
-      {/* OBS 연결 + 방송 시작/종료(OBS 송출 + 음성 분석) */}
+      {/* LAIVE 분석 세션 종료 */}
+      <SessionControl sessionId={sessionId} />
+
+      {/* OBS 연결 + 방송 송출(연동 시 음성 분석도 함께 시작/정지) */}
       <ObsControl onBroadcastStart={audio.start} onBroadcastStop={audio.stop} />
 
       {audio.error && (
