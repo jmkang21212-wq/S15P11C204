@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.laive.broadcast.analysis.repository.mybatis.AnalysisMapper">
+
+    <select id="findSessionRef"
+            resultType="com.example.laive.broadcast.analysis.repository.mybatis.AnalysisSessionRef">
+        SELECT id AS session_id,
+               streamer_id,
+               started_at
+          FROM broadcast_sessions
+         WHERE id = #{sessionId}
+    </select>
+
+    <!--
+      전사는 Upsert다. 위험 경고와 약속은 즉시 전송이고 전사는 배치라 도착 순서가
+      뒤집힌다. 먼저 온 쪽이 행을 만들고 나중 온 쪽은 같은 행을 다시 쓴다.
+      uq_transcripts_session_range (session_id, start_ms, end_ms)가 중복을 막는다.
+
+      xmax = 0이면 이번에 INSERT된 행이다. UPDATE로 처리된 행은 xmax가 0이 아니다.
+      이 값으로 신규와 중복을 구분해 배치 응답의 duplicateCount를 만든다.
+    -->
+    <select id="upsertTranscript" affectData="true" flushCache="true"
+            resultType="com.example.laive.broadcast.analysis.repository.mybatis.TranscriptRow">
+        INSERT INTO transcripts (session_id, start_ms, end_ms, transcript)
+        VALUES (#{sessionId}, #{item.startMs}, #{item.endMs}, #{item.transcript})
+        ON CONFLICT (session_id, start_ms, end_ms) DO UPDATE
+            SET transcript = EXCLUDED.transcript
+        RETURNING id AS transcript_id, (xmax = 0) AS inserted
+    </select>
+
+    <select id="upsertTranscripts" affectData="true" flushCache="true"
+            resultType="com.example.laive.broadcast.analysis.repository.mybatis.TranscriptRow">
+        INSERT INTO transcripts (session_id, start_ms, end_ms, transcript)
+        VALUES
+        <foreach collection="items" item="item" separator=",">
+            (#{sessionId}, #{item.startMs}, #{item.endMs}, #{item.transcript})
+        </foreach>
+        ON CONFLICT (session_id, start_ms, end_ms) DO UPDATE
+            SET transcript = EXCLUDED.transcript
+        RETURNING id AS transcript_id, (xmax = 0) AS inserted
+    </select>
+
+    <select id="insertRiskEvent" resultType="long" affectData="true" flushCache="true">
+        INSERT INTO risk_events (session_id, transcript_id, risk_level, risk_category, advice)
+        VALUES (#{sessionId}, #{transcriptId}, #{riskLevel}, #{riskCategory}, #{advice})
+        RETURNING id
+    </select>
+
+    <select id="insertPromise" resultType="long" affectData="true" flushCache="true">
+        INSERT INTO promises (streamer_id, session_id, transcript_id, content, status, due_date)
+        VALUES (#{streamerId}, #{sessionId}, #{transcriptId}, #{content}, 'DETECTED', #{dueDate})
+        RETURNING id
+    </select>
+
+    <select id="insertBriefing" resultType="long" affectData="true" flushCache="true">
+        INSERT INTO live_briefings (session_id, briefing_type, message)
+        VALUES (#{sessionId}, #{briefingType}, #{message})
+        RETURNING id
+    </select>
+
+</mapper>

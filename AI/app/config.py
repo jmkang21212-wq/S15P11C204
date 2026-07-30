@@ -68,9 +68,11 @@ PROMISE_DEDUP_SEC = 900        # 같은 약속을 15분 내에 반복하면 한 
 # 비어 있으면 전송을 아예 하지 않는다. 스펙 합의 전까지는 이대로 두면 된다.
 SPRING_BASE_URL = os.getenv("SPRING_BASE_URL", "").rstrip("/")
 SPRING_TOKEN = os.getenv("SPRING_TOKEN", "")   # 서버간 인증용
-SPRING_TRANSCRIPT_PATH = "/api/ai/transcripts"
-SPRING_ALERT_PATH = "/api/ai/alerts"
-SPRING_PROMISE_PATH = "/api/ai/promises"
+# Spring의 내부 API 규약(명세 13.1)을 따른다. {sessionId}는 broadcast_sessions.id다.
+# 프론트가 핸드셰이크에 실어 보낸 번호를 그대로 넣는다.
+SPRING_TRANSCRIPT_PATH = "/internal/v1/sessions/{session_id}/transcripts:batch"
+SPRING_ALERT_PATH = "/internal/v1/sessions/{session_id}/risk-events"
+SPRING_PROMISE_PATH = "/internal/v1/sessions/{session_id}/promises"
 
 # 전사는 양이 많고 지연이 상관없어 묶어 보낸다. 경고는 즉시 개별 전송한다.
 SPRING_BATCH_SIZE = 10    # 이만큼 모이면 보낸다
