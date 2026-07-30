@@ -1,32 +1,28 @@
 import { Button } from '@renderer/components/ui/button'
 import { cn } from '@renderer/lib/utils'
 import { formatMs, formatCount } from '@renderer/lib/format'
-import type { LiveSnapshotSession } from '@renderer/types/console'
+import type { ConsoleServices, LiveSnapshotSession } from '@renderer/types/console'
 import type { UseAudioStreamResult } from '@renderer/hooks/useAudioStream'
 import ObsControl from './ObsControl'
 
 interface ConsoleStatusBarProps {
-  session: LiveSnapshotSession
+  /** 스냅샷 조회 실패 시 null — 그래도 음성 제어는 계속 쓸 수 있어야 한다. */
+  session: LiveSnapshotSession | null
+  services: ConsoleServices | null
   onOpenMini: () => void
-  /** 음성 스트리밍 — 마이크·STT·AI 상태와 방송 시작/종료 연동에 함께 쓴다. */
+  /** 음성 스트리밍 — 마이크·STT 상태와 방송 시작/종료 연동에 함께 쓴다. */
   audio: UseAudioStreamResult
 }
 
-function ServiceDot({
-  label,
-  ok,
-  pending
-}: {
-  label: string
-  ok: boolean
-  pending: boolean
-}): React.JSX.Element {
+type DotState = 'ok' | 'pending' | 'off'
+
+function ServiceDot({ label, state }: { label: string; state: DotState }): React.JSX.Element {
   return (
     <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
       <span
         className={cn(
           'size-1.5 rounded-full',
-          ok ? 'bg-success' : pending ? 'bg-warning' : 'bg-muted-foreground'
+          state === 'ok' ? 'bg-success' : state === 'pending' ? 'bg-warning' : 'bg-muted-foreground'
         )}
       />
       {label}
@@ -36,12 +32,22 @@ function ServiceDot({
 
 export default function ConsoleStatusBar({
   session,
+  services,
   onOpenMini,
   audio
 }: ConsoleStatusBarProps): React.JSX.Element {
-  // 마이크·STT·AI는 모두 음성 스트리밍 파이프라인이 살아있을 때만 동작한다.
-  const streaming = audio.status === 'STREAMING'
-  const pending = audio.status === 'CONNECTING'
+  // 마이크·STT는 백엔드가 항상 미연결로 내려준다(음성 파이프라인 미구현).
+  // 실제 상태는 프론트 음성 스트림만 알고 있으므로 그 값을 쓴다.
+  const audioState: DotState =
+    audio.status === 'STREAMING' ? 'ok' : audio.status === 'CONNECTING' ? 'pending' : 'off'
+
+  const collectorState: DotState = !services
+    ? 'off'
+    : services.collector === 'RUNNING'
+      ? 'ok'
+      : services.collector === 'RECONNECTING'
+        ? 'pending'
+        : 'off'
 
   return (
     <div className="flex items-center gap-4 border-b bg-card px-6 py-3">
@@ -51,31 +57,39 @@ export default function ConsoleStatusBar({
           ● LIVE
         </span>
         <span className="font-mono text-xl font-bold">
-          {formatMs(session.elapsedSeconds * 1000)}
+          {session ? formatMs(session.elapsedSeconds * 1000) : '--:--'}
         </span>
       </div>
 
       {/* 현재 시청자 */}
       <div className="flex flex-col border-l pl-4">
         <span className="text-micro text-muted-foreground">현재 시청자</span>
-        <span className="font-mono text-lg font-bold">{formatCount(session.currentViewers)}</span>
+        <span className="font-mono text-lg font-bold">
+          {session ? formatCount(session.currentViewers) : '-'}
+        </span>
       </div>
 
-      {/* 서비스 상태 — 실제 음성 스트리밍 상태를 반영한다 */}
+      {/* 서비스 상태 — 마이크·STT는 프론트 음성 스트림, AI·수집기는 백엔드 스냅샷 */}
       <div className="ml-auto flex items-center gap-3 rounded-lg bg-muted px-3 py-1.5">
-        <ServiceDot label="마이크" ok={streaming} pending={pending} />
-        <ServiceDot label="STT" ok={streaming} pending={pending} />
-        <ServiceDot label="AI" ok={streaming} pending={pending} />
+        <ServiceDot label="마이크" state={audioState} />
+        <ServiceDot label="STT" state={audioState} />
+        <ServiceDot label="AI" state={services?.ai === 'RUNNING' ? 'ok' : 'off'} />
+        {/* RECONNECTING 구간의 채팅은 유실되므로 반드시 보여준다 */}
+        <ServiceDot label="수집기" state={collectorState} />
       </div>
 
       {/* 음성 분석 단독 제어 — OBS 없이도 켜고 끌 수 있게 둔다 */}
       <Button
         size="sm"
-        variant={streaming ? 'secondary' : 'outline'}
-        disabled={pending}
-        onClick={streaming ? audio.stop : audio.start}
+        variant={audio.status === 'STREAMING' ? 'secondary' : 'outline'}
+        disabled={audio.status === 'CONNECTING'}
+        onClick={audio.status === 'STREAMING' ? audio.stop : audio.start}
       >
-        {pending ? '연결 중…' : streaming ? '음성 분석 중지' : '음성 분석 시작'}
+        {audio.status === 'CONNECTING'
+          ? '연결 중…'
+          : audio.status === 'STREAMING'
+            ? '음성 분석 중지'
+            : '음성 분석 시작'}
       </Button>
 
       {/* 미니 모드 = 항상-위 별도 창 열기 (IPC → main) */}
