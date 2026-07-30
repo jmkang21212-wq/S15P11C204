@@ -58,6 +58,19 @@ const api = {
       ipcRenderer.on('session:state', listener)
       return () => ipcRenderer.removeListener('session:state', listener)
     }
+  },
+  /**
+   * 실시간 콘솔 스냅샷 릴레이. main은 값을 검사하지 않고 그대로 전달하므로
+   * 여기서는 unknown으로 받고, 실제 타입은 preload/index.d.ts의 SnapshotBridge가 정의한다.
+   */
+  snapshot: {
+    publish: (snapshot: unknown): void => ipcRenderer.send('snapshot:state', snapshot),
+    getState: (): Promise<unknown> => ipcRenderer.invoke('snapshot:get-state'),
+    onState: (callback: (snapshot: unknown) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, snapshot: unknown): void => callback(snapshot)
+      ipcRenderer.on('snapshot:state', listener)
+      return () => ipcRenderer.removeListener('snapshot:state', listener)
+    }
   }
 }
 

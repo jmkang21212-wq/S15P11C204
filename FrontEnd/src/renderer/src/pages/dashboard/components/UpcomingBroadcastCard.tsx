@@ -41,7 +41,7 @@ export default function UpcomingBroadcastCard({
     try {
       const result = await startSession({
         platformAccountId: platformAccount.platformAccountId,
-        calendarEventId: broadcast.calendarEventId ?? null,
+        calendarEventId: broadcast.calendarEventId,
         title: broadcast.title,
         category: null,
         language: DEFAULT_LANGUAGE

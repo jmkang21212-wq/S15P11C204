@@ -12,6 +12,9 @@ import {
 } from 'lucide-react'
 import { cn } from '@renderer/lib/utils'
 import { PATHS } from '@renderer/routes/paths'
+import { useAuth } from '@renderer/auth/authStore'
+import { usePlatformAccounts } from '@renderer/hooks/usePlatformAccounts'
+import Avatar from '@renderer/components/common/Avatar'
 
 interface NavItem {
   to: string
@@ -50,6 +53,15 @@ export default function GNB({
   liveSessionId
 }: GNBProps): React.JSX.Element {
   const navigate = useNavigate()
+  const { streamer } = useAuth()
+  const { accounts } = usePlatformAccounts()
+  const primary = accounts?.find((a) => a.connectionStatus === 'CONNECTED') ?? accounts?.[0] ?? null
+  const linkStatus: 'connected' | 'reauth' | 'none' =
+    primary === null
+      ? 'none'
+      : primary.connectionStatus === 'REAUTH_REQUIRED'
+        ? 'reauth'
+        : 'connected'
   return (
     <nav
       className={cn(
@@ -110,16 +122,40 @@ export default function GNB({
         ))}
       </ul>
 
-      {/* 하단 — 플랫폼 연동 상태 + 계정 (현재는 정적 placeholder) */}
+      {/* 하단 — 플랫폼 연동 상태 + 계정. 만료·미연동이면 연동 화면으로 가는 CTA를 겸한다(design.md §6) */}
       <div className={cn('flex flex-col gap-3 border-t p-4', collapsed && 'items-center p-2')}>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="size-2 rounded-full bg-success" aria-hidden />
-          {!collapsed && <span>연동됨</span>}
-        </div>
+        {linkStatus === 'connected' ? (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="size-2 rounded-full bg-success" aria-hidden />
+            {!collapsed && <span>연동됨{primary && ` · ${primary.channelName}`}</span>}
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => navigate(PATHS.platformConnect)}
+            className={cn(
+              'flex items-center gap-2 text-xs font-medium',
+              linkStatus === 'reauth' ? 'text-warning' : 'text-muted-foreground'
+            )}
+          >
+            <span
+              className={cn(
+                'size-2 rounded-full',
+                linkStatus === 'reauth' ? 'bg-warning' : 'bg-muted-foreground'
+              )}
+              aria-hidden
+            />
+            {!collapsed && <span>{linkStatus === 'reauth' ? '재연동 필요' : '미연동'}</span>}
+          </button>
+        )}
         {!collapsed && (
           <div className="flex items-center gap-2">
-            <span className="size-7 rounded-full bg-muted" aria-hidden />
-            <span className="text-sm font-medium">한별TV</span>
+            <Avatar
+              src={streamer?.profileImageUrl ?? null}
+              alt={streamer?.nickname ?? '프로필'}
+              size="size-7"
+            />
+            <span className="text-sm font-medium">{streamer?.nickname ?? '-'}</span>
           </div>
         )}
       </div>

@@ -1,10 +1,8 @@
-import { useCallback } from 'react'
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
 import { MonitorPlay } from 'lucide-react'
-import { useAsyncData } from '@renderer/hooks/useAsyncData'
+import { useLiveSnapshot } from '@renderer/hooks/useLiveSnapshot'
 import { useAudioStream } from '@renderer/hooks/useAudioStream'
 import type { CurrentSessionContext } from '@renderer/hooks/useCurrentSession'
-import { getLiveSnapshot } from '@renderer/api/console'
 import { Skeleton } from '@renderer/components/ui/skeleton'
 import { cn } from '@renderer/lib/utils'
 import { Button } from '@renderer/components/ui/button'
@@ -23,9 +21,8 @@ const AUDIO_STATUS_LABEL = {
 } as const
 
 /**
- * SC-03 방송 콘솔.
- * 지표·여론·반복 질문은 아직 mock 스냅샷이고, 위험 발언·약속 브리핑은
- * AI 서버 음성 스트리밍(useAudioStream)에서 실시간으로 들어온다.
+ * SC-03 방송 콘솔. 지표·여론·반복 질문은 실시간 스냅샷(useLiveSnapshot, 3초 폴링)이고,
+ * 위험 발언·약속 브리핑은 AI 서버 음성 스트리밍(useAudioStream)에서 실시간으로 들어온다.
  * TODO: 나머지 항목도 WebSocket(`/ws/v1/broadcast-sessions/{id}`)으로 실시간 갱신.
  */
 export default function BroadcastConsolePage(): React.JSX.Element {
@@ -37,11 +34,8 @@ export default function BroadcastConsolePage(): React.JSX.Element {
     useOutletContext<CurrentSessionContext>()
   const sid = sessionId ? Number(sessionId) : (currentSession?.sessionId ?? null)
 
-  const loader = useCallback(() => {
-    if (sid === null) return Promise.resolve(null)
-    return getLiveSnapshot(sid)
-  }, [sid])
-  const { data, loading, error, refetch } = useAsyncData(loader)
+  // 이 창(콘솔)이 owner다 — 조회 결과를 main을 거쳐 미니·오버레이 창에도 릴레이한다.
+  const { snapshot: data, loading, error, refresh: refetch } = useLiveSnapshot(sid, 'owner')
   const audio = useAudioStream(`session${sid}`)
 
   if (sessionId === undefined && currentLoading) {

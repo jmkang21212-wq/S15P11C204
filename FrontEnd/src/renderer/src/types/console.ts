@@ -18,10 +18,16 @@ export interface LiveSnapshotSession {
   currentViewers: number
 }
 
+/**
+ * BE(`LiveSnapshotResponse.Services`)는 자유 문자열을 준다 — `collector`는
+ * `CollectorState`(RUNNING/RECONNECTING/STOPPED), 나머지는 각자 다른 값 집합이라
+ * 하나의 리터럴 유니온으로 묶지 않는다. 현재 화면에서 렌더링하는 곳은 없다(스키마만 맞춰 둠).
+ */
 export interface ConsoleServices {
-  microphone: 'CONNECTED' | 'DISCONNECTED'
-  stt: 'RUNNING' | 'STOPPED'
-  ai: 'RUNNING' | 'STOPPED'
+  microphone: string
+  stt: string
+  ai: string
+  collector: string
 }
 
 export interface Briefing {
@@ -38,6 +44,10 @@ export interface Briefing {
   advice?: string
 }
 
+/**
+ * FE가 그리는 3분할 여론 뷰. BE는 감정 8종 비율(distribution)만 주므로
+ * `api/console.ts`가 긍정/중립/부정으로 묶어 만든다 — BE 응답과 1:1이 아니다.
+ */
 export interface Sentiment {
   positiveRatio: number
   neutralRatio: number

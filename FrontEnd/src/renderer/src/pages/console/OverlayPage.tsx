@@ -1,26 +1,19 @@
-import { useCallback } from 'react'
-import { useAsyncData } from '@renderer/hooks/useAsyncData'
+import { useLiveSnapshot } from '@renderer/hooks/useLiveSnapshot'
 import { useCurrentSession } from '@renderer/hooks/useCurrentSession'
-import { getLiveSnapshot } from '@renderer/api/console'
 
 /**
  * SC-03 부속: OBS 브라우저 소스용 투명 오버레이 (1920×1080 전제).
  * 시청자 노출용 — 호응도 게이지(FR-F-05)만 표시하고 스트리머 전용 정보는 절대 넣지 않는다.
  *
  * 이 창은 별도 BrowserWindow라 인증 토큰이 없다 — API를 직접 부르지 않고
- * main의 IPC 릴레이(session:state)로 진행 중 세션을 받는다(follower 모드).
+ * main의 IPC 릴레이(session:state·snapshot:state)로 진행 중 세션·스냅샷을 받는다(follower 모드).
  *
  * TODO(연동): OBS가 이 URL을 브라우저 소스로 로드. body 투명 배경 설정 필요.
- *   호응도 값은 실제로는 WebSocket으로 실시간 갱신.
  */
 export default function OverlayPage(): React.JSX.Element | null {
   const { session: currentSession } = useCurrentSession('follower')
   const sessionId = currentSession?.sessionId ?? null
-  const loader = useCallback(() => {
-    if (sessionId === null) return Promise.resolve(null)
-    return getLiveSnapshot(sessionId)
-  }, [sessionId])
-  const { data } = useAsyncData(loader)
+  const { snapshot: data } = useLiveSnapshot(sessionId, 'follower')
 
   // 진행 중 세션이 없으면 OBS 화면에 유령 위젯을 남기지 않는다.
   if (sessionId === null) return null

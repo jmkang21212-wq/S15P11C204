@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useAsyncData } from '@renderer/hooks/useAsyncData'
+import { useLiveSnapshot } from '@renderer/hooks/useLiveSnapshot'
 import { useLiveBriefings } from '@renderer/hooks/useLiveBriefings'
 import { useCurrentSession } from '@renderer/hooks/useCurrentSession'
-import { getLiveSnapshot } from '@renderer/api/console'
 import MiniWidget from './components/MiniWidget'
 
 /** HIGH 위험이 도착하면 이 시간 동안만 창을 강조 상태로 둔다 (목업 SC-03 부속). */
@@ -18,17 +17,13 @@ const HIGH_EMPHASIS_MS = 15000
  * 미리보기: `#/console/mini` (기본) / `#/console/mini?state=high` (HIGH 강조)
  *
  * 이 창은 별도 BrowserWindow라 인증 토큰이 없다 — API를 직접 부르지 않고
- * main의 IPC 릴레이(session:state)로 진행 중 세션을 받는다(follower 모드).
+ * main의 IPC 릴레이(session:state·snapshot:state)로 진행 중 세션·스냅샷을 받는다(follower 모드).
  */
 export default function MiniModePage(): React.JSX.Element | null {
   const [params] = useSearchParams()
   const { session: currentSession } = useCurrentSession('follower')
   const sessionId = currentSession?.sessionId ?? null
-  const loader = useCallback(() => {
-    if (sessionId === null) return Promise.resolve(null)
-    return getLiveSnapshot(sessionId)
-  }, [sessionId])
-  const { data } = useAsyncData(loader)
+  const { snapshot: data } = useLiveSnapshot(sessionId, 'follower')
   const liveBriefings = useLiveBriefings()
   /** 강조 시간이 지난 HIGH 브리핑 id — 강조를 끄는 쪽만 상태로 둔다. */
   const [expiredHighId, setExpiredHighId] = useState<number | null>(null)

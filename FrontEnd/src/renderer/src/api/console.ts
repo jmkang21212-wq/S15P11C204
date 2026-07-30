@@ -1,19 +1,113 @@
-import type { LiveSnapshot } from '@renderer/types/console'
+import { apiFetch } from './client'
+import type {
+  Briefing,
+  LiveSnapshot,
+  LiveSnapshotSession,
+  Sentiment
+} from '@renderer/types/console'
 
 /**
- * 실시간 콘솔 스냅샷 조회.
+ * 실시간 콘솔 스냅샷 — `LiveConsoleController`(`GET /broadcast-sessions/{id}/live-snapshot`).
+ * BE 결정(2026-07-29)으로 WebSocket이 아니라 2~3초 폴링 전제다. 호출부(`BroadcastConsolePage`
+ * 등)가 그 주기로 이 함수를 반복 호출한다.
  *
- * 현재는 mock을 반환한다. 실제 연동 시:
- *   const res = await fetch(`/api/v1/broadcast-sessions/${sessionId}/live-snapshot`, ...)
- *   return (await res.json()).data as LiveSnapshot
- * 이후 WebSocket(`/ws/v1/broadcast-sessions/{id}`)으로 briefings·sentiment 등을 갱신한다.
+ * `briefings`·`repeatedQuestions`는 STT·반복 질문 파이프라인이 아직 없어 BE가 항상 빈
+ * 배열을 준다 — 실시간 브리핑은 `useAudioStream`/`useLiveBriefings`(AI 서버 WebSocket
+ * 중계)에서 별도로 오고, 호출부가 스냅샷 값과 합쳐서 쓴다.
  */
-export async function getLiveSnapshot(sessionId: number): Promise<LiveSnapshot> {
-  await new Promise((resolve) => window.setTimeout(resolve, 200))
-  return { ...MOCK_SNAPSHOT, session: { ...MOCK_SNAPSHOT.session, sessionId } }
+const USE_MOCK = false
+const MOCK_DELAY_MS = 200
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-// ─── mock 데이터 (실제 API 연동 시 제거) ───────────────────────────
+export async function getLiveSnapshot(sessionId: number): Promise<LiveSnapshot> {
+  if (USE_MOCK) {
+    await delay(MOCK_DELAY_MS)
+    return { ...MOCK_SNAPSHOT, session: { ...MOCK_SNAPSHOT.session, sessionId } }
+  }
+
+  const raw = await apiFetch<RawLiveSnapshot>(`/broadcast-sessions/${sessionId}/live-snapshot`)
+  return {
+    // status는 BroadcastStatus와 같은 값 집합(BroadcastStatus enum name)이지만 wire 타입은
+    // 느슨한 string이라 단언이 필요하다.
+    session: raw.session as LiveSnapshotSession,
+    services: raw.services,
+    // BE는 STT 파이프라인이 없어 항상 빈 배열을 준다 — briefingType 유니온 단언도 그래서 안전하다.
+    briefings: raw.briefings as Briefing[],
+    sentiment: toSentiment(raw.sentiment),
+    repeatedQuestions: raw.repeatedQuestions,
+    // BE는 0~1 비율(유니크 채터 ÷ 시청자)을 준다. 오버레이 게이지는 0~100 폭으로 그린다.
+    engagement: Math.round((raw.sentiment.engagement ?? 0) * 100),
+    lastEventId: raw.lastEventId
+  }
+}
+
+// ─── BE 응답(wire) 타입 — LiveSnapshotResponse와 1:1, 이 파일 밖에서는 쓰지 않는다 ───
+interface RawSession {
+  sessionId: number
+  status: string
+  startedAt: string
+  elapsedSeconds: number
+  currentViewers: number
+}
+interface RawServices {
+  microphone: string
+  stt: string
+  ai: string
+  collector: string
+}
+interface RawBriefing {
+  briefingId: number
+  briefingType: string
+  message: string
+  createdAt: string
+}
+interface RawSentiment {
+  windowSec: number
+  analyzedChat: number
+  engagement: number | null
+  dominant: string | null
+  /** 감정 코드(SentimentLabel.name()) → 비율(합 1.0). analyzedChat이 0이면 null. */
+  distribution: Record<string, number> | null
+}
+interface RawRepeatedQuestion {
+  questionId: number
+  question: string
+  occurrenceCount: number
+}
+interface RawLiveSnapshot {
+  session: RawSession
+  services: RawServices
+  briefings: RawBriefing[]
+  sentiment: RawSentiment
+  repeatedQuestions: RawRepeatedQuestion[]
+  lastEventId: string
+}
+
+/**
+ * BE의 감정 8종(`SentimentLabel`) 분포를 화면의 긍정/중립/부정 3분할로 묶는다.
+ * SURPRISE(놀람)는 방향성이 불분명해 중립 쪽에 둔다.
+ * analyzedChat이 0(아직 분석된 채팅 없음)이면 BE가 null을 주므로, 값이 없다는 뜻으로
+ * 중립 100%를 표시한다(전부 0%로 두면 "매우 부정적으로 중립"처럼 읽혀 오해의 소지가 있다).
+ */
+const POSITIVE_LABELS = ['JOY', 'EXCITEMENT', 'SUPPORT']
+const NEGATIVE_LABELS = ['SADNESS', 'ANGER']
+
+function toSentiment(raw: RawSentiment): Sentiment {
+  if (!raw.distribution || raw.analyzedChat === 0) {
+    return { positiveRatio: 0, neutralRatio: 1, negativeRatio: 0 }
+  }
+  const sumOf = (labels: string[]): number =>
+    labels.reduce((total, label) => total + (raw.distribution?.[label] ?? 0), 0)
+  const positiveRatio = sumOf(POSITIVE_LABELS)
+  const negativeRatio = sumOf(NEGATIVE_LABELS)
+  const neutralRatio = Math.max(0, 1 - positiveRatio - negativeRatio)
+  return { positiveRatio, neutralRatio, negativeRatio }
+}
+
+// ─── mock 데이터 (되돌릴 때 USE_MOCK = true) ───────────────────────────
 const MOCK_SNAPSHOT: LiveSnapshot = {
   session: {
     sessionId: 9002,
@@ -25,7 +119,8 @@ const MOCK_SNAPSHOT: LiveSnapshot = {
   services: {
     microphone: 'CONNECTED',
     stt: 'RUNNING',
-    ai: 'RUNNING'
+    ai: 'RUNNING',
+    collector: 'RUNNING'
   },
   briefings: [
     {

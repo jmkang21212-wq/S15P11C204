@@ -1,20 +1,16 @@
+import { apiFetch } from './client'
 import { buildMockGrowthReport, MOCK_GROWTH_GOALS } from '@renderer/mocks/growth.mock'
 import type { GrowthGoal, GrowthReport, PeriodType } from '@renderer/types/growth'
 
 /**
- * SC-09 성장 리포트 데이터 소스.
+ * SC-09 성장 리포트 데이터 소스 — `GrowthReportController`·`GrowthGoalController`.
  *
- * 백엔드 미구현 상태 — 현재는 목 데이터를 반환한다.
- * 실연동 시 이 파일만 고치면 되고, 페이지·컴포넌트는 손대지 않는다.
- *
- * TODO: GET /growth-reports?periodType&from&to 연동 (API 명세서 §11.2)
- * TODO: GET /growth-goals?status=ACTIVE 연동         (API 명세서 §11.3)
- *       두 엔드포인트 모두 `{ success, data }` 엔벨로프다.
- *       목표는 `data.items`, 지표는 `data`를 그대로 반환하면 된다.
+ * `GET /growth-goals`는 status를 생략해 전체 상태(ACTIVE·ACHIEVED·CANCELLED)를 받는다.
+ * `GoalCard`가 상태별 배지를 이미 그리므로 ACTIVE만 필터링하면 달성/중단 목표가 안 보인다.
  */
 
-/** 백엔드가 붙으면 false로 바꾸고 아래 fetch 분기를 채운다. */
-const USE_MOCK = true
+/** 되돌리려면 true. 삭제 시 각 함수 상단 3줄만 제거. */
+const USE_MOCK = false
 
 /** 목 응답에도 지연을 줘 로딩 스켈레톤이 실제로 보이게 한다. */
 const MOCK_DELAY_MS = 400
@@ -37,14 +33,13 @@ export async function fetchGrowthReport(
     return buildMockGrowthReport(periodType)
   }
 
-  // const res = await fetch(
-  //   `${BASE_URL}/growth-reports?periodType=${periodType}&from=${from}&to=${to}`
-  // )
-  // const body = await res.json()
-  // return body.data
-  void from
-  void to
-  throw new Error('NOT_IMPLEMENTED')
+  const params = new URLSearchParams({ periodType, from, to })
+  const report = await apiFetch<GrowthReport>(`/growth-reports?${params}`)
+  // BE의 avgViewers는 Integer(nullable)라 이론상 null이 올 수 있다. 화면은 항상 number를 기대한다.
+  return {
+    ...report,
+    summaryMetrics: { ...report.summaryMetrics, avgViewers: report.summaryMetrics.avgViewers ?? 0 }
+  }
 }
 
 /** 성장 목표와 AI 다음 액션. */
@@ -54,8 +49,6 @@ export async function fetchGrowthGoals(): Promise<GrowthGoal[]> {
     return MOCK_GROWTH_GOALS
   }
 
-  // const res = await fetch(`${BASE_URL}/growth-goals?status=ACTIVE`)
-  // const body = await res.json()
-  // return body.data.items
-  throw new Error('NOT_IMPLEMENTED')
+  const data = await apiFetch<{ items: GrowthGoal[] }>('/growth-goals')
+  return data.items
 }
