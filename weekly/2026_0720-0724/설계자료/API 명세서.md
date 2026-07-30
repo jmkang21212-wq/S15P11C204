@@ -100,7 +100,7 @@ ERD의 관계와 API의 단일 리소스 식별 규칙을 실제 DDL에서도 �
 | `TRIGGERS.transcript_id` | 트리거 구간에 겹치는 STT 청크가 없는 경우 |
 | `TRIGGERS.narrative`, `analyzed_at` | 리포트 생성 전이거나 LLM 분석이 실패한 트리거 |
 | `TRIGGERS.screen_context` | 화면 캡처 도입 전. 현재 전 구간 `NULL` |
-| `PROMISES.due_date` | 목업의 “기한 미정” 약속 |
+| `PROMISES.due_date` | 목업의 “기한 미정” 약속. 조건부 약속(“구독자 1000명 되면”)도 날짜로 환산할 수 없어 여기 해당한다 |
 | `HIGHLIGHTS.clip_url`, `thumbnail_url` | 하이라이트 구간 탐지 후 클립 생성 전 또는 생성 실패 상태 |
 | `PORTFOLIOS.published_at` | 아직 공개하지 않은 포트폴리오 |
 
@@ -265,7 +265,7 @@ ERD의 관계와 API의 단일 리소스 식별 규칙을 실제 DDL에서도 �
 | Promise | GET | `/promises` | 약속 전체 목록 |
 | Promise | POST | `/promises/{promiseId}/confirm` | 감지 약속 확정 |
 | Promise | POST | `/promises/{promiseId}/dismiss` | 감지 약속 무시 |
-| Promise | PATCH | `/promises/{promiseId}` | 확정 약속 상태 변경 |
+| Promise | PATCH | `/promises/{promiseId}` | 확정 약속 수정 (상태·내용·기한) |
 | Report | GET | `/broadcast-sessions/{sessionId}/report` | 세션 리포트 조회 |
 | Report | GET | `/growth-reports` | 성장 지표 조회 |
 | Growth Goal | GET | `/growth-goals` | 성장 목표와 다음 액션 조회 |
@@ -561,6 +561,14 @@ Access Token과 Refresh Token은 `PLATFORM_ACCOUNTS`에 암호화하여 저장�
         "endAt": "2026-07-25T00:00:00Z",
         "status": "SCHEDULED"
       }
+    ],
+    "promises": [
+      {
+        "promiseId": 31,
+        "content": "공포게임 방송",
+        "dueDate": "2026-08-14",
+        "status": "PENDING"
+      }
     ]
   }
 }
@@ -569,6 +577,19 @@ Access Token과 Refresh Token은 `PLATFORM_ACCOUNTS`에 암호화하여 저장�
 - `eventType`은 `BROADCAST`, `DAY_OFF` 중 하나다.
 - `status`는 `SCHEDULED`, `COMPLETED`, `CANCELLED` 중 하나다.
 - `DAY_OFF` 일정은 `platformAccountId = null`을 허용한다.
+
+`promises`는 캘린더에 함께 표시할 약속이다 (10.8).
+
+- 기한이 조회 범위에 들고 `status`가 `PENDING` 또는 `ON_HOLD`인 것만 담는다.
+  확정 전(`DETECTED`)과 종료된(`COMPLETED`, `DISMISSED`) 약속은 제외한다.
+  사람이 확정하며 날짜를 넣은 것만 일정으로 본다.
+- 약속은 `CALENDAR_EVENTS`에 복사하지 않고 조회 시점에 얹는다. 복사하면 같은 약속이
+  두 행이 되어 상태가 갈라진다(약속은 `COMPLETED`인데 일정은 `SCHEDULED`로 남는 식).
+  `PROMISES`가 단일 원천이고 캘린더는 읽기 뷰다.
+- 따라서 캘린더에서 약속의 날짜를 옮기려면 `PATCH /promises/{promiseId}`에 `dueDate`를
+  보낸다. 일정 수정 API(8.3)로는 약속을 바꿀 수 없다.
+- `PROMISES.due_date`가 `DATE`이므로 `from`·`to`를 **Asia/Seoul 기준 날짜**로 변환해
+  비교한다. UTC로 자르면 경계 하루가 어긋난다.
 
 ### 8.2 일정 생성
 
@@ -971,6 +992,21 @@ wss://api.example.com/ws/v1/broadcast-sessions/{sessionId}?ticket={wsTicket}&las
 
 AI가 약속 발언을 감지하면 `PROMISES`에 `DETECTED` 상태로 저장하고, `BRIEFING_CREATED.data.promiseId`로 식별자를 전달한다. 사용자가 목업의 “약속 추가”를 누르면 확정하고 “무시”를 누르면 제외한다.
 
+상태 전이는 아래 한 방향이며, 확정 전후로 쓰는 API가 다르다.
+
+```
+DETECTED ──confirm──▶ PENDING ◀──▶ ON_HOLD
+    │                    │
+    └──dismiss──▶        └──▶ COMPLETED
+              DISMISSED
+```
+
+- `DETECTED`에서 나가는 길은 확정·무시(10.8.2) 두 개뿐이다.
+- 확정 이후의 이동(`PENDING`·`ON_HOLD`·`COMPLETED`)은 수정 API(10.8.3)가 담당한다.
+- `DISMISSED`는 종착점이다. 되살리려면 별도 API가 필요하며 현재 정의하지 않는다.
+
+**기한의 시간대**: AI가 보낸 절대 시각(`deadlineAt`)을 `PROMISES.due_date`로 저장할 때는 **Asia/Seoul 기준 날짜**로 변환한다. UTC로 자르면 `15:00~23:59Z` 구간의 약속이 하루 일찍 저장되며, 자정을 넘겨 방송하는 경우 실제로 발생한다. 캘린더 조회(8.1)의 범위 비교도 같은 기준을 쓴다.
+
 #### 10.8.1 약속 전체 목록
 
 `GET /promises?page=0&size=20&status=PENDING`
@@ -1017,23 +1053,34 @@ AI가 약속 발언을 감지하면 `PROMISES`에 `DETECTED` 상태로 저장하
 
 확정 시 사용자가 수정한 `content`, `due_date`를 반영하고 `status`를 `DETECTED`에서 `PENDING`으로 변경한다. 성공 응답은 변경된 약속을 반환한다.
 
+두 필드 모두 선택이다. `content`를 생략하면 AI가 추출한 문구를 그대로 쓰고, `dueDate`를 생략하면 기한 미정으로 확정한다. `dueDate`를 넣으면 그 시점부터 캘린더(8.1)에 표시된다.
+
 무시:
 
 `POST /promises/{promiseId}/dismiss`
 
 무시 시 `status`를 `DISMISSED`로 변경하고 `204 No Content`를 반환한다. 두 API 모두 현재 상태가 `DETECTED`가 아니면 `409 Conflict`를 반환한다.
 
-#### 10.8.3 확정 약속 상태 변경
+#### 10.8.3 확정 약속 수정
 
 `PATCH /promises/{promiseId}`
 
 ```json
 {
-  "status": "COMPLETED"
+  "status": "COMPLETED",
+  "content": "구독자 추첨 이벤트 진행",
+  "dueDate": "2026-08-20"
 }
 ```
 
-변경 가능한 `status`는 `PENDING`, `COMPLETED`, `ON_HOLD` 중 하나다. `DETECTED`, `DISMISSED` 상태는 확정·무시 전용 API로만 변경한다.
+세 필드 모두 선택이며 **보낸 것만 반영한다**. 캘린더에서 약속을 끌어 날짜를 옮기면 `{"dueDate": "2026-08-20"}` 하나만 보낸다.
+
+`content`와 `dueDate`를 여는 이유는 확정 이후에 기한을 바꿀 경로가 달리 없기 때문이다. 확정 API(10.8.2)는 `DETECTED` 상태에서만 동작하므로, 상태만 받는 설계로는 캘린더에서 일정을 옮길 수 없다.
+
+- 변경 가능한 `status`는 `PENDING`, `COMPLETED`, `ON_HOLD` 중 하나다. `DETECTED`, `DISMISSED` 상태는 확정·무시 전용 API로만 변경한다.
+- `dueDate`에 `null`을 명시하면 기한을 지우고, 필드를 생략하면 기존 값을 유지한다. 두 경우를 구분하므로 한 번 넣은 기한을 다시 비울 수 있다. 기한을 지우면 캘린더(8.1)에서 빠진다.
+- 현재 상태가 `DETECTED`나 `DISMISSED`면 `409 Conflict`를 반환한다.
+- `status`가 허용 목록 밖이거나 세 필드를 모두 생략하면 `400 Bad Request`를 반환한다.
 
 ---
 
