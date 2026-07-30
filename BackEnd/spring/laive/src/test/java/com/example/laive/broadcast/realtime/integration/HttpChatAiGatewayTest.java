@@ -2,6 +2,7 @@ package com.example.laive.broadcast.realtime.integration;
 
 import com.example.laive.broadcast.realtime.config.ChatAiProperties;
 import com.example.laive.broadcast.realtime.domain.ChatAiIngestResult;
+import com.example.laive.broadcast.realtime.domain.ChatAiQuestionsResult;
 import com.example.laive.broadcast.realtime.domain.IngestChat;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -156,6 +157,84 @@ class HttpChatAiGatewayTest {
         )).orElseThrow();
 
         assertThat(result.labels()).containsExactly("NEUTRAL", null);
+    }
+
+    @Test
+    void mapsQuestionsResponseToDomain() {
+        server.expect(requestTo("http://chat-ai:8001/broadcasts/9002/questions?limit=50"))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header("Authorization", "Bearer test-token"))
+                .andRespond(withSuccess("""
+                        {
+                          "questions": [
+                            {"questionId": 1753690000000007, "text": "오늘 몇 시까지 하세요?", "type": "FAQ",
+                             "askers": 42, "messages": 51,
+                             "firstAskedAt": 1753690000123, "lastAskedAt": 1753693400555},
+                            {"questionId": 1753690000000012, "text": "저게 안맞아?", "type": null,
+                             "askers": 8, "messages": 9,
+                             "firstAskedAt": 1753693000000, "lastAskedAt": 1753693400000}
+                          ],
+                          "totalQuestions": 1284,
+                          "pendingEmbedding": 23,
+                          "updatedAt": 1753693410000
+                        }
+                        """, MediaType.APPLICATION_JSON));
+
+        ChatAiQuestionsResult result = gateway.getQuestions(9002L, 50).orElseThrow();
+
+        assertThat(result.totalQuestions()).isEqualTo(1284);
+        assertThat(result.pendingEmbedding()).isEqualTo(23);
+        assertThat(result.updatedAt()).isEqualTo(Instant.ofEpochMilli(1753693410000L));
+        assertThat(result.questions()).hasSize(2);
+        ChatAiQuestionsResult.Question first = result.questions().get(0);
+        assertThat(first.questionId()).isEqualTo(1753690000000007L); // 16자리 — long이어야 한다
+        assertThat(first.text()).isEqualTo("오늘 몇 시까지 하세요?");
+        assertThat(first.type()).isEqualTo("FAQ");
+        assertThat(first.askers()).isEqualTo(42);
+        assertThat(first.firstAskedAt()).isEqualTo(Instant.ofEpochMilli(1753690000123L));
+        assertThat(result.questions().get(1).type()).isNull(); // 판정 전 null 통과
+    }
+
+    @Test
+    void unknownQuestionTypeBecomesNullAndBrokenItemIsDropped() {
+        server.expect(requestTo("http://chat-ai:8001/broadcasts/1/questions?limit=5"))
+                .andRespond(withSuccess("""
+                        {
+                          "questions": [
+                            {"questionId": 1753690000000001, "text": "질문", "type": "새타입",
+                             "askers": 5, "messages": 6,
+                             "firstAskedAt": 1, "lastAskedAt": 2},
+                            {"questionId": null, "text": "필수 필드 없음", "type": "FAQ",
+                             "askers": 3, "messages": 3,
+                             "firstAskedAt": 1, "lastAskedAt": 2}
+                          ],
+                          "totalQuestions": 2,
+                          "pendingEmbedding": 0,
+                          "updatedAt": 3
+                        }
+                        """, MediaType.APPLICATION_JSON));
+
+        ChatAiQuestionsResult result = gateway.getQuestions(1L, 5).orElseThrow();
+
+        assertThat(result.questions()).hasSize(1); // 깨진 항목만 버리고 나머지는 산다
+        assertThat(result.questions().get(0).type()).isNull(); // 모르는 타입은 판정 전과 동일 취급
+    }
+
+    @Test
+    void questionsNotFoundMeansNoIngestYetAndReturnsEmpty() {
+        // 계약: 404 = ingest가 들어온 적 없는 방송(PREPARING 폴링의 정상 경로).
+        server.expect(requestTo("http://chat-ai:8001/broadcasts/1/questions?limit=50"))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+        assertThat(gateway.getQuestions(1L, 50)).isEmpty();
+    }
+
+    @Test
+    void questionsServerErrorSkipsCycleInsteadOfThrowing() {
+        server.expect(requestTo("http://chat-ai:8001/broadcasts/1/questions?limit=50"))
+                .andRespond(withServerError());
+
+        assertThat(gateway.getQuestions(1L, 50)).isEmpty();
     }
 
     @Test

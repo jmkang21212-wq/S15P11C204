@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.laive.broadcast.questions.repository.mybatis.RepeatedQuestionMapper">
+
+    <!-- PREPARING을 포함하는 이유: 시작 직후부터 질문이 모이고, ingest 이력이
+         없으면 chat-ai가 404를 주므로(계약상 정상) 폴러가 조용히 건너뛴다. -->
+    <select id="findPollableSessionIds" resultType="long">
+        SELECT id
+          FROM broadcast_sessions
+         WHERE status IN ('PREPARING', 'LIVE')
+    </select>
+
+    <!--
+        전량 교체(DELETE+INSERT)가 아니라 UPSERT인 이유: dismiss 표식은 Spring만
+        기억한다(AI는 Redis TTL 기반). 교체하면 답변 완료가 함께 날아간다.
+
+        WHERE ... IS DISTINCT FROM: 값이 그대로인 행은 건드리지 않는다.
+        10~15초 폴링 × 방송 5시간 × 50행이면 9만 UPDATE가 되는데, 목록은 천천히
+        변하므로 실제 변경은 수백 건이다. 조건이 거짓이면 PostgreSQL이 행을 쓰지
+        않아 죽은 튜플·autovacuum 부담이 사라진다(계약 "쓰기 부담").
+
+        first_asked_at을 갱신하지 않는 이유: 같은 question_id의 첫 목격 시각은
+        불변이고, 집계 리셋은 새 id = 새 행으로 온다.
+    -->
+    <insert id="upsertQuestions">
+        INSERT INTO repeated_questions
+            (session_id, question_id, text, type, askers, messages,
+             first_asked_at, last_asked_at, created_at, updated_at)
+        VALUES
+        <foreach collection="items" item="q" separator=",">
+            (#{sessionId}, #{q.questionId}, #{q.text}, #{q.type,jdbcType=VARCHAR},
+             #{q.askers}, #{q.messages}, #{q.firstAskedAt}, #{q.lastAskedAt}, #{now}, #{now})
+        </foreach>
+        ON CONFLICT (session_id, question_id) DO UPDATE
+           SET text          = EXCLUDED.text,
+               type          = EXCLUDED.type,
+               askers        = EXCLUDED.askers,
+               messages      = EXCLUDED.messages,
+               last_asked_at = EXCLUDED.last_asked_at,
+               updated_at    = EXCLUDED.updated_at
+         WHERE (repeated_questions.text, repeated_questions.type, repeated_questions.askers,
+                repeated_questions.messages, repeated_questions.last_asked_at)
+               IS DISTINCT FROM
+               (EXCLUDED.text, EXCLUDED.type, EXCLUDED.askers,
+                EXCLUDED.messages, EXCLUDED.last_asked_at)
+    </insert>
+
+    <!-- ② 응답에 있는 질문: UPSERT가 먼저 돌았으므로 askers가 이미 이번 응답 값이다. -->
+    <update id="confirmBaselineFromResponse">
+        UPDATE repeated_questions
+           SET baseline_askers = askers, updated_at = #{now}
+         WHERE session_id = #{sessionId}
+           AND dismissed_at IS NOT NULL
+           AND baseline_askers IS NULL
+           AND dismissed_at &lt;= #{graceCutoff}
+           AND question_id IN
+           <foreach collection="questionIds" item="id" open="(" separator="," close=")">
+               #{id}
+           </foreach>
+    </update>
+
+    <!-- ② fallback: top-N 밖으로 밀려 응답에 없는 질문은 dismiss 시점 값으로 확정한다. -->
+    <update id="confirmBaselineByFallback">
+        UPDATE repeated_questions
+           SET baseline_askers = askers_at_dismiss, updated_at = #{now}
+         WHERE session_id = #{sessionId}
+           AND dismissed_at IS NOT NULL
+           AND baseline_askers IS NULL
+           AND dismissed_at &lt;= #{graceCutoff}
+           <if test="!questionIds.isEmpty()">
+           AND question_id NOT IN
+           <foreach collection="questionIds" item="id" open="(" separator="," close=")">
+               #{id}
+           </foreach>
+           </if>
+    </update>
+
+    <!-- ③ 리셋 방어: 음수 diff가 판정을 조용히 죽이지 않게 baseline을 낮춘다. -->
+    <update id="lowerBaselineOnShrink">
+        UPDATE repeated_questions
+           SET baseline_askers = askers, updated_at = #{now}
+         WHERE session_id = #{sessionId}
+           AND dismissed_at IS NOT NULL
+           AND baseline_askers IS NOT NULL
+           AND askers &lt; baseline_askers
+    </update>
+
+    <!-- ③ 재노출. reexposed_at은 재차 dismiss해도 보존한다(리포트의 재질문 이력 근거). -->
+    <update id="reexpose">
+        UPDATE repeated_questions
+           SET dismissed_at      = NULL,
+               askers_at_dismiss = NULL,
+               baseline_askers   = NULL,
+               reexposed_at      = #{now},
+               updated_at        = #{now}
+         WHERE session_id = #{sessionId}
+           AND dismissed_at IS NOT NULL
+           AND baseline_askers IS NOT NULL
+           AND askers - baseline_askers &gt;= #{threshold}
+    </update>
+
+    <!-- ① 멱등: 이미 dismissed면 0행 — 첫 dismiss의 시각과 askers_at_dismiss가 보존된다. -->
+    <update id="dismiss">
+        UPDATE repeated_questions
+           SET dismissed_at      = #{now},
+               askers_at_dismiss = askers,
+               baseline_askers   = NULL,
+               updated_at        = #{now}
+         WHERE session_id = #{sessionId}
+           AND question_id = #{questionId}
+           AND dismissed_at IS NULL
+    </update>
+
+    <select id="existsQuestion" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1
+              FROM repeated_questions
+             WHERE session_id = #{sessionId}
+               AND question_id = #{questionId}
+        )
+    </select>
+
+    <select id="findDismissedAt" resultType="java.time.Instant">
+        SELECT dismissed_at
+          FROM repeated_questions
+         WHERE session_id = #{sessionId}
+           AND question_id = #{questionId}
+    </select>
+
+    <!-- 동률 시 question_id 보조 정렬로 폴링 간 순서 흔들림을 막는다. -->
+    <select id="findVisible" resultType="com.example.laive.broadcast.questions.domain.RepeatedQuestionView">
+        SELECT question_id,
+               text,
+               type,
+               askers,
+               messages,
+               (reexposed_at IS NOT NULL) AS reasked,
+               first_asked_at,
+               last_asked_at
+          FROM repeated_questions
+         WHERE session_id = #{sessionId}
+           AND dismissed_at IS NULL
+         ORDER BY askers DESC, question_id
+         LIMIT #{limit}
+    </select>
+
+</mapper>
