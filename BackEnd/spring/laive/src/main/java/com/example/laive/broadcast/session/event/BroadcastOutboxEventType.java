@@ -6,6 +6,7 @@ package com.example.laive.broadcast.session.event;
 public enum BroadcastOutboxEventType {
     PREPARATION_REQUESTED,
     BROADCAST_STARTED,
-    BROADCAST_ENDED
+    BROADCAST_ENDED,
+    TRIGGER_ANALYSIS_REQUESTED,
+    REPORT_FINALIZATION_REQUESTED
 }
-

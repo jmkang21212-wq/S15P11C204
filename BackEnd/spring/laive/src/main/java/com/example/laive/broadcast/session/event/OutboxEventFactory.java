@@ -6,6 +6,8 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.util.UUID;
+import com.example.laive.report.event.ReportFinalizationRequestedEvent;
+import com.example.laive.report.event.TriggerAnalysisRequestedEvent;
 
 /**
  * 이벤트 식별자, 버전, 중복 방지 Key와 JSON 직렬화를 한곳에서 생성한다.
@@ -103,6 +105,43 @@ public class OutboxEventFactory {
         );
     }
 
+    public PendingOutboxEvent triggerAnalysisRequested(
+            long sessionId,
+            long reportId,
+            long triggerId,
+            Instant occurredAt
+    ) {
+        UUID eventId = UUID.randomUUID();
+        return pending(
+                eventId,
+                sessionId,
+                BroadcastOutboxEventType.TRIGGER_ANALYSIS_REQUESTED,
+                "report:" + reportId + ":trigger:" + triggerId,
+                new TriggerAnalysisRequestedEvent(
+                        eventId, SCHEMA_VERSION, sessionId, reportId, triggerId, occurredAt
+                ),
+                occurredAt
+        );
+    }
+
+    public PendingOutboxEvent reportFinalizationRequested(
+            long sessionId,
+            long reportId,
+            Instant occurredAt
+    ) {
+        UUID eventId = UUID.randomUUID();
+        return pending(
+                eventId,
+                sessionId,
+                BroadcastOutboxEventType.REPORT_FINALIZATION_REQUESTED,
+                "report:" + reportId + ":finalize",
+                new ReportFinalizationRequestedEvent(
+                        eventId, SCHEMA_VERSION, sessionId, reportId, occurredAt
+                ),
+                occurredAt
+        );
+    }
+
     private PendingOutboxEvent pending(
             UUID eventId,
             long aggregateId,
@@ -135,4 +174,3 @@ public class OutboxEventFactory {
     ) {
     }
 }
-
