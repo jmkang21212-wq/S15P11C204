@@ -18,6 +18,15 @@ REDIS_URL = os.getenv('CHATAI_REDIS_URL', 'redis://127.0.0.1:6379/1')
 # 서버 간 인증 토큰. 비워두면 검사하지 않는다 (로컬 개발용).
 CHATAI_TOKEN = os.getenv('CHATAI_TOKEN', '')
 
+# --- 로깅 ---
+# 로그 파일 경로. 빈 문자열이면 콘솔에만 남긴다.
+# 기본은 chat-ai/logs/chatai.log (실행 위치와 무관하게 패키지 기준으로 잡는다).
+LOG_FILE = os.getenv('CHATAI_LOG_FILE',
+                     str(Path(__file__).resolve().parents[1] / 'logs' / 'chatai.log'))
+# 이 시간을 넘긴 요청은 INFO가 아니라 WARNING으로 올린다.
+# Spring 계약의 ingest 타임아웃이 2초라 그 절반을 경고선으로 잡았다.
+SLOW_REQUEST_MS = int(os.getenv('CHATAI_SLOW_REQUEST_MS', '1000'))
+
 # Redis 키 TTL(초) — 방송 종료 후 DELETE를 못 받아도 스스로 사라지는 안전망.
 UID_TTL = 600       # 유니크 채터 ZSET · viewers · 원문 LIST: 윈도우(180s)보다 넉넉히
 BUCKET_TTL = 300    # 초단위 감정 버킷: 윈도우 + 여유
@@ -28,6 +37,11 @@ GMS_KEY = os.getenv('GMS_KEY', '')
 GMS_BASE_URL = 'https://gms.ssafy.io/gmsapi/api.openai.com/v1'
 SUMMARY_MODEL = 'gpt-5-nano'      # GMS 사용량 제한이 mini보다 여유로움 (품질 비교: 2026-07-29)
 SUMMARY_REASONING = 'low'         # nano는 minimal에서 지시 이해가 흔들림 — low로 보정
+
+# LLM 호출 상한. OpenAI SDK 기본 재시도는 2회라 그냥 두면 최악 지연이 timeout×3이 된다.
+# 이 값이 곧 in-flight 락 TTL의 근거이므로(summary.LOCK_TTL) 바꿀 때 함께 볼 것.
+LLM_TIMEOUT_SEC = int(os.getenv('CHATAI_LLM_TIMEOUT', '20'))
+LLM_MAX_RETRIES = int(os.getenv('CHATAI_LLM_MAX_RETRIES', '1'))   # 최악 20×2 = 40초
 
 SUMMARY_MIN_CHATS = int(os.getenv('CHATAI_SUMMARY_MIN_CHATS', '30'))    # 미만이면 422
 SUMMARY_COOLDOWN_SEC = int(os.getenv('CHATAI_SUMMARY_COOLDOWN', '60'))  # 이내 재요청 409

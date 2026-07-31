@@ -38,7 +38,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=8.3",            # chat-ai/tests, chat-collector/tests 실행기
-    "fakeredis>=2.26",        # Redis 없이 윈도우 단위테스트
+    "fakeredis[lua]>=2.26",   # [lua] = lupa, Lua 스크립트(락 해제) 테스트에 필요
 ]
 
 [tool.uv]

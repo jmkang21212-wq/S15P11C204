@@ -11,14 +11,17 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 
 from app.audio.segmenter import VadSegmenter
-from app.config import CHUNK, PROMISE_ENABLED, SAMPLE_RATE
+from app.auth import TicketVerifier
+from app.config import CHUNK, LOG_FILE, PROMISE_ENABLED, SAMPLE_RATE
 from app.detect.dictionary import DictionaryMatcher
 from app.detect.llm_judge import LLMJudge, RollingContext
 from app.detect.promise import PromiseExtractor
+from app.logging_setup import setup_logging
 from app.sink.spring import SpringSink
 from app.stt.groq_stt import GroqSTT
 
-log = logging.getLogger(__name__)
+# uvicorn은 root 로거를 설정하지 않는다 — 이게 없으면 아래 log.info가 전부 사라진다
+log = setup_logging(__name__, LOG_FILE)
 
 _matcher = DictionaryMatcher()
 _stt: Optional[GroqSTT] = None
@@ -27,6 +30,7 @@ _promise: Optional[PromiseExtractor] = None
 _spring: Optional[SpringSink] = None
 _registry: "SessionRegistry"
 _loop: Optional[asyncio.AbstractEventLoop] = None
+_ticket_verifier: Optional[TicketVerifier] = None
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
@@ -88,14 +92,27 @@ class SessionRegistry:
 _registry = SessionRegistry()
 
 
-def verify_handshake(session_id: str, token: str) -> bool:
-    """접속 자격 확인.
+def verify_handshake(handshake: dict) -> Optional[int]:
+    """접속 자격을 확인하고 **신뢰할 수 있는** broadcast_session_id를 돌려준다.
 
-    TODO(Phase 6): Spring이 발급한 JWT를 여기서 검증한다.
-    서명 검증에 필요한 공개키/알고리즘이 정해지면 교체할 것.
-    지금은 session_id가 있는지만 본다.
+    반환값이 None이면 접속을 거절해야 한다.
+
+    핵심: 세션 번호를 핸드셰이크가 아니라 **티켓에서** 얻는다. 예전에는 클라이언트가
+    보낸 broadcastSessionId를 그대로 믿어서, 아무 번호나 넣으면 남의 방송에 전사·
+    위험 이벤트를 기록할 수 있었다. Spring이 소유권을 확인한 뒤에만 티켓을 발급하므로
+    그 경로가 막힌다.
+
+    개발 우회(VOICE_AUTH_DEV_BYPASS=1)일 때만 예전처럼 핸드셰이크 값을 받아준다.
     """
-    return bool(session_id)
+    ticket_value = str(handshake.get("ticket", "")).strip()
+    ticket = _ticket_verifier.consume(ticket_value) if ticket_value else None
+    if ticket is not None:
+        return ticket.broadcast_session_id
+
+    if _ticket_verifier.dev_bypass:
+        log.warning("티켓 없이 접속 허용(개발 우회) — 배포 환경이면 즉시 끌 것")
+        return _parse_broadcast_session_id(handshake.get("broadcastSessionId"))
+    return None
 
 
 def _dispatch_transcripts() -> None:
@@ -210,8 +227,9 @@ def _dispatch_promises() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _stt, _judge, _promise, _loop, _spring
+    global _stt, _judge, _promise, _loop, _spring, _ticket_verifier
     _loop = asyncio.get_running_loop()
+    _ticket_verifier = TicketVerifier()
     _spring = SpringSink().start()
     _stt = GroqSTT().start()
     threading.Thread(target=_dispatch_transcripts, daemon=True,
@@ -249,7 +267,10 @@ async def health() -> dict:
     return {"status": "ok", "dictionary": _matcher.size,
             "llm": _judge is not None,
             "promise": _promise is not None,
-            "spring": _spring is not None and _spring.enabled}
+            "spring": _spring is not None and _spring.enabled,
+            # 개발 우회가 켜져 있으면 헬스체크에 드러낸다 — 배포 환경에서
+            # 켜진 채 방치되는 것을 눈으로 잡을 수 있어야 한다
+            "authBypass": _ticket_verifier is not None and _ticket_verifier.dev_bypass}
 
 
 @app.get("/")
@@ -270,7 +291,15 @@ async def ws_audio(websocket: WebSocket) -> None:
         return
 
     session_id = str(handshake.get("session_id", "")).strip()
-    if not verify_handshake(session_id, str(handshake.get("token", ""))):
+    if not session_id:
+        await websocket.close(code=1008, reason="session_id required")
+        return
+
+    # 티켓 검증 — 실패하면 접속 자체를 막는다. 통과하면 신뢰할 수 있는 세션 번호를 얻는다.
+    # session_id는 프론트가 탭 충돌을 피하려고 만든 임의 문자열이라 Spring 저장에 못 쓴다.
+    broadcast_session_id = verify_handshake(handshake)
+    if broadcast_session_id is None:
+        log.warning("접속 거절 session_id=%s — 티켓이 없거나 만료·재사용됐다", session_id)
         await websocket.close(code=1008, reason="unauthorized")
         return
 
@@ -278,17 +307,8 @@ async def ws_audio(websocket: WebSocket) -> None:
                       send_transcripts=bool(handshake.get("transcripts", False)))
     _registry.add(session)
 
-    # Spring 저장에는 broadcast_sessions.id가 필요하다. session_id는 프론트가 탭 충돌을
-    # 피하려고 만든 임의 문자열이라 그 역할을 못 한다. 프론트가 방송 시작 응답으로 이미
-    # 갖고 있는 번호를 핸드셰이크에 실어 보내면 여기서 묶는다. 없으면 감지와 프론트
-    # 전송은 그대로 돌고 Spring 저장만 건너뛴다.
-    broadcast_session_id = _parse_broadcast_session_id(handshake.get("broadcastSessionId"))
     if _spring is not None and _spring.enabled:
-        if broadcast_session_id is None:
-            log.warning("broadcastSessionId가 없어 Spring 저장을 건너뜁니다: session_id=%s",
-                        session_id)
-        else:
-            _spring.bind_session(session_id, broadcast_session_id)
+        _spring.bind_session(session_id, broadcast_session_id)
 
     await websocket.send_json({
         "type": "ready", "session_id": session_id,

@@ -12,24 +12,27 @@ Spring 백엔드가 HTTP로 호출한다. 전처리·모델이 이 프로세스 
     http://localhost:8001/docs     # Swagger UI에서 바로 시험 가능
     계약: ../CHAT_AI_API.md
 """
-import logging
 import os
+import time
 
 from contextlib import asynccontextmanager
 
 import redis as redis_lib
-from fastapi import Depends, FastAPI, Header, HTTPException, Response
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from chatai.classifier import LABELS, ChatClassifier
 from chatai.config import (CHATAI_TOKEN, EMBED_MODEL, GMS_BASE_URL, GMS_KEY,
-                           REDIS_URL, SUMMARY_MODEL, SUMMARY_REASONING)
+                           LOG_FILE, REDIS_URL, SLOW_REQUEST_MS, SUMMARY_MODEL,
+                           SUMMARY_REASONING)
+from chatai.logging_setup import setup_logging
 from chatai.questions import QUESTION_LABEL, QuestionTracker
 from chatai.summary import SummaryRejected, SummaryService
 from chatai.window import BroadcastWindow
 
-log = logging.getLogger('chatai')
+# import 시점에 설정해야 lifespan·모델 로드 중의 로그도 살아난다
+log = setup_logging('chatai', LOG_FILE)
 
 MODEL_DIR = os.getenv('CHATAI_MODEL_DIR', 'models/kcelectra-chat-8emo-onnx')
 # int8은 약 2배 빠르지만 macro-F1이 1.9점 낮다. 기본은 정확도 우선(fp32).
@@ -42,11 +45,17 @@ questions = None
 
 
 def _make_llm_fn():
-    """GMS(OpenAI 호환 프록시) 호출 함수. 키가 없으면 None — /summary만 꺼진다."""
+    """GMS(OpenAI 호환 프록시) 호출 함수. 키가 없으면 None — /summary만 꺼진다.
+
+    max_retries를 명시적으로 지정한다. SDK 기본값이 2라 최악 지연이
+    timeout×3이 되는데, 그 값을 모르면 in-flight 락 TTL을 정할 수 없다
+    (summary.py의 LOCK_TTL이 이 상한에 맞춰져 있다).
+    """
     if not GMS_KEY:
         return None
     from openai import OpenAI
-    client = OpenAI(api_key=GMS_KEY, base_url=GMS_BASE_URL, timeout=20)
+    client = OpenAI(api_key=GMS_KEY, base_url=GMS_BASE_URL,
+                    timeout=LLM_TIMEOUT_SEC, max_retries=LLM_MAX_RETRIES)
 
     def call(prompt):
         r = client.chat.completions.create(
@@ -96,7 +105,10 @@ async def lifespan(app: FastAPI):
     summarizer = SummaryService(rdb, llm_fn)
     # llm_fn 공유: 질문 목록은 클러스터 대표 문장만 FAQ/CONTEXT로 판정한다
     questions = QuestionTracker(rdb, _make_embed_fn(), llm_fn).start()
+    log.info('기동 완료 model=%s int8=%s log=%s',
+             MODEL_DIR, USE_INT8, LOG_FILE or '(콘솔만)')
     yield
+    log.info('종료 중...')
     questions.stop()
     rdb.close()
 
@@ -104,6 +116,35 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title='채팅 감정 분류기', version='1.1',
               description='치지직 채팅 8감정 분류 + 실시간 호응도 (KcELECTRA 증류 · CPU ONNX)',
               lifespan=lifespan)
+
+
+@app.middleware('http')
+async def access_log(request: Request, call_next):
+    """요청 1건 = 로그 1줄. 엔드포인트가 request.state.log_extra에 세부를 붙인다.
+
+    느린 요청을 WARNING으로 올려, 평소엔 조용하고 문제일 때만 눈에 띄게 한다.
+    """
+    started = time.perf_counter()
+    request.state.log_extra = ''
+    try:
+        response = await call_next(request)
+        status = response.status_code
+    except Exception:
+        # 미들웨어에서 삼키면 500의 원인을 잃는다 — 남기고 그대로 올린다
+        elapsed = (time.perf_counter() - started) * 1000
+        log.exception('%s %s 처리 중 예외 (%.0fms)',
+                      request.method, request.url.path, elapsed)
+        raise
+
+    elapsed = (time.perf_counter() - started) * 1000
+    line = '%s %s %d %.0fms%s'
+    args = (request.method, request.url.path, status, elapsed,
+            ' ' + request.state.log_extra if request.state.log_extra else '')
+    if elapsed >= SLOW_REQUEST_MS:
+        log.warning(line + ' [느림]', *args)
+    else:
+        log.info(line, *args)
+    return response
 
 
 def require_token(authorization: str | None = Header(default=None)):
@@ -173,34 +214,42 @@ def aggregate(req: AggregateRequest):
 
 
 @app.post('/broadcasts/{broadcast_id}/ingest', dependencies=[Depends(require_token)])
-def ingest(broadcast_id: str, req: IngestRequest):
+def ingest(broadcast_id: str, req: IngestRequest, request: Request):
     """
     1초 배치 분류 + 슬라이딩 윈도우 지표 (계약: ../CHAT_AI_API.md 1장).
 
     results는 요청 chats와 같은 순서. window는 이번 배치까지 반영된
     최근 180초 지표 — 그대로 프론트에 중계하면 실시간 호응도 화면이 된다.
     """
+    t_pred = 0.0
     if req.chats:
+        t0 = time.perf_counter()
         preds = clf.predict([c.msg for c in req.chats])
+        t_pred = (time.perf_counter() - t0) * 1000
         results = [{'label': p['label'], 'score': round(p['score'], 4)} for p in preds]
         # (uid, 원문, top-1 라벨, 확률8) — 원문·라벨은 /summary가 쓴다
         items = [(c.uid, c.msg, p['label'], [p['probs'][lab] for lab in LABELS])
                  for c, p in zip(req.chats, preds)]
-        # 질문은 반복 질문 집계 대기열로 (임베딩은 백그라운드 — 여기서 하면
-        # GMS 호출 1.9초가 계약 타임아웃 2초를 먹는다)
-        for c, p in zip(req.chats, preds):
-            if p['label'] == QUESTION_LABEL:
-                questions.offer(broadcast_id, c.uid, c.msg, c.ts or None)
     else:
         results, items = [], []
 
+    t0 = time.perf_counter()
     try:
         window = BroadcastWindow(rdb, broadcast_id).add_batch(req.viewers, items)
+        # 질문 적재도 Redis를 쓴다 — 같은 try 안에 둬야 장애 시 503으로 일관된다.
+        # (임베딩은 백그라운드: 여기서 하면 GMS 1.9초가 계약 타임아웃 2초를 먹는다)
+        for c, p in zip(req.chats, results):
+            if p['label'] == QUESTION_LABEL:
+                questions.offer(broadcast_id, c.uid, c.msg, c.ts or None)
     except redis_lib.RedisError as e:
         # 계약 '반드시 볼 것 1': Spring은 503을 받으면 이 배치를 건너뛴다.
         # 지표 없는 반쪽 응답보다 명확한 실패가 낫다 (원본은 Spring에 있어 유실 없음).
         raise HTTPException(status_code=503, detail=f'redis unavailable: {type(e).__name__}')
+    t_redis = (time.perf_counter() - t0) * 1000
 
+    request.state.log_extra = (
+        f'bid={broadcast_id} chats={len(req.chats)} '
+        f'pred={t_pred:.0f}ms redis={t_redis:.0f}ms win={window["chatCount"]}')
     return {'results': results, 'window': window}
 
 
@@ -209,24 +258,32 @@ class SummaryRequest(BaseModel):
 
 
 @app.post('/broadcasts/{broadcast_id}/summary', dependencies=[Depends(require_token)])
-def summary_post(broadcast_id: str, req: SummaryRequest):
+def summary_post(broadcast_id: str, req: SummaryRequest, request: Request):
     """
     LLM 여론 요약 생성 (계약: ../CHAT_AI_API.md 2장).
 
     가드: 채팅 30건 미만 422 · 쿨다운 60초 409 · 진행 중 409.
     409 IN_FLIGHT를 받으면 잠시 후 GET으로 방금 생성된 요약을 받으면 된다.
     """
-    log.info('summary 요청: broadcast=%s mode=%s', broadcast_id, req.mode)
     try:
-        return summarizer.generate(broadcast_id, req.mode)
+        result = summarizer.generate(broadcast_id, req.mode)
     except SummaryRejected as e:
+        # 가드 거절은 정상 동작이다 (계약 '반드시 볼 것 3') — 에러로 찍지 않는다
+        request.state.log_extra = (f'bid={broadcast_id} mode={req.mode} '
+                                   f'거절={e.payload.get("reason")}')
         return JSONResponse(e.payload, status_code=e.status)
     except redis_lib.RedisError as e:
         raise HTTPException(status_code=503, detail=f'redis unavailable: {type(e).__name__}')
     except Exception as e:
-        # LLM 호출 실패 (GMS 장애·타임아웃 등) — 락은 finally로 이미 해제됨
-        log.error('summary LLM 실패: %s', e)
+        # LLM 호출 실패 (GMS 장애·타임아웃 등) — 락은 finally로 이미 해제됨.
+        # exception()으로 트레이스백까지 남긴다: 코드 버그가 여기로 새면
+        # 타입 이름만으로는 원인을 못 찾는다
+        log.exception('summary LLM 실패 bid=%s: %s', broadcast_id, e)
         raise HTTPException(status_code=502, detail=f'llm failed: {type(e).__name__}')
+
+    request.state.log_extra = (f'bid={broadcast_id} mode={req.mode} '
+                               f'chats={result["chatCount"]} dom={result["dominant"]}')
+    return result
 
 
 @app.get('/broadcasts/{broadcast_id}/summary', dependencies=[Depends(require_token)])

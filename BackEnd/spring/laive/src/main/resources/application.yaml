@@ -90,6 +90,8 @@ laive:
     finalization-grace-period: 30s
     # 종료된 실시간 콘솔 Stream은 재연결을 위해 잠시 유지한다.
     stream-ttl-after-end: 30m
+    # 음성 AI WebSocket 접속 티켓. 발급 직후 바로 쓰이고 재연결마다 새로 받는다.
+    voice-ticket-ttl: 60s
     outbox:
       poll-delay-ms: 500
       batch-size: 50

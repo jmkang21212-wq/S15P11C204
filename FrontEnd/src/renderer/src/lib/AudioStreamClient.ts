@@ -1,3 +1,4 @@
+import { issueVoiceTicket } from '@renderer/api/broadcastSessions'
 import { AI_WS_URL } from '@renderer/api/config'
 import type {
   AlertEvent,
@@ -87,6 +88,16 @@ export class AudioStreamClient {
       await ctx.audioWorklet.addModule(workletUrl())
       if (!this.desired) return this.teardown()
 
+      // AI 서버 접속권은 Spring이 발급한다. WebSocket에는 Authorization 헤더를 실을 수
+      // 없어서, 인증된 HTTP로 일회용 티켓을 받아 핸드셰이크에 싣는다. AI 서버는 방송
+      // 세션 번호를 이 티켓에서 얻으므로 클라이언트가 번호를 지어낼 수 없다.
+      // 티켓은 쓰는 즉시 소비되니 재연결할 때도 매번 새로 받아야 한다.
+      if (this.broadcastSessionId === null) {
+        throw new Error('방송 세션이 없어 음성 분석을 시작할 수 없어요')
+      }
+      const { ticket } = await issueVoiceTicket(this.broadcastSessionId)
+      if (!this.desired) return this.teardown()
+
       // 같은 session_id로 두 번 접속하면 앞 연결이 조용히 죽는다. 접속마다 새로 만든다.
       const sessionId = `${this.baseSessionId}-${crypto.randomUUID().slice(0, 8)}`
       const ws = new WebSocket(AI_WS_URL)
@@ -95,17 +106,7 @@ export class AudioStreamClient {
 
       ws.onopen = () => {
         // 첫 메시지는 반드시 핸드셰이크 JSON이어야 한다 (10초 제한).
-        // broadcastSessionId를 함께 보낸다 — session_id는 창마다 고유한 임의 문자열이라
-        // AI 서버가 Spring 저장에 쓸 수 없다. 빠지면 위험 발언·약속이 화면에는 뜨지만
-        // DB에 남지 않아 방송 후 리포트에서 조용히 사라진다.
-        // TODO: token은 아직 검증되지 않는다. Spring JWT로 교체될 자리.
-        ws.send(
-          JSON.stringify({
-            session_id: sessionId,
-            token: 'dev',
-            broadcastSessionId: this.broadcastSessionId
-          })
-        )
+        ws.send(JSON.stringify({ session_id: sessionId, ticket }))
       }
       ws.onmessage = (event) => this.handleMessage(event.data)
       ws.onerror = () => this.handlers.onError('AI 서버에 연결할 수 없어요')

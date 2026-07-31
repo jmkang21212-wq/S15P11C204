@@ -1,5 +1,6 @@
 package com.example.laive.broadcast.session.controller;
 
+import com.example.laive.broadcast.session.config.BroadcastSessionProperties;
 import com.example.laive.broadcast.session.domain.BroadcastSessionListItem;
 import com.example.laive.broadcast.session.domain.BroadcastStatus;
 import com.example.laive.broadcast.session.dto.request.StartBroadcastSessionRequest;
@@ -7,8 +8,10 @@ import com.example.laive.broadcast.session.dto.response.BroadcastSessionDetailRe
 import com.example.laive.broadcast.session.dto.response.BroadcastSessionListItemResponse;
 import com.example.laive.broadcast.session.dto.response.EndBroadcastSessionResponse;
 import com.example.laive.broadcast.session.dto.response.StartBroadcastSessionResponse;
+import com.example.laive.broadcast.session.dto.response.VoiceTicketResponse;
 import com.example.laive.broadcast.session.service.BroadcastSessionCommandService;
 import com.example.laive.broadcast.session.service.BroadcastSessionQueryService;
+import com.example.laive.broadcast.session.service.VoiceTicketService;
 import com.example.laive.common.api.ApiResponse;
 import com.example.laive.common.api.PageResponse;
 import com.example.laive.common.security.JwtStreamerIdExtractor;
@@ -41,15 +44,21 @@ public class BroadcastSessionController {
 
     private final BroadcastSessionCommandService commandService;
     private final BroadcastSessionQueryService queryService;
+    private final VoiceTicketService voiceTicketService;
+    private final BroadcastSessionProperties properties;
     private final JwtStreamerIdExtractor streamerIdExtractor;
 
     public BroadcastSessionController(
             BroadcastSessionCommandService commandService,
             BroadcastSessionQueryService queryService,
+            VoiceTicketService voiceTicketService,
+            BroadcastSessionProperties properties,
             JwtStreamerIdExtractor streamerIdExtractor
     ) {
         this.commandService = commandService;
         this.queryService = queryService;
+        this.voiceTicketService = voiceTicketService;
+        this.properties = properties;
         this.streamerIdExtractor = streamerIdExtractor;
     }
 
@@ -78,6 +87,26 @@ public class BroadcastSessionController {
         return ResponseEntity
                 .status(HttpStatus.ACCEPTED)
                 .body(ApiResponse.success(EndBroadcastSessionResponse.from(result)));
+    }
+
+    /**
+     * 음성 AI WebSocket 접속용 일회용 티켓을 발급한다.
+     *
+     * <p>WebSocket은 브라우저에서 Authorization 헤더를 실을 수 없어 JWT를 직접 못 쓴다.
+     * 인증된 이 요청으로 티켓을 받아 핸드셰이크에 실으면, AI 서버가 Redis에서 조회해
+     * <b>어느 방송 세션인지를 티켓에서</b> 알아낸다 — 클라이언트가 주장하는 번호를
+     * 믿지 않으므로 남의 방송에 기록하는 경로가 막힌다.
+     *
+     * <p>일회용이고 짧게 만료되므로 재연결할 때마다 새로 호출해야 한다.
+     */
+    @PostMapping("/{sessionId}/voice-ticket")
+    public ResponseEntity<ApiResponse<VoiceTicketResponse>> issueVoiceTicket(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable @Positive long sessionId
+    ) {
+        String ticket = voiceTicketService.issue(streamerIdExtractor.extract(jwt), sessionId);
+        return ResponseEntity.ok(ApiResponse.success(
+                new VoiceTicketResponse(ticket, properties.voiceTicketTtl().toSeconds())));
     }
 
     /** PREPARING 또는 LIVE인 현재 세션을 반환하며 없으면 204를 반환한다. */
