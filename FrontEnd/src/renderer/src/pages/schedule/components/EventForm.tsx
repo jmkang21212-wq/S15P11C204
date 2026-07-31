@@ -7,6 +7,12 @@ import type { CalendarEvent, CalendarEventType } from '@renderer/types/schedule'
 
 interface EventFormProps {
   event: CalendarEvent | null
+  /** BROADCAST로 새로 전환할 때 채울 대표 연동 계정. 없으면 null. */
+  primaryPlatformAccountId: number | null
+  /** 저장/취소 요청 진행 중이면 버튼을 잠근다. */
+  saving?: boolean
+  /** 직전 저장/취소 실패 메시지 (BE ApiError.message). */
+  error?: string | null
   onSave: (event: CalendarEvent) => void
   onClose: () => void
   onDelete: (event: CalendarEvent) => void
@@ -31,14 +37,22 @@ function withTime(iso: string, time: string): string {
  */
 export default function EventForm({
   event,
+  primaryPlatformAccountId,
+  saving = false,
+  error = null,
   onSave,
   onClose,
   onDelete
 }: EventFormProps): React.JSX.Element {
   const [eventType, setEventType] = useState<CalendarEventType>(event?.eventType ?? 'BROADCAST')
+  const [platformAccountId, setPlatformAccountId] = useState<number | null>(
+    event?.platformAccountId ?? primaryPlatformAccountId
+  )
   const [title, setTitle] = useState(event?.title ?? '')
   const [startTime, setStartTime] = useState(event ? toTimeInput(event.startAt) : '21:00')
-  const [endTime, setEndTime] = useState(event ? toTimeInput(event.endAt) : '24:00')
+  // 부모가 항상 event를 넘길 때만 쓰이는 값이라(아래 !event 분기가 먼저 반환) 실제로는
+  // blankEvent의 기본 종료 시각(23:00)과 맞춰 둔다 — '24:00'은 <input type="time">에 무효하다.
+  const [endTime, setEndTime] = useState(event ? toTimeInput(event.endAt) : '23:00')
   const [memo, setMemo] = useState(event?.memo ?? '')
 
   if (!event) {
@@ -51,10 +65,21 @@ export default function EventForm({
     )
   }
 
+  /** BE는 DAY_OFF에 platformAccountId=null을 허용·기대한다. BROADCAST로 되돌리면 대표 계정을 다시 채운다. */
+  const handleTypeChange = (t: CalendarEventType): void => {
+    setEventType(t)
+    if (t === 'DAY_OFF') {
+      setPlatformAccountId(null)
+    } else if (platformAccountId === null) {
+      setPlatformAccountId(primaryPlatformAccountId)
+    }
+  }
+
   const handleSave = (): void => {
     onSave({
       ...event,
       eventType,
+      platformAccountId,
       title,
       memo: memo || null,
       startAt: withTime(event.startAt, startTime),
@@ -84,7 +109,7 @@ export default function EventForm({
           <button
             key={t}
             type="button"
-            onClick={() => setEventType(t)}
+            onClick={() => handleTypeChange(t)}
             className={cn(
               'flex-1 rounded-lg border py-2 text-xs font-semibold',
               eventType === t
@@ -124,14 +149,16 @@ export default function EventForm({
         />
       </div>
 
+      {error && <p className="text-xs text-destructive">{error}</p>}
+
       <div className="flex gap-2">
-        <Button className="flex-1" onClick={handleSave}>
-          저장
+        <Button className="flex-1" onClick={handleSave} disabled={saving}>
+          {saving ? '저장 중…' : '저장'}
         </Button>
         {!isNew && (
-          // TODO: PATCH /calendar-events/{id} (status=CANCELLED) 또는 삭제 — 현재는 자리만
-          <Button variant="outline" onClick={() => onDelete(event)}>
-            삭제
+          // 취소는 BE에 DELETE가 없어 PATCH status=CANCELLED로 처리한다 (API 8.3).
+          <Button variant="outline" onClick={() => onDelete(event)} disabled={saving}>
+            {saving ? '처리 중…' : '일정 취소'}
           </Button>
         )}
       </div>

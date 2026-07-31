@@ -1,20 +1,55 @@
-import type { CalendarEvent } from '@renderer/types/schedule'
+import { apiFetch } from './client'
+import type {
+  CalendarEvent,
+  CalendarEventListResponse,
+  CreateCalendarEventInput,
+  UpdateCalendarEventInput
+} from '@renderer/types/schedule'
 
 /**
- * 기간별 일정 목록 조회.
- * 현재는 mock. 실제 연동 시:
- *   const res = await fetch(`/api/v1/calendar-events?from=${from}&to=${to}`, ...)
- *   return (await res.json()).data.items as CalendarEvent[]
+ * 일정 캘린더 API — `/api/v1/calendar-events` (CalendarEventController).
+ * 전 엔드포인트가 Bearer JWT를 요구한다 (api/client.ts가 자동 주입·401 재시도).
  */
-export async function getCalendarEvents(_from: string, _to: string): Promise<CalendarEvent[]> {
-  await new Promise((resolve) => window.setTimeout(resolve, 200))
-  return MOCK_EVENTS
+
+const BASE = '/calendar-events'
+
+/**
+ * 기간별 일정 목록. `from`/`to`는 ISO-8601 instant, 조회 범위는 최대 62일(BE 강제).
+ * 응답의 `promises`(기한 잡힌 약속)는 별도 렌더 작업 전까지 쓰지 않는다 (API 8.1).
+ */
+export async function getCalendarEvents(from: string, to: string): Promise<CalendarEvent[]> {
+  const query = new URLSearchParams({ from, to })
+  const data = await apiFetch<CalendarEventListResponse>(`${BASE}?${query}`)
+  return data.items
+}
+
+/** 201 Created. SCHEDULED 상태로 생성된다. */
+export async function createCalendarEvent(input: CreateCalendarEventInput): Promise<CalendarEvent> {
+  return apiFetch<CalendarEvent>(BASE, { method: 'POST', body: JSON.stringify(input) })
+}
+
+/** 부분 수정. patch에 없는 키는 유지, `null`은 값을 비운다 (PatchValue 계약). */
+export async function updateCalendarEvent(
+  calendarEventId: number,
+  patch: UpdateCalendarEventInput
+): Promise<CalendarEvent> {
+  return apiFetch<CalendarEvent>(`${BASE}/${calendarEventId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch)
+  })
+}
+
+/** BE에 DELETE 엔드포인트가 없어 취소는 상태 변경으로 처리한다 (API 8.3). */
+export async function cancelCalendarEvent(calendarEventId: number): Promise<CalendarEvent> {
+  return updateCalendarEvent(calendarEventId, { status: 'CANCELLED' })
 }
 
 /**
- * AI 공지 문구 초안(mock) — 실제로는 POST /calendar-events/{id}/announcement-drafts.
+ * AI 공지 문구 초안 — 실제 `POST /calendar-events/{id}/announcement-drafts`는
+ * 명세서 8.4 기준 BE 미구현("보류")이라 그동안 클라이언트에서 생성해 둔다.
+ * BE 구현 시 이 함수를 걷어내고 실제 호출로 교체한다.
  */
-export function buildMockAnnouncement(event: CalendarEvent): string {
+export function buildAnnouncementDraft(event: CalendarEvent): string {
   const time = new Date(event.startAt).toLocaleTimeString('ko-KR', {
     hour: '2-digit',
     minute: '2-digit',
@@ -24,38 +59,4 @@ export function buildMockAnnouncement(event: CalendarEvent): string {
     return `📢 오늘은 휴방입니다. 다음 방송에서 만나요! 🙌`
   }
   return `📢 오늘 밤 ${time}! ${event.title} 갑니다. 놓치지 마세요 🔥`
-}
-
-// ─── mock 데이터 (실제 API 연동 시 제거) — 2026년 7월 기준 ───────────────
-const MOCK_EVENTS: CalendarEvent[] = [
-  ev(101, 'BROADCAST', '발로란트 랭크 정복 Day 8', '2026-07-01T12:00:00Z', '2026-07-01T15:00:00Z'),
-  ev(102, 'DAY_OFF', '휴방', '2026-07-03T00:00:00Z', '2026-07-04T00:00:00Z', null),
-  ev(103, 'BROADCAST', '롤토체스 랭크', '2026-07-04T11:00:00Z', '2026-07-04T14:00:00Z'),
-  ev(104, 'BROADCAST', '발로란트 랭크 정복 Day 9', '2026-07-06T12:00:00Z', '2026-07-06T15:00:00Z'),
-  ev(105, 'BROADCAST', '심야 수다방', '2026-07-08T12:00:00Z', '2026-07-08T15:00:00Z'),
-  ev(106, 'BROADCAST', '합방 — 제로킬', '2026-07-10T11:00:00Z', '2026-07-10T14:00:00Z'),
-  ev(107, 'BROADCAST', '발로란트 랭크 정복 Day 10', '2026-07-13T12:00:00Z', '2026-07-13T15:00:00Z'),
-  ev(108, 'BROADCAST', '심야 수다방', '2026-07-15T12:00:00Z', '2026-07-15T15:00:00Z'),
-  ev(109, 'BROADCAST', '롤토체스 랭크', '2026-07-17T11:00:00Z', '2026-07-17T14:00:00Z'),
-  ev(110, 'BROADCAST', '발로란트 랭크 정복 Day 12', '2026-07-20T12:00:00Z', '2026-07-20T15:00:00Z')
-]
-
-function ev(
-  id: number,
-  type: CalendarEvent['eventType'],
-  title: string,
-  startAt: string,
-  endAt: string,
-  platformAccountId: number | null = 15
-): CalendarEvent {
-  return {
-    calendarEventId: id,
-    platformAccountId,
-    eventType: type,
-    title,
-    memo: null,
-    startAt,
-    endAt,
-    status: 'SCHEDULED'
-  }
 }

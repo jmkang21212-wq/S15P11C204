@@ -12,12 +12,22 @@ interface CalendarMonthProps {
   onNextMonth: () => void
   onSelectEvent: (event: CalendarEvent) => void
   onAddEvent: () => void
+  /** 연동된 플랫폼 계정이 없어 새 일정을 만들 수 없을 때. */
+  addDisabled?: boolean
 }
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
 
-function dateKey(d: Date): string {
-  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+/**
+ * 셀 날짜(자정~다음 자정)와 일정 구간이 겹치는지.
+ * BE `findRange`가 포함이 아니라 겹침으로 조회하므로(여러 날짜짜리 DAY_OFF가 경계를
+ * 걸칠 수 있다), 화면도 시작일 하나에만 꽂지 않고 걸치는 모든 날짜 셀에 그린다.
+ */
+function overlapsDay(event: CalendarEvent, day: Date): boolean {
+  const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate())
+  const dayEnd = new Date(dayStart)
+  dayEnd.setDate(dayEnd.getDate() + 1)
+  return new Date(event.startAt) < dayEnd && new Date(event.endAt) > dayStart
 }
 
 export default function CalendarMonth({
@@ -28,17 +38,9 @@ export default function CalendarMonth({
   onPrevMonth,
   onNextMonth,
   onSelectEvent,
-  onAddEvent
+  onAddEvent,
+  addDisabled = false
 }: CalendarMonthProps): React.JSX.Element {
-  // 일정을 날짜별로 그룹화 (로컬 날짜 기준)
-  const eventsByDay = new Map<string, CalendarEvent[]>()
-  for (const e of events) {
-    const key = dateKey(new Date(e.startAt))
-    const list = eventsByDay.get(key) ?? []
-    list.push(e)
-    eventsByDay.set(key, list)
-  }
-
   // 6주 × 7일 그리드 생성
   const startWeekday = new Date(year, month, 1).getDay()
   const gridStart = new Date(year, month, 1 - startWeekday)
@@ -72,7 +74,13 @@ export default function CalendarMonth({
         <span className="rounded-lg border border-dashed px-3 py-1.5 text-xs text-muted-foreground">
           추천 시간대 보기 (준비 중)
         </span>
-        <Button className="ml-auto" size="sm" onClick={onAddEvent}>
+        <Button
+          className="ml-auto"
+          size="sm"
+          onClick={onAddEvent}
+          disabled={addDisabled}
+          title={addDisabled ? '연동된 방송 플랫폼이 없어요. 연동 후 이용해 주세요.' : undefined}
+        >
           + 일정 추가
         </Button>
       </div>
@@ -97,7 +105,7 @@ export default function CalendarMonth({
       <div className="grid flex-1 grid-cols-7 grid-rows-6 overflow-hidden">
         {cells.map((d, i) => {
           const inMonth = d.getMonth() === month
-          const dayEvents = eventsByDay.get(dateKey(d)) ?? []
+          const dayEvents = events.filter((e) => overlapsDay(e, d))
           return (
             <div
               key={i}
