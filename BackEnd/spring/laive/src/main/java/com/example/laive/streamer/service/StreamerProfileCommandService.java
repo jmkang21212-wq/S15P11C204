@@ -6,6 +6,7 @@ import com.example.laive.streamer.domain.StreamerProfile;
 import com.example.laive.streamer.domain.UpdateStreamerProfileCommand;
 import com.example.laive.streamer.exception.StreamerProfileException;
 import com.example.laive.streamer.repository.StreamerProfileRepository;
+import com.example.laive.growth.roadmap.service.GrowthRoadmapTransactionService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,15 +26,18 @@ public class StreamerProfileCommandService {
     private final StreamerProfileRepository repository;
     private final StreamerTagService tagService;
     private final StreamerProfileQueryService queryService;
+    private final GrowthRoadmapTransactionService growthRoadmaps;
 
     public StreamerProfileCommandService(
             StreamerProfileRepository repository,
             StreamerTagService tagService,
-            StreamerProfileQueryService queryService
+            StreamerProfileQueryService queryService,
+            GrowthRoadmapTransactionService growthRoadmaps
     ) {
         this.repository = repository;
         this.tagService = tagService;
         this.queryService = queryService;
+        this.growthRoadmaps = growthRoadmaps;
     }
 
     /** 보낸 필드만 반영하고, 수정된 전체 프로필을 돌려준다. */
@@ -56,6 +60,7 @@ public class StreamerProfileCommandService {
 
         if (command.tagIds() != null) {
             tagService.replaceTags(streamerId, command.tagIds().value());
+            growthRoadmaps.requestForPortfolio(streamerId);
         }
 
         return queryService.getProfile(streamerId);

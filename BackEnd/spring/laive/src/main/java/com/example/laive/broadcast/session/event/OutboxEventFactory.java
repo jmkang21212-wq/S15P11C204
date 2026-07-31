@@ -9,6 +9,9 @@ import java.util.UUID;
 import com.example.laive.report.event.ReportFinalizationRequestedEvent;
 import com.example.laive.report.event.TriggerAnalysisRequestedEvent;
 import com.example.laive.growth.event.GrowthActionGenerationRequestedEvent;
+import com.example.laive.growth.roadmap.domain.RoadmapGenerationTrigger;
+import com.example.laive.growth.roadmap.domain.RoadmapQuality;
+import com.example.laive.growth.roadmap.event.GrowthRoadmapGenerationRequestedEvent;
 
 /**
  * 이벤트 식별자, 버전, 중복 방지 Key와 JSON 직렬화를 한곳에서 생성한다.
@@ -163,6 +166,32 @@ public class OutboxEventFactory {
                         sourceReportId, promptVersion, occurredAt
                 ),
                 occurredAt
+        );
+    }
+
+    public PendingOutboxEvent growthRoadmapGenerationRequested(
+            long generationId,
+            long roadmapId,
+            long streamerId,
+            Long sourceReportId,
+            RoadmapGenerationTrigger triggerType,
+            RoadmapQuality quality,
+            String promptVersion,
+            String deduplicationKey,
+            Instant occurredAt,
+            Instant availableAt
+    ) {
+        UUID eventId = UUID.randomUUID();
+        return pending(
+                eventId,
+                roadmapId,
+                BroadcastOutboxEventType.GROWTH_ROADMAP_GENERATION_REQUESTED,
+                deduplicationKey,
+                new GrowthRoadmapGenerationRequestedEvent(
+                        eventId, SCHEMA_VERSION, generationId, roadmapId, streamerId,
+                        sourceReportId, triggerType, quality, promptVersion, occurredAt
+                ),
+                availableAt
         );
     }
 

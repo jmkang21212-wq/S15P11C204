@@ -6,25 +6,25 @@
 
     <resultMap id="growthGoalMap" type="com.example.laive.growth.domain.GrowthGoal">
         <constructor>
-            <idArg column="id" javaType="long"/>
-            <arg column="streamer_id" javaType="long"/>
+            <idArg column="id" javaType="_long"/>
+            <arg column="streamer_id" javaType="_long"/>
             <arg column="metric_type" javaType="com.example.laive.growth.domain.GrowthMetricType"/>
             <arg column="target_value" javaType="java.math.BigDecimal"/>
             <arg column="unit" javaType="com.example.laive.growth.domain.GrowthMetricUnit"/>
             <arg column="period_start" javaType="java.time.LocalDate"/>
             <arg column="period_end" javaType="java.time.LocalDate"/>
             <arg column="status" javaType="com.example.laive.growth.domain.GrowthGoalStatus"/>
-            <arg column="revision" javaType="long"/>
+            <arg column="revision" javaType="_long"/>
         </constructor>
     </resultMap>
 
     <resultMap id="growthActionGenerationMap"
                type="com.example.laive.growth.domain.GrowthActionGeneration">
         <constructor>
-            <idArg column="id" javaType="long"/>
-            <arg column="growth_goal_id" javaType="long"/>
+            <idArg column="id" javaType="_long"/>
+            <arg column="growth_goal_id" javaType="_long"/>
             <arg column="source_report_id" javaType="java.lang.Long"/>
-            <arg column="goal_revision" javaType="long"/>
+            <arg column="goal_revision" javaType="_long"/>
             <arg column="trigger_type" javaType="com.example.laive.growth.domain.GrowthActionTriggerType"/>
             <arg column="status" javaType="com.example.laive.growth.domain.GrowthActionJobStatus"/>
             <arg column="prompt_version" javaType="java.lang.String"/>

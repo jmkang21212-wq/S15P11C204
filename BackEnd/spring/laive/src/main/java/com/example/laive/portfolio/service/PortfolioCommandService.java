@@ -8,6 +8,7 @@ import com.example.laive.portfolio.domain.UpdatePortfolioCommand;
 import com.example.laive.portfolio.exception.PortfolioException;
 import com.example.laive.portfolio.repository.PortfolioRepository;
 import com.example.laive.streamer.service.StreamerTagService;
+import com.example.laive.growth.roadmap.service.GrowthRoadmapTransactionService;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,6 +33,7 @@ public class PortfolioCommandService {
     private final PortfolioPerformanceService performanceService;
     private final PortfolioQueryService queryService;
     private final Clock clock;
+    private final GrowthRoadmapTransactionService growthRoadmaps;
     /** 슬러그는 공개 주소다 — 추측 불가능해야 하므로 SecureRandom을 쓴다. */
     private final SecureRandom random = new SecureRandom();
 
@@ -40,13 +42,15 @@ public class PortfolioCommandService {
             StreamerTagService tagService,
             PortfolioPerformanceService performanceService,
             PortfolioQueryService queryService,
-            Clock clock
+            Clock clock,
+            GrowthRoadmapTransactionService growthRoadmaps
     ) {
         this.repository = repository;
         this.tagService = tagService;
         this.performanceService = performanceService;
         this.queryService = queryService;
         this.clock = clock;
+        this.growthRoadmaps = growthRoadmaps;
     }
 
     /**
@@ -71,6 +75,7 @@ public class PortfolioCommandService {
         tagService.replaceTags(streamerId, command.tagIds());
         replaceHighlights(streamerId, portfolioId, command.featuredHighlights());
         performanceService.refresh(streamerId);
+        growthRoadmaps.requestForPortfolio(streamerId);
         return queryService.getMyPortfolio(streamerId);
     }
 
@@ -90,6 +95,11 @@ public class PortfolioCommandService {
                             : command.featuredHighlights().value();
             FeaturedHighlightSelection.requireNoDuplicates(selections);
             replaceHighlights(streamerId, current.portfolioId(), selections);
+        }
+        if (command.title() != null
+                || command.introduction() != null
+                || command.featuredHighlights() != null) {
+            growthRoadmaps.requestForPortfolio(streamerId);
         }
         return queryService.getMyPortfolio(streamerId);
     }
