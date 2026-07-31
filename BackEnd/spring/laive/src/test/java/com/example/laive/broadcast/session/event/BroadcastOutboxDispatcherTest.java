@@ -83,6 +83,7 @@ class BroadcastOutboxDispatcherTest {
                 Duration.ofSeconds(10),
                 Duration.ofSeconds(30),
                 Duration.ofMinutes(30),
+                Duration.ofSeconds(60),   // voiceTicketTtl — 이 테스트와는 무관
                 new BroadcastSessionProperties.Outbox(
                         500,
                         50,
