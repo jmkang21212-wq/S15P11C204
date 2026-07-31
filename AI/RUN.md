@@ -232,7 +232,91 @@ Select-String -Path logs\chatai.log -Pattern "bid=42"
 
 ---
 
-# E. 실제 방송 없이 채팅 테스트 (리플레이 시뮬레이터)
+# E. 테스트
+
+## E-1. 단위 테스트
+
+```powershell
+cd C:\projects\S15P11C204\AI\chat-ai
+..\.venv\Scripts\python.exe -m pytest -q
+```
+
+```
+63 passed in 1.33s
+```
+
+> **Docker 컨테이너 안에서는 안 돈다** (`No module named pytest`).
+> 이미지를 `uv sync --no-dev`로 빌드해 개발 의존성을 뺐기 때문이다 — 고장이 아니라
+> **의도한 것**이다(이미지 크기 축소). 테스트는 위처럼 호스트 venv에서 돌린다.
+> 호스트 venv가 없으면 B-1을 먼저 할 것.
+
+## E-2. API를 직접 찔러보기
+
+⚠ **한글이 든 본문을 `curl -d`로 바로 보내면 실패한다.** 콘솔이 UTF-8이 아니라
+cp949로 인코딩해 서버가 JSON을 못 읽는다:
+
+```
+{"detail":"There was an error parsing the body"}
+```
+
+**해결 1 — Swagger UI (가장 쉽다).** 브라우저가 UTF-8로 보내주므로 인코딩 문제가 없다.
+
+```
+http://localhost:8001/docs      채팅 감정 분류
+http://localhost:8000/docs      위험 발언 감지
+http://localhost:8002/docs      채팅 수집기
+```
+
+**해결 2 — curl에 UTF-8 파일로 넘기기.** 본문을 파일로 저장하고 `--data-binary`로 보낸다.
+(`-d @파일`이 아니라 **`--data-binary`** 여야 한다 — `-d`는 줄바꿈을 지운다.
+`Out-File -Encoding utf8`이 BOM을 붙이지만 서버가 무시하므로 문제없다 — 확인함)
+
+```powershell
+'{"viewers":100,"chats":[{"uid":"u1","msg":"ㅋㅋㅋ 개웃기네"}]}' |
+    Out-File -Encoding utf8 body.json
+curl.exe -X POST http://localhost:8001/broadcasts/999/ingest `
+    -H "Content-Type: application/json" --data-binary "@body.json"
+```
+
+정상 응답:
+
+```json
+{"results":[{"label":"웃음/재미","score":0.9921}],
+ "window":{"chatCount":1,"uniqueChatters":1,"engagement":0.01,"dominant":"웃음/재미", ...}}
+```
+
+**해결 3 — PowerShell.** `Invoke-RestMethod`는 쓰지 말 것. 요청은 나가지만
+**응답 한글이 `ìì/ì¬ë¯¸`처럼 깨진다** — PowerShell 5.1이 응답을
+UTF-8로 안 읽는다. `Invoke-WebRequest`로 받아 직접 디코딩해야 한다:
+
+```powershell
+$body = @{
+    viewers = 100
+    chats = @(@{ uid = "u1"; msg = "ㅋㅋㅋ 개웃기네" })
+} | ConvertTo-Json -Depth 5
+
+$resp = Invoke-WebRequest -UseBasicParsing `
+    -Uri http://localhost:8001/broadcasts/999/ingest -Method Post `
+    -ContentType "application/json; charset=utf-8" `
+    -Body ([Text.Encoding]::UTF8.GetBytes($body))
+
+$r = [Text.Encoding]::UTF8.GetString($resp.RawContentStream.ToArray()) | ConvertFrom-Json
+$r.results | Format-Table label, score -AutoSize
+$r.window.dominant
+```
+
+```
+label     score
+-----     -----
+웃음/재미 0.9921
+
+웃음/재미
+```
+
+요청(`UTF8.GetBytes`)과 응답(`UTF8.GetString`) **양쪽 다** 손대야 한다.
+번거로우면 Swagger UI를 쓰는 게 낫다.
+
+## E-3. 실제 방송 없이 채팅 테스트 (리플레이 시뮬레이터)
 
 수집된 과거 VOD 채팅을 **원래 타이밍대로 재생하는 가짜 치지직 서버**다 (포트 8899).
 접속 주소만 바꾸면 라이브 방송 없이 개발·백테스트할 수 있다.
@@ -277,13 +361,15 @@ python replay\spring_sim.py                           # 터미널 3: Spring 역�
 | `/summary`가 503 | `AI\.env`에 `GMS_KEY` 없음 |
 | 컨테이너가 계속 재시작 | `docker compose logs <서비스>`로 원인 확인. 대개 `.env` 누락 |
 | Docker에서 코드 수정이 반영 안 됨 | `compose.override.yaml`이 있는지 확인. 없으면 배포 모드로 도는 것 |
+| `There was an error parsing the body` | 한글 본문 인코딩. `-d` 대신 Swagger UI나 `--data-binary` (E-2) |
+| 컨테이너 안에서 `No module named pytest` | 정상. 배포 이미지는 개발 의존성을 뺐다. 호스트 venv에서 돌릴 것 (E-1) |
 | `이 시스템에서 스크립트를 실행할 수 없으므로` | 실행 정책 (B-2 참고) |
 | PowerShell에서 `&&` 파서 에러 | Windows PowerShell 5.1은 `&&` 미지원. `;`로 바꾸거나 줄을 나눌 것 |
 | `uvicorn: 명령을 찾을 수 없습니다` | 가상환경 활성화 안 함 (B-2) |
 | `Port 8080 was already in use` | Spring이 이미 떠 있다. IDE 실행과 `gradlew bootRun` 중 하나만 쓸 것 |
 | `CreateProcess error=206, 파일 이름이 너무 깁니다` | IntelliJ classpath 길이 제한. Run Configuration → Modify options → **Shorten command line** → `@argfile` |
 | 프론트에 감정이 안 보임 | Spring `.env`의 `CHATAI_BASE_URL` 확인 (C) |
-| `replay --list`가 비어 있음 | 채팅 데이터 없음 (E) |
+| `replay --list`가 비어 있음 | 채팅 데이터 없음 (E-3) |
 | 콘솔에서 한글이 깨짐 | 서버 문제가 아니라 콘솔 인코딩. Swagger UI(`/docs`)로 테스트할 것 |
 
 ### 포트를 누가 잡고 있는지
