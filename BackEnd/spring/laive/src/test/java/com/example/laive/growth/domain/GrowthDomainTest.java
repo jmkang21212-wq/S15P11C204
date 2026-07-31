@@ -26,12 +26,19 @@ class GrowthDomainTest {
     }
 
     @Test
-    void acceptsUnalignedPeriodButRejectsExcessivePeriod() {
-        assertThat(GrowthPeriod.aligned(
+    void rejectsUnalignedAndExcessivePeriods() {
+        assertThatThrownBy(() -> GrowthPeriod.aligned(
                 GrowthPeriodType.WEEKLY,
                 LocalDate.parse("2026-07-14"),
                 LocalDate.parse("2026-07-20")
-        ).start()).isEqualTo(LocalDate.parse("2026-07-14"));
+        )).isInstanceOf(GrowthException.class)
+                .extracting("code").isEqualTo("INVALID_GROWTH_PERIOD");
+        assertThatThrownBy(() -> GrowthPeriod.aligned(
+                GrowthPeriodType.MONTHLY,
+                LocalDate.parse("2026-07-02"),
+                LocalDate.parse("2026-07-31")
+        )).isInstanceOf(GrowthException.class)
+                .extracting("code").isEqualTo("INVALID_GROWTH_PERIOD");
         assertThatThrownBy(() -> GrowthPeriod.aligned(
                 GrowthPeriodType.WEEKLY,
                 LocalDate.parse("2024-01-01"),

@@ -3,6 +3,7 @@ package com.example.laive.growth.domain;
 import com.example.laive.growth.exception.GrowthException;
 
 import java.time.Duration;
+import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -22,7 +23,17 @@ public record GrowthPeriod(LocalDate start, LocalDate end) {
         if (type == null) {
             throw GrowthException.invalidPeriod();
         }
-        return new GrowthPeriod(start, end);
+        GrowthPeriod period = new GrowthPeriod(start, end);
+        boolean aligned = switch (type) {
+            case WEEKLY -> start.getDayOfWeek() == DayOfWeek.MONDAY
+                    && end.getDayOfWeek() == DayOfWeek.SUNDAY;
+            case MONTHLY -> start.getDayOfMonth() == 1
+                    && end.equals(end.withDayOfMonth(end.lengthOfMonth()));
+        };
+        if (!aligned) {
+            throw GrowthException.invalidPeriod();
+        }
+        return period;
     }
 
     public Instant startInclusive() {
