@@ -1,4 +1,4 @@
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts'
+import { Bar, BarChart, CartesianGrid, Cell, XAxis, YAxis } from 'recharts'
 import { BarChart3 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@renderer/components/ui/card'
 import {
@@ -35,7 +35,20 @@ interface GrowthTrendChartProps {
   series: GrowthSeriesPoint[]
   metric: SeriesMetric
   periodType: PeriodType
+  /**
+   * 아직 끝나지 않은 구간의 `periodStart`. 그 막대는 계속 자랄 값이라 완결 구간과
+   * 같은 밀도로 그리면 "지표가 꺾였다"로 잘못 읽힌다. 없으면 전부 완결 구간이다.
+   */
+  inProgressPeriodStart?: string | null
+  /**
+   * 조회 구간 개수. 헤더의 "최근 N주" 라벨에만 쓴다 — 구간을 정하는 쪽(페이지)이
+   * 그대로 넘겨야 상수를 바꿨을 때 라벨이 조용히 어긋나지 않는다.
+   */
+  bucketCount: number
 }
+
+/** 진행 중 막대는 같은 색을 옅게 써서 "아직 확정 아님"을 알린다. */
+const IN_PROGRESS_OPACITY = 0.4
 
 /** 주간은 `07.14`, 월간은 `2026.07`로 축 라벨을 만든다. */
 function formatPeriodLabel(periodStart: string, periodType: PeriodType): string {
@@ -46,7 +59,9 @@ function formatPeriodLabel(periodStart: string, periodType: PeriodType): string 
 export default function GrowthTrendChart({
   series,
   metric,
-  periodType
+  periodType,
+  inProgressPeriodStart = null,
+  bucketCount
 }: GrowthTrendChartProps): React.JSX.Element {
   const chartConfig = {
     [metric]: { label: METRIC_LABEL[metric], color: 'var(--chart-1)' }
@@ -56,8 +71,10 @@ export default function GrowthTrendChart({
     label: formatPeriodLabel(point.periodStart, periodType),
     periodStart: point.periodStart,
     periodEnd: point.periodEnd,
-    value: point[metric]
+    value: point[metric],
+    inProgress: point.periodStart === inProgressPeriodStart
   }))
+  const hasInProgress = data.some((point) => point.inProgress)
 
   return (
     <Card>
@@ -65,7 +82,8 @@ export default function GrowthTrendChart({
         <CardTitle className="text-sm font-semibold">
           {METRIC_LABEL[metric]} 추이
           <span className="ml-2 text-xs font-normal text-muted-foreground">
-            {periodType === 'WEEKLY' ? '최근 12주' : '최근 6개월'}
+            {`최근 ${bucketCount}${periodType === 'WEEKLY' ? '주' : '개월'}`}
+            {hasInProgress && ` · 마지막 ${periodType === 'WEEKLY' ? '주' : '달'}는 진행 중`}
           </span>
         </CardTitle>
       </CardHeader>
@@ -104,11 +122,12 @@ export default function GrowthTrendChart({
                     indicator="line"
                     labelFormatter={(_value, payload) => {
                       const item = payload?.[0]?.payload as
-                        { periodStart: string; periodEnd: string } | undefined
+                        { periodStart: string; periodEnd: string; inProgress: boolean } | undefined
                       if (!item) return null
                       return (
                         <span className="font-mono">
                           {item.periodStart} ~ {item.periodEnd}
+                          {item.inProgress && <span className="ml-1 font-sans">(진행 중)</span>}
                         </span>
                       )
                     }}
@@ -122,7 +141,14 @@ export default function GrowthTrendChart({
                 }
               />
 
-              <Bar dataKey="value" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="value" fill="var(--chart-1)" radius={[4, 4, 0, 0]}>
+                {data.map((point) => (
+                  <Cell
+                    key={point.periodStart}
+                    fillOpacity={point.inProgress ? IN_PROGRESS_OPACITY : 1}
+                  />
+                ))}
+              </Bar>
             </BarChart>
           </ChartContainer>
         )}
