@@ -901,9 +901,9 @@ Access Token과 Refresh Token은 `PLATFORM_ACCOUNTS`에 암호화하여 저장�
 
 `briefings[].createdAt`은 `LIVE_BRIEFINGS.created_at`을 반환한다. `created_at`은 `NOT NULL`이며 브리핑 레코드가 생성된 시각이다.
 
-`services`의 각 필드 판정 기준 (2026-07-29 구현 기준):
+`services`의 각 필드 판정 기준 (2026-07-31 구현 기준):
 
-- `microphone`, `stt` — 음성 파이프라인 구현 전까지 각각 `DISCONNECTED`, `STOPPED` 고정. 미구현 기능을 정상으로 표시하지 않는다.
+- `microphone`, `stt` — 각각 `DISCONNECTED`, `STOPPED` 고정. 음성 경로는 프론트 ↔ AI 음성 서버 직결(WebSocket, `AI/FRONTEND_API.md`)이라 Spring이 관측할 수 없다. 실제 마이크·음성 분석 상태는 프론트가 자기 WS 연결 상태로 표시한다.
 - `ai` — 채팅 감정 분류 파이프라인의 생사. 여론 스냅샷이 최근 10초 안에 갱신됐으면 `RUNNING`. 방송 중에는 채팅이 없어도 Spring이 매초 빈 배치를 중계하므로(13.6) 정상일 때 항상 신선하다.
 - `collector` — 치지직 채팅 수집기의 연결 상태(하트비트 기반, 30초 초과 시 `STOPPED` 강등). 수집기는 자동 재연결이 불가능해 재핸드셰이크 루프로 복구하며, 그 사이의 채팅은 영구 유실된다. 수집이 멈춘 것을 스트리머가 알아야 하므로 화면에 노출한다.
 
@@ -916,7 +916,9 @@ Access Token과 Refresh Token은 `PLATFORM_ACCOUNTS`에 암호화하여 저장�
 
 `briefings`는 `LIVE_BRIEFINGS`의 **최근 20건을 최신순**으로 내려보낸다 (2026-07-30 구현). AI 분석이 저장하는 `RISK`·`PROMISE`와 여론 요약 `CHAT_SUMMARY`가 실리며, `FAQ`는 아직 쓰는 곳이 없다. 전체 이력은 세션 리포트 몫이다.
 
-`repeatedQuestions`는 13.6 폴링이 DB에 쌓은 것 중 **답변 완료(dismissed)가 아닌 질문을 askers 내림차순으로 최대 50건** 내려보낸다 (2026-07-30 Spring측 구현 — 단 AI측 라우트가 아직 없어 그 전까지는 빈 배열이다).
+방송 중 `RISK`·`PROMISE`는 AI 음성 서버가 프론트로 WebSocket 직송도 하므로(`AI/FRONTEND_API.md`) **같은 사건이 두 경로로 도착한다.** 두 표현은 공유 키가 없어(id·문구·시각이 전부 다르다) 건별 중복 제거가 불가능하고, 프론트는 콘솔 진입 시각을 컷오버로 삼아 그 이전 것만 스냅샷에서 히스토리로 병합한다(새로고침·재입장 복구용) — 이후는 WS가 전담한다. `CHAT_SUMMARY`처럼 WS로 오지 않는 유형은 항상 스냅샷에서 받는다. 병합 규칙의 구현은 프론트 `lib/briefings.ts`다.
+
+`repeatedQuestions`는 13.6 폴링이 DB에 쌓은 것 중 **답변 완료(dismissed)가 아닌 질문을 askers 내림차순으로 최대 50건** 내려보낸다 (Spring측 2026-07-30 구현, chat-ai의 `GET /broadcasts/{id}/questions` 라우트도 구현되어 E2E 검증 완료).
 
 - `questionId` — AI가 발급하는 불투명 식별자. **16자리 정수**이므로 프론트는 반드시 number 그대로 다루되 해석하지 말 것(JS Number 정밀도 2^53 안이다).
 - `text` — 질문 묶음의 대표 표현. 폴링마다 바뀔 수 있다.
@@ -1545,17 +1547,17 @@ SC-11의 채널명·태그 검색, 카테고리 필터, 규모 필터를 지원�
 | 수집기 → Spring | POST | `/internal/v1/sessions/{sessionId}/collection-gaps` | 수집 공백 구간 보고 |
 | Spring → 수집기 | POST | `/collectors/{sessionId}` | 세션 수집 시작 |
 | Spring → 수집기 | DELETE | `/collectors/{sessionId}` | 세션 수집 종료와 잔여 Flush |
-| 음성 중계 → Spring | POST | `/internal/v1/sessions/{sessionId}/audio-chunks` | 음성 청크 저장·STT 작업 등록 |
-| FastAPI → Spring | POST | `/internal/v1/sessions/{sessionId}/transcripts:batch` | STT 결과 배치 저장 |
-| Spring → FastAPI | POST | `/internal/v1/ai/stt` | 음성 청크 STT 변환 |
-| Spring → FastAPI | POST | `/internal/v1/ai/risk-speech` | 위험 발언 분류와 조언 생성 |
+| AI 음성 서버 → Spring | POST | `/internal/v1/sessions/{sessionId}/transcripts:batch` | STT 전사 배치 저장 (13.4) |
+| AI 음성 서버 → Spring | POST | `/internal/v1/sessions/{sessionId}/risk-events` | 위험 발언 저장 + RISK 브리핑 생성 (13.5) |
+| AI 음성 서버 → Spring | POST | `/internal/v1/sessions/{sessionId}/promises` | 약속 후보 저장 + PROMISE 브리핑 생성 (13.5) |
 | Spring → 채팅 AI | POST | `/broadcasts/{sessionId}/ingest` | 1초 배치 채팅 분류와 실시간 윈도우 지표 (구현·검증 완료 — 13.6) |
 | Spring → 채팅 AI | POST | `/broadcasts/{sessionId}/summary` | LLM 여론 요약 생성 (양측 구현 완료 2026-07-30 — 13.6) |
 | Spring → 채팅 AI | GET | `/broadcasts/{sessionId}/summary` | 마지막 요약 캐시 회수 (COOLDOWN 백스톱 — 13.6) |
 | Spring → 채팅 AI | DELETE | `/broadcasts/{sessionId}` | 방송 종료 시 윈도우·요약 캐시 정리 (구현·검증 완료) |
-| Spring → 채팅 AI | GET | `/broadcasts/{sessionId}/questions` | 반복 질문 Top N 폴링(Spring측 구현 완료, AI측 라우트 미구현 — 계약은 `AI/CHAT_AI_API.md` §3) |
-| Spring → FastAPI | POST | `/internal/v1/ai/promise-detection` | STT에서 약속 후보 추출 |
+| Spring → 채팅 AI | GET | `/broadcasts/{sessionId}/questions` | 반복 질문 Top N 폴링(양측 구현 완료 — 계약은 `AI/CHAT_AI_API.md` §3) |
 | Spring → FastAPI | POST | `/internal/v1/ai/growth-actions` | 성장 목표의 다음 액션 제안 |
+
+> **개정 (2026-07-31).** 음성 파이프라인의 호출 방향을 실제 구현에 맞췄다. 초안의 음성 청크 수집(`audio-chunks`, 13.3.3)과 Spring이 AI를 호출하는 `POST /internal/v1/ai/stt`·`/internal/v1/ai/risk-speech`·`/internal/v1/ai/promise-detection`은 폐기됐다. 오디오는 프론트가 AI 음성 서버로 WebSocket 직송하고(`AI/FRONTEND_API.md`), AI가 STT·판정을 마친 결과를 Spring으로 push한다(13.4·13.5, 규격 정본은 `AI/BACKEND_API.md`). 감지 즉시 밀어주는 편이 실시간 콘솔에 자연스럽고, 큐·재시도·배치가 이미 AI 쪽에 있기 때문이다.
 
 세션 리포트 생성은 내부 API가 아니다. Spring이 자기 DB의 트리거·전사·채팅을 읽어 LLM을 직접 호출한다(13.7). 따라서 `session-reports` 요청, `highlight-detection` 요청, `analysis-results` Callback 세 Endpoint는 두지 않는다.
 
@@ -1661,133 +1663,82 @@ Spring은 `viewerHash`로 `VIEWER_PROFILES`를 조회하거나 생성한 뒤 `CH
 
 `(session_id, started_at)` Upsert라 같은 보고를 몇 번 보내도 행이 늘지 않으므로 `X-Request-Id`를 받지 않는다.
 
-#### 13.3.3 음성 청크 수집
+#### 13.3.3 음성 청크 수집 (폐기 — 2026-07-31)
 
-`POST /internal/v1/sessions/{sessionId}/audio-chunks`
+> 초안의 음성 중계 서버와 `POST /internal/v1/sessions/{sessionId}/audio-chunks`는 구현하지 않는다. 오디오는 프론트가 AI 음성 서버로 WebSocket 직송하고(`AI/FRONTEND_API.md`), Spring은 음성 원본을 저장하지 않는다 — 전사 결과만 13.4로 받는다.
 
-`multipart/form-data`로 `audio`, `startMs`, `endMs`, `language`를 전달한다. Spring은 음성을 S3 호환 스토리지에 저장하고 STT 작업을 등록한다.
+#### 13.3.4 STT 결과 배치 저장 (13.4로 통합)
 
-```json
-{
-  "success": true,
-  "data": {
-    "audioChunkId": "chunk_01J2ABC",
-    "audioObjectKey": "sessions/9002/audio/chunk_01J2ABC.webm",
-    "startMs": 6450000,
-    "endMs": 6465000,
-    "status": "QUEUED"
-  }
-}
-```
+> AI 음성 서버가 전사를 Spring으로 직접 push하는 경로로 확정되어, 요청·응답과 저장 규칙은 13.4에서 다룬다.
 
-`audioChunkId`, `audioObjectKey`는 작업 큐·오브젝트 스토리지 식별자이며 ERD의 외부 리소스가 아니다.
+### 13.4 STT 전사 저장
 
-#### 13.3.4 STT 결과 배치 저장
+> **개정 (2026-07-31).** 초안의 `POST /internal/v1/ai/stt`(Spring이 음성 청크로 STT를 요청)는 폐기됐다. 실제 구현은 AI 음성 서버가 프론트에서 WebSocket으로 받은 오디오를 자체 STT로 전사하고, 그 결과를 아래 API로 Spring에 push한다. 요청·응답 규격의 정본은 `AI/BACKEND_API.md`다.
 
 `POST /internal/v1/sessions/{sessionId}/transcripts:batch`
+
+2초마다 또는 10건이 모이면 배치로 온다.
 
 ```json
 {
   "items": [
-    {
-      "startMs": 6450000,
-      "endMs": 6465000,
-      "transcript": "이번 판 이기면 구독자 추첨 이벤트 할게"
-    }
+    { "text": "안녕하세요 오늘 방송 시작합니다",
+      "startedAt": "2026-07-20T13:01:48.000Z",
+      "endedAt":   "2026-07-20T13:01:50.000Z" }
   ]
 }
 ```
 
-각 항목은 `TRANSCRIPTS(session_id, start_ms, end_ms, transcript)`에 저장한다. Spring이 STT 응답을 동기식으로 받은 경우에는 서비스 계층에서 직접 저장하고, 이 Endpoint는 비동기 Callback·재처리 배치에 사용한다.
+```json
+{ "success": true, "data": { "acceptedCount": 1, "duplicateCount": 0 } }
+```
 
-### 13.4 STT 분석
+- AI는 벽시계 시각(ISO 8601 UTC)을 보내고, Spring이 세션 `started_at` 기준 밀리초로 환산해 `TRANSCRIPTS(session_id, start_ms, end_ms, transcript)`에 저장한다(4.2). 방송 시작보다 이른 발화는 `start_ms`를 0으로 당긴다.
+- `(session_id, start_ms, end_ms)` Unique Upsert라 재전송이 같은 결과로 수렴하므로 `X-Request-Id` 멱등 가드를 걸지 않는다.
+- 배치 항목 수가 `laive.internal.max-batch-items`(기본 1000)를 넘으면 413이다.
 
-`POST /internal/v1/ai/stt`
+### 13.5 발언 분석 결과 저장
+
+> **개정 (2026-07-31).** 초안의 `POST /internal/v1/ai/risk-speech`·`/internal/v1/ai/promise-detection`(Spring이 `transcriptId`로 분석을 요청)은 폐기됐다. 실제 구현은 AI 음성 서버가 감지 즉시 결과를 Spring으로 push한다. 규격 정본은 `AI/BACKEND_API.md`다. 프론트 실시간 표시는 같은 감지를 AI가 WebSocket으로 직접 밀어주므로(`AI/FRONTEND_API.md`) 이 경로와 무관하다 — 이 API는 저장 전용이다.
+
+위험 발언 저장:
+
+`POST /internal/v1/sessions/{sessionId}/risk-events`
 
 ```json
 {
-  "sessionId": 9002,
-  "audioChunkId": "chunk_01J2ABC",
-  "audioObjectKey": "sessions/9002/audio/chunk_01J2ABC.webm",
-  "startMs": 6450000,
-  "endMs": 6465000,
-  "language": "ko"
+  "source": "DICTIONARY",
+  "severity": "HIGH",
+  "category": "PROFANITY",
+  "text": "아 씨발 뭐야 이게",
+  "startedAt": "2026-07-20T13:02:08.000Z",
+  "endedAt":   "2026-07-20T13:02:10.000Z",
+  "reason": null
 }
 ```
+
+`source`는 `DICTIONARY`(사전 매칭) | `LLM`(문맥 판정), `reason`은 LLM 판정 근거(사전 매칭이면 `null`)다. 성공 시 `201`과 저장된 행 id를 돌려준다. Spring은 `RISK_EVENTS`를 저장하고 `LIVE_BRIEFINGS(RISK)`를 생성한다 — 브리핑 문구는 `reason`이 있으면 그것, 없으면 기본 문구다.
+
+약속 후보 저장:
+
+`POST /internal/v1/sessions/{sessionId}/promises`
 
 ```json
 {
-  "success": true,
-  "data": {
-    "audioChunkId": "chunk_01J2ABC",
-    "startMs": 6450000,
-    "endMs": 6465000,
-    "transcript": "이번 판 이기면 구독자 추첨 이벤트 할게"
-  }
+  "content": "공포게임 방송",
+  "rawText": "2주 안으로 공포게임 할게요",
+  "deadlineAt": "2026-08-03T12:00:00.000Z",
+  "spokenAt":   "2026-07-20T13:02:18.000Z"
 }
 ```
 
-Spring은 성공 결과를 `TRANSCRIPTS`에 저장한 후 생성된 `transcriptId`로 위험 발언·약속 분석을 요청한다.
+`PROMISES`에 `DETECTED` 상태로 저장되고 `LIVE_BRIEFINGS(PROMISE)`가 생성된다. 기한(`"2주 안으로"`)은 AI가 절대 시각까지 계산해서 보내며 Spring이 파싱할 일은 없다 — `deadlineAt`이 `null`이면 기한 미정 약속이다(1.5). 같은 약속의 반복 발화는 AI가 15분 창에서 중복 제거한다.
 
-### 13.5 발언 분석
+공통 규칙:
 
-위험 발언 분석:
-
-`POST /internal/v1/ai/risk-speech`
-
-```json
-{
-  "sessionId": 9002,
-  "transcriptId": 701,
-  "transcript": "정치 관련 비방 표현",
-  "startMs": 6450000,
-  "endMs": 6465000
-}
-```
-
-```json
-{
-  "success": true,
-  "data": {
-    "detected": true,
-    "riskLevel": "HIGH",
-    "riskCategory": "POLITICS",
-    "advice": "화제를 전환하고 단정적인 표현을 피하세요.",
-    "briefingMessage": "정치·비방 소지가 있는 표현이 감지되었습니다."
-  }
-}
-```
-
-`detected = true`이면 Spring은 `RISK_EVENTS`를 저장하고 `briefingMessage`로 `LIVE_BRIEFINGS(RISK)`를 생성한다.
-
-약속 후보 분석:
-
-`POST /internal/v1/ai/promise-detection`
-
-```json
-{
-  "sessionId": 9002,
-  "transcriptId": 701,
-  "transcript": "이번 판 이기면 구독자 추첨 이벤트 할게",
-  "broadcastDate": "2026-07-20"
-}
-```
-
-```json
-{
-  "success": true,
-  "data": {
-    "candidates": [
-      {
-        "content": "구독자 추첨 이벤트 진행",
-        "dueDate": null
-      }
-    ]
-  }
-}
-```
-
-Spring은 후보마다 `PROMISES(streamer_id, session_id, transcript_id, content, status, due_date)`를 `DETECTED` 상태로 저장하고 `LIVE_BRIEFINGS(PROMISE)`를 생성한다.
+- **경고·약속이 전사 배치보다 먼저 도착한다** — 전사는 최대 2초 모았다 보내고 경고는 즉시 온다. `RISK_EVENTS.transcript_id`가 NOT NULL이므로 Spring은 payload에 실린 발화 원문(`text`·`rawText`)으로 전사를 먼저 Upsert한 뒤 연결한다. 도착 순서를 따질 필요가 없고, 뒤늦게 배치로 온 같은 발화는 13.4의 Unique가 흡수한다.
+- 위험 경고·약속에는 멱등 가드가 없어 재시도로 중복 저장될 수 있다. 실시간 경고 특성상 스트리머가 같은 경고를 두 번 보는 정도라 막지 않는다.
+- 저장의 일시 실패에는 반드시 5xx를 반환한다 — AI는 `4xx`를 받으면 재시도 없이 버리고(요청 자체가 잘못됐다고 본다), `5xx`·타임아웃은 0.5→1→2초 간격으로 최대 3회 재시도한다.
 
 ### 13.6 채팅 분석
 
@@ -2081,9 +2032,9 @@ ERD가 스트리머 중심으로 수정되었으므로 `ADVERTISER` 역할과 �
 - [ ]  Electron 앱의 음성 수집 방식과 권한
 - [ ]  Spring·FastAPI 서비스 토큰 회전, 네트워크 접근 제한 또는 mTLS 적용
 - [x]  `X-Request-Id` 멱등 처리 Redis TTL과 동일 요청 판별 범위 확정. TTL 10분, 키는 `internal:request-id:{id}`, 판별 범위는 요청 하나(배치 하나)다. 완료된 요청은 응답 본문까지 보관해 재시도에 같은 응답을 돌려주고, 처리 중인 요청과 겹치면 409를 준다. 처리에 실패하면 표식을 지운다 — 남겨두면 그 ID가 TTL이 끝날 때까지 409로 막혀 일시적 실패가 영구 실패가 된다
-- [ ]  채팅·시청자 지표·STT 배치의 최대 항목 수와 요청 크기 제한. 채팅·시청자 지표는 `laive.internal.max-batch-items`(기본 1000)로 걸었고 초과 시 413이다. STT 배치와 바이트 단위 크기 제한은 아직 없다
+- [ ]  채팅·시청자 지표·STT 배치의 최대 항목 수와 요청 크기 제한. 채팅·시청자 지표·STT 전사 배치 모두 `laive.internal.max-batch-items`(기본 1000)로 걸었고 초과 시 413이다. 바이트 단위 크기 제한은 아직 없다
 - [ ]  실시간 STT·위험 발언·채팅 분석의 Timeout, 재시도, Circuit Breaker 정책
-- [ ]  음성 청크의 S3 보관 기간과 삭제 작업 (리포트 입력 파일은 13.7에서 폐지)
+- [x]  ~~음성 청크의 S3 보관 기간과 삭제 작업 (리포트 입력 파일은 13.7에서 폐지)~~ 해소(2026-07-31) — 음성 원본은 저장하지 않는 것으로 확정됐다(13.3.3 폐기). 프론트 → AI 음성 서버 WS 직송이며 Spring에는 전사 텍스트만 남는다
 - [x]  스키마 변경 마이그레이션: `CHAT_MESSAGES.sentiment_label` 추가, `TRIGGERS` 신설, `REPORTS`의 3분류 비율 컬럼을 8종 건수와 `analyzed_chat`으로 교체, `REPORT_SEGMENTS`·`SENTIMENT_SNAPSHOTS` 폐기, `HIGHLIGHTS.report_segment_id` → `trigger_id` (V8)
 - [ ]  **트리거 판정 구현 시 함께 처리할 것**
     - `chat_message_counts_1m` 연속 집계 폐기. V3가 적은 세 용도(하이라이트 z-score 입력, `reports.total_chat` 집계, 성장 리포트 누적 채팅)가 모두 다른 경로로 바뀌어 소비처가 없다. 판정은 Spring이 인메모리 60초 윈도우로 수행하고, 세션 총량은 `REPORTS.total_chat`, 구간 채팅량은 `TRIGGERS.chat_count`에 영구 저장된다. 방송 중 채팅량 그래프를 리포트에 넣기로 하면 이 결정을 뒤집고 유지해야 한다 — 원본 90일 보존을 넘긴 이력은 재생성할 수 없다.
@@ -2102,14 +2053,14 @@ ERD가 스트리머 중심으로 수정되었으므로 `ADVERTISER` 역할과 �
 - [x]  수집 엔드포인트 2개 구현 (`chat-messages:batch`, `viewer-metrics:batch`). 서비스 토큰 필터 체인(`/internal/**`)과 `X-Request-Id` 멱등 가드를 함께 넣었다. 수집기 자격 발급·상태 보고·공백 보고 Endpoint 3개가 13.3에 추가됐다
 - [x]  **Spring → chat-ai 채팅 분류 파이프라인(13.6 ingest) 구현·E2E 검증 (2026-07-30).** 배치 중계(`CollectionRelayService`)·1초 빈 배치 보충(`RealtimeTicker`)·라벨 저장·Redis window·live-snapshot 중계·종료 DELETE까지 전 구간 확인했다. **주의: `CHATAI_BASE_URL` 미설정 시 경고 한 줄과 함께 no-op으로 기동해 라벨이 전부 NULL로 저장된다** — "파이프라인이 없다"로 오해된 원인이었으므로 로컬 `.env`에도 반드시 설정한다. chat-ai 기동 절차(모델 다운로드 포함)는 `AI/chat-ai/README.md`
 - [x]  **반복 질문 파이프라인 Spring측 구현 (2026-07-30).** `broadcast/questions` 패키지 — 15초 폴링·변경분만 UPSERT(V11 스키마)·dismiss API·재질문 감지 3컬럼 알고리즘·방송 종료 마감 폴링·live-snapshot 노출(10.6 스키마 정본화)까지. 통합 테스트로 ①②③ 전 시나리오(유예·fallback·리셋 방어·재노출·재-dismiss) 검증 완료
-- [ ]  **반복 질문 파이프라인 AI측.** chat-ai의 `GET /broadcasts/{id}/questions` 라우트와 임베딩 배치 클러스터링이 미구현이다. 그 전까지 Spring 폴링은 404를 받아 조용히 건너뛴다
+- [x]  **반복 질문 파이프라인 AI측.** ~~chat-ai의 `GET /broadcasts/{id}/questions` 라우트와 임베딩 배치 클러스터링이 미구현이다~~ 구현 완료 — chat-ai `server.py`의 `GET /broadcasts/{id}/questions` 라우트와 `QuestionTracker`(임베딩 클러스터링, GMS 임베딩 키 없으면 이 기능만 꺼진다)까지. ingest·질문·요약 E2E 검증 완료(2026-07-30)
 - [x]  **LLM 여론 요약 Spring 호출부.** ~~chat-ai의 `/summary`는 구현이 끝났고(2026-07-30 확인) Spring의 3분 AUTO 스케줄러·수동 MANUAL API·`LIVE_BRIEFINGS(CHAT_SUMMARY)` 저장 경로가 남았다~~ 완료(2026-07-30) — `broadcast/summary` 패키지, MANUAL API는 10.6의 `POST .../chat-summary`, live-snapshot `briefings[]` 조회 경로 포함 (13.6 참조)
 - [ ]  Spring의 LLM 클라이언트 선택 — Spring AI의 Spring Boot 4 지원 버전 확인, 미지원 시 GMS OpenAI 호환 Endpoint 직접 호출
 - [ ]  트리거 구간 채팅 원문이 프롬프트 한도를 넘길 때의 압축 규칙 (반복 표현 접기, 표본 추출) 확정
 - [ ]  `TRIGGERS.trigger_type` Enum 확정. 현재 채팅 급증 하나이며 시청자 급변 트리거는 판정 로직이 없다
 - [ ]  8종 라벨 집합이 채팅 분류 모델 버전에 묶여 있으므로 모델 교체 시 컬럼 마이그레이션 절차 합의
 - [ ]  화면 캡처 도입 시점과 방식. 트리거는 사후 판정이라 발생 시점에 캡처할 수 없으므로 상시 링버퍼 캡처 또는 VOD 사후 추출 중 선택
-- [ ]  `AI/BACKEND_API.md`의 STT·위험 발언·약속 전송 방향과 13.4·13.5의 불일치 정리 (AI가 Spring을 호출하는 실제 구현과 반대로 적혀 있다)
+- [x]  ~~`AI/BACKEND_API.md`의 STT·위험 발언·약속 전송 방향과 13.4·13.5의 불일치 정리 (AI가 Spring을 호출하는 실제 구현과 반대로 적혀 있다)~~ 정리 완료(2026-07-31) — 13.2 표·13.3.3(폐기)·13.3.4(통합)·13.4·13.5를 AI → Spring push 방향으로 갱신했다. 규격 정본은 `AI/BACKEND_API.md`
 - [ ]  성장 액션 생성(`/internal/v1/ai/growth-actions`)도 Spring 내부 LLM 호출로 옮길지 결정. 현재 리포트만 옮겨 두 방식이 공존한다
 - [ ]  목업에 표시된 하이라이트 점수·탐지 사유가 필요하면 `HIGHLIGHTS` 컬럼 추가
 - [ ]  실제 채팅 닉네임이 필요하면 `VIEWER_PROFILES`에 공개용 표시명 저장 정책과 컬럼 추가 검토

@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
 import { MonitorPlay } from 'lucide-react'
 import { useLiveSnapshot } from '@renderer/hooks/useLiveSnapshot'
 import { useAudioStream } from '@renderer/hooks/useAudioStream'
+import { mergeBriefings } from '@renderer/lib/briefings'
 import type { CurrentSessionContext } from '@renderer/hooks/useCurrentSession'
 import { Skeleton } from '@renderer/components/ui/skeleton'
 import { cn } from '@renderer/lib/utils'
@@ -25,9 +27,12 @@ const AUDIO_STATUS_LABEL = {
  * SC-03 방송 콘솔.
  *
  * 두 갈래에서 데이터가 온다:
- *  - 백엔드 스냅샷 폴링(useLiveSnapshot, 3초 · owner 모드) — 시청자·채팅 여론·수집기 상태.
+ *  - 백엔드 스냅샷 폴링(useLiveSnapshot, 3초 · owner 모드) — 시청자·채팅 여론·수집기 상태,
+ *    브리핑 히스토리(진입 전 이력)와 CHAT_SUMMARY.
  *    이 창(콘솔)이 owner라 조회 결과를 main을 거쳐 미니·오버레이 창에도 릴레이한다.
- *  - AI 음성 서버 스트리밍(useAudioStream) — 위험 발언·약속 브리핑, 마이크·STT 상태
+ *  - AI 음성 서버 스트리밍(useAudioStream) — 진입 후 위험 발언·약속 브리핑, 마이크·STT 상태
+ *
+ * 위험 발언·약속은 두 경로로 겹쳐 오므로 진입 시각을 컷오버로 병합한다(lib/briefings.ts).
  *
  * 스냅샷 조회가 실패해도 화면을 비우지 않는다. 음성 분석은 백엔드와 무관하게
  * 동작하므로, 스냅샷이 없다고 콘솔 전체를 막으면 쓸 수 있는 기능까지 잃는다.
@@ -43,6 +48,9 @@ export default function BroadcastConsolePage(): React.JSX.Element {
 
   const { snapshot: data, loading, error } = useLiveSnapshot(sid, 'owner')
   const audio = useAudioStream(`session${sid}`, sid)
+  // 브리핑 병합 컷오버(마운트 시각 고정) — 이 시각 이후의 RISK·PROMISE는
+  // WS(useAudioStream)가 전담하고, 스냅샷에서는 이전 것만 히스토리로 받는다.
+  const [briefingCutoff] = useState(() => new Date().toISOString())
 
   if (sessionId === undefined && currentLoading) {
     return (
@@ -97,8 +105,10 @@ export default function BroadcastConsolePage(): React.JSX.Element {
       />
 
       <div className="flex flex-1 overflow-hidden">
-        {/* 좌: 브리핑 피드 — 음성 서버 실시간 이벤트 + 백엔드 브리핑(현재 빈 배열) */}
-        <BriefingFeed briefings={[...audio.briefings, ...(data?.briefings ?? [])]} />
+        {/* 좌: 브리핑 피드 — 진입 후는 음성 서버 실시간 이벤트, 진입 전 이력과 채팅 요약은 스냅샷 */}
+        <BriefingFeed
+          briefings={mergeBriefings(audio.briefings, data?.briefings ?? [], briefingCutoff)}
+        />
 
         {/* 우: 여론 · 반복 질문 · 연결 상태 */}
         <aside className="flex w-[328px] shrink-0 flex-col gap-4 border-l bg-card p-5">
