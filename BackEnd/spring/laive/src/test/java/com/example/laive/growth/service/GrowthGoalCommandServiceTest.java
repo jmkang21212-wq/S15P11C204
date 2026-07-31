@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -20,8 +21,16 @@ class GrowthGoalCommandServiceTest {
     @Test
     void createsGoalAfterLockAndOverlapCheck() {
         GrowthGoalCommandRepository repository = mock(GrowthGoalCommandRepository.class);
+        GrowthActionTransactionService actions = mock(GrowthActionTransactionService.class);
         when(repository.insert(any())).thenReturn(21L);
-        GrowthGoalCommandService service = new GrowthGoalCommandService(repository);
+        when(repository.findOwnedForUpdate(101L, 21L)).thenAnswer(invocation ->
+                Optional.of(GrowthGoal.create(
+                        101L, GrowthMetricType.AVG_VIEWERS, new BigDecimal("3000"),
+                        GrowthMetricUnit.VIEWERS, LocalDate.parse("2026-08-01"),
+                        LocalDate.parse("2026-10-31")
+                ))
+        );
+        GrowthGoalCommandService service = new GrowthGoalCommandService(repository, actions);
         var command = new CreateGrowthGoalCommand(
                 GrowthMetricType.AVG_VIEWERS,
                 new BigDecimal("3000"),
@@ -39,9 +48,10 @@ class GrowthGoalCommandServiceTest {
     @Test
     void rejectsOverlappingActiveGoal() {
         GrowthGoalCommandRepository repository = mock(GrowthGoalCommandRepository.class);
+        GrowthActionTransactionService actions = mock(GrowthActionTransactionService.class);
         when(repository.existsOverlappingActive(any(Long.class), any(), any(), any(), any()))
                 .thenReturn(true);
-        GrowthGoalCommandService service = new GrowthGoalCommandService(repository);
+        GrowthGoalCommandService service = new GrowthGoalCommandService(repository, actions);
 
         assertThatThrownBy(() -> service.create(
                 101L,

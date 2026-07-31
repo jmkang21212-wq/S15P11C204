@@ -76,7 +76,8 @@ class GrowthDomainTest {
                 GrowthMetricUnit.MESSAGES,
                 LocalDate.parse("2026-07-01"),
                 LocalDate.parse("2026-07-31"),
-                GrowthGoalStatus.CANCELLED
+                GrowthGoalStatus.CANCELLED,
+                1
         );
         assertThatThrownBy(() -> cancelled.update(
                 null, BigDecimal.ONE, null, null, null, null
