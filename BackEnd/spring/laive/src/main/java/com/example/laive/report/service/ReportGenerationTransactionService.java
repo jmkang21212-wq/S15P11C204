@@ -7,6 +7,7 @@ import com.example.laive.report.domain.HighlightCandidate;
 import com.example.laive.report.domain.ReportStatus;
 import com.example.laive.report.repository.SessionReportGenerationRepository;
 import com.example.laive.growth.service.GrowthActionTransactionService;
+import com.example.laive.growth.roadmap.service.GrowthRoadmapTransactionService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,19 +22,22 @@ public class ReportGenerationTransactionService {
     private final OutboxEventFactory eventFactory;
     private final Clock clock;
     private final GrowthActionTransactionService growthActions;
+    private final GrowthRoadmapTransactionService growthRoadmaps;
 
     public ReportGenerationTransactionService(
             SessionReportGenerationRepository repository,
             BroadcastOutboxRepository outboxRepository,
             OutboxEventFactory eventFactory,
             Clock clock,
-            GrowthActionTransactionService growthActions
+            GrowthActionTransactionService growthActions,
+            GrowthRoadmapTransactionService growthRoadmaps
     ) {
         this.repository = repository;
         this.outboxRepository = outboxRepository;
         this.eventFactory = eventFactory;
         this.clock = clock;
         this.growthActions = growthActions;
+        this.growthRoadmaps = growthRoadmaps;
     }
 
     @Transactional
@@ -79,6 +83,7 @@ public class ReportGenerationTransactionService {
             throw new IllegalStateException("PROCESSING 리포트를 완료할 수 없습니다.");
         }
         growthActions.requestForReport(reportId);
+        growthRoadmaps.requestForReport(reportId);
         return partial ? ReportStatus.PARTIAL : ReportStatus.COMPLETED;
     }
 
@@ -86,6 +91,7 @@ public class ReportGenerationTransactionService {
     public void partialWithoutSummary(long reportId) {
         if (repository.partialReport(reportId, null, clock.instant()) == 1) {
             growthActions.requestForReport(reportId);
+            growthRoadmaps.requestForReport(reportId);
         }
     }
 
