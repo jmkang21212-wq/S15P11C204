@@ -34,6 +34,10 @@ services:
     environment:
       SPRING_BASE_URL: "http://host.docker.internal:8080"
       VOICE_LOG_FILE: "/app/logs/voice.log"
+      # WS 인증 티켓은 Spring이 발급하고 여기서 읽는다 → Spring과 같은 DB 0.
+      # (chat-ai의 DB 1과 달리 공유가 목적이라 분리하면 안 된다)
+      # 컨테이너 안에서 127.0.0.1은 자기 자신이라 기본값으로는 붙지 않는다.
+      VOICE_REDIS_URL: "redis://redis:6379/0"
     volumes:
       - ./logs:/app/logs
     healthcheck:
