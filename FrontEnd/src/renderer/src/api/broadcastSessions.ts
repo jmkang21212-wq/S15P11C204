@@ -7,7 +7,8 @@ import type {
   EndBroadcastSessionResult,
   Page,
   StartBroadcastSessionInput,
-  StartBroadcastSessionResult
+  StartBroadcastSessionResult,
+  VoiceTicket
 } from '@renderer/types/broadcastSession'
 
 /**
@@ -102,4 +103,15 @@ export async function endSession(sessionId: number): Promise<EndBroadcastSession
     throw new Error('NOT_IMPLEMENTED')
   }
   return apiFetch<EndBroadcastSessionResult>(`${BASE}/${sessionId}/end`, { method: 'POST' })
+}
+
+/**
+ * 음성 AI WebSocket 접속용 일회용 티켓을 발급받는다.
+ *
+ * WebSocket은 Authorization 헤더를 실을 수 없어 JWT를 직접 못 쓴다. 인증된 이 요청으로
+ * 티켓을 받아 핸드셰이크에 실으면, AI 서버가 Redis에서 조회해 어느 방송 세션인지
+ * 확인한다. 한 번 쓰면 소비되므로 **재연결할 때마다** 다시 불러야 한다.
+ */
+export async function issueVoiceTicket(sessionId: number): Promise<VoiceTicket> {
+  return apiFetch<VoiceTicket>(`${BASE}/${sessionId}/voice-ticket`, { method: 'POST' })
 }

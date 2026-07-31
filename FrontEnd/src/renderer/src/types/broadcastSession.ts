@@ -45,6 +45,15 @@ export interface BroadcastSessionListItem {
   reportStatus: ReportStatus | null
 }
 
+/**
+ * 음성 AI WebSocket 접속용 일회용 티켓.
+ * 한 번 쓰면 서버에서 소비되므로 재연결할 때마다 새로 발급받아야 한다.
+ */
+export interface VoiceTicket {
+  ticket: string
+  expiresInSec: number
+}
+
 export interface StartBroadcastSessionInput {
   platformAccountId: number
   calendarEventId?: number | null
