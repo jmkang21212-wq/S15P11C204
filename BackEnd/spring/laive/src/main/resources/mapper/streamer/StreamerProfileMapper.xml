@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.laive.streamer.repository.mybatis.StreamerProfileMapper">
+
+    <!--
+      record는 생성자 순서로 매핑되므로 컬럼 순서를 record 컴포넌트 순서와 일치시킨다.
+      password_hash는 원문 대신 존재 여부만 boolean으로 내린다 (API 6.6 hasPassword).
+    -->
+    <select id="findAccount" resultType="com.example.laive.streamer.domain.StreamerAccount">
+        SELECT id AS streamer_id,
+               email,
+               password_hash IS NOT NULL AS has_password,
+               nickname,
+               profile_image_url,
+               bio
+          FROM streamers
+         WHERE id = #{streamerId}
+    </select>
+
+    <!-- 연결한 순서대로. loginMethods 조립 시 EMAIL 뒤에 이 순서로 붙는다. -->
+    <select id="findLoginProviders" resultType="string">
+        SELECT provider
+          FROM social_accounts
+         WHERE streamer_id = #{streamerId}
+         ORDER BY connected_at, id
+    </select>
+
+    <!-- 표시 순서는 스트리머가 고른 순서(display_order)다. -->
+    <select id="findTags" resultType="com.example.laive.streamer.domain.StreamerTag">
+        SELECT t.id AS tag_id,
+               t.name,
+               t.tag_type
+          FROM streamer_tags st
+          JOIN tags t ON t.id = st.tag_id
+         WHERE st.streamer_id = #{streamerId}
+         ORDER BY st.display_order, t.id
+    </select>
+
+    <!-- 선택 UI가 그릴 전체 카탈로그다 (GET /tags). 타입별로 묶어 이름순으로 준다. -->
+    <select id="findTagCatalog" resultType="com.example.laive.streamer.domain.StreamerTag">
+        SELECT id AS tag_id,
+               name,
+               tag_type
+          FROM tags
+         ORDER BY tag_type, name, id
+    </select>
+
+    <select id="countTagsByIds" resultType="long">
+        SELECT count(*)
+          FROM tags
+         WHERE id IN
+        <foreach collection="tagIds" item="tagId" open="(" separator="," close=")">
+            #{tagId}
+        </foreach>
+    </select>
+
+    <update id="updateProfile">
+        UPDATE streamers
+           SET nickname          = #{nickname},
+               profile_image_url = #{profileImageUrl},
+               bio               = #{bio}
+         WHERE id = #{streamerId}
+    </update>
+
+    <delete id="deleteTags">
+        DELETE FROM streamer_tags
+         WHERE streamer_id = #{streamerId}
+    </delete>
+
+    <!-- display_order는 요청 배열의 순서(1부터)다. 스트리머가 고른 순서가 곧 노출 순서다. -->
+    <insert id="insertTags">
+        INSERT INTO streamer_tags (streamer_id, tag_id, display_order)
+        VALUES
+        <foreach collection="tagIds" item="tagId" index="i" separator=",">
+            (#{streamerId}, #{tagId}, #{i} + 1)
+        </foreach>
+    </insert>
+
+</mapper>
