@@ -4,10 +4,14 @@
 
   전사 : 양이 많고 지연이 상관없다  -> 모아서 배치 전송
   경고 : 적고 유실되면 안 된다      -> 즉시 개별 전송 + 재시도
-  약속 : 경고와 같다                -> 즉시 개별 전송 + 재시도
+  약속 : 저장된 id를 되받아야 한다  -> 부르는 자리에서 동기 전송 + 재시도
 
-전부 별도 스레드에서 돈다. Spring이 느리거나 죽어 있어도
+전사와 경고는 별도 스레드에서 돈다. Spring이 느리거나 죽어 있어도
 실시간 감지와 클라이언트 경고는 영향을 받지 않아야 하기 때문이다.
+
+약속만 예외다. 프론트가 확정/무시 버튼을 누르려면 PROMISES의 행 id가 필요한데
+그 id는 POST 응답에만 있다. 큐에 던지고 잊으면 알 방법이 없어서, 약속은 부르는
+쪽이 응답을 기다린다. 건수가 분당 몇 건 수준이라 감당된다.
 """
 
 import logging
@@ -69,6 +73,22 @@ def _iso(ts: float) -> str:
             .replace("+00:00", "Z"))
 
 
+def _row_id(body: dict) -> Optional[int]:
+    """저장 응답에서 행 id를 꺼낸다: {"success": true, "data": {"id": 4821}}.
+
+    id가 없어도 저장 자체는 성공한 것이라 실패로 만들지 않는다. 프론트는 id 없는
+    약속 카드를 받아 확정/무시 버튼만 잠근다.
+    """
+    data = body.get("data")
+    if not isinstance(data, dict):
+        return None
+    try:
+        return int(data["id"])
+    except (KeyError, TypeError, ValueError):
+        log.warning("저장 응답에 id가 없습니다: %.200s", data)
+        return None
+
+
 class SpringSink:
     def __init__(self, base_url: str = SPRING_BASE_URL):
         self.base_url = base_url
@@ -82,9 +102,9 @@ class SpringSink:
         self._session_ids: dict[str, int] = {}
         self._session_lock = threading.Lock()
 
+        # 약속은 큐를 쓰지 않는다. 모듈 docstring 참고.
         self._transcripts: queue.Queue = queue.Queue(maxsize=SPRING_QUEUE_MAX)
         self._alerts: queue.Queue = queue.Queue(maxsize=SPRING_QUEUE_MAX)
-        self._promises: queue.Queue = queue.Queue(maxsize=SPRING_QUEUE_MAX)
         self._stopping = threading.Event()
         self._client: Optional[httpx.Client] = None
         self._threads: list[threading.Thread] = []
@@ -112,8 +132,6 @@ class SpringSink:
                              name="spring-transcript"),
             threading.Thread(target=self._alert_worker, daemon=True,
                              name="spring-alert"),
-            threading.Thread(target=self._promise_worker, daemon=True,
-                             name="spring-promise"),
         ]
         for t in self._threads:
             t.start()
@@ -182,16 +200,35 @@ class SpringSink:
             "reason": v.reason,
         }))
 
-    def send_promise(self, p: Promise) -> None:
-        """약속은 경고와 같은 큐를 쓴다. 건수가 적고 유실되면 안 되는 점이 같다."""
-        self._offer(self._promises, (p.session_id, {
+    def send_promise(self, p: Promise) -> Optional[int]:
+        """약속을 저장하고 PROMISES의 행 id를 돌려준다. 응답을 기다린다.
+
+        프론트는 이 id로 확정/무시를 호출한다. id 없이 카드만 띄우면 버튼이 가리킬
+        대상이 없어서, 다른 전송과 달리 큐에 넣지 않고 여기서 끝낸다.
+
+        Spring이 죽어 있으면 재시도 백오프만큼(0.5+1+2초 + 타임아웃) 붙잡힌다.
+        이 함수는 약속 디스패치 스레드에서만 불리므로 감지와 오디오는 멀쩡하고
+        약속 카드만 그만큼 늦게 뜬다. 저장하지 못했으면 None이다.
+        """
+        if not self.enabled:
+            return None
+        path = self._path(SPRING_PROMISE_PATH, p.session_id)
+        if path is None:
+            return None
+
+        body = self._post(path, {
             "content": p.content,
             "rawText": p.raw_text,
             # 한국어 기한 표현은 AI가 절대 시각으로 바꿔서 보낸다.
             # Spring이 "2주 안"을 파싱하게 두면 안 된다.
             "deadlineAt": _iso(p.deadline_at) if p.deadline_at else None,
             "spokenAt": _iso(p.spoken_at),
-        }))
+        })
+        if body is None:
+            return None
+
+        self.sent_promises += 1
+        return _row_id(body)
 
     def stop(self, timeout: float = 5.0) -> None:
         self._stopping.set()
@@ -252,7 +289,7 @@ class SpringSink:
 
         for session_id, items in by_session.items():
             path = self._path(SPRING_TRANSCRIPT_PATH, session_id)
-            if path and self._post(path, {"items": items}):
+            if path and self._post(path, {"items": items}) is not None:
                 self.sent_transcripts += len(items)
 
     def _alert_worker(self) -> None:
@@ -262,18 +299,8 @@ class SpringSink:
             except queue.Empty:
                 continue
             path = self._path(SPRING_ALERT_PATH, session_id)
-            if path and self._post(path, payload):
+            if path and self._post(path, payload) is not None:
                 self.sent_alerts += 1
-
-    def _promise_worker(self) -> None:
-        while not self._stopping.is_set():
-            try:
-                session_id, payload = self._promises.get(timeout=0.2)
-            except queue.Empty:
-                continue
-            path = self._path(SPRING_PROMISE_PATH, session_id)
-            if path and self._post(path, payload):
-                self.sent_promises += 1
 
     def _path(self, template: str, session_id: str) -> Optional[str]:
         """방송 세션 번호가 묶여 있지 않으면 보낼 곳이 없다.
@@ -289,18 +316,27 @@ class SpringSink:
             return None
         return template.format(session_id=broadcast_session_id)
 
-    def _post(self, path: str, payload: dict) -> bool:
+    def _post(self, path: str, payload: dict) -> Optional[dict]:
+        """성공하면 응답 본문, 실패하면 None.
+
+        본문이 JSON 객체가 아니면 빈 dict다. 빈 응답과 실패를 구분해야 해서
+        bool이 아니므로, 호출부는 `is not None`으로 판정한다.
+        """
         for attempt in range(SPRING_MAX_RETRIES + 1):
             try:
                 r = self._client.post(path, json=payload)
                 if r.status_code < 300:
-                    return True
+                    try:
+                        body = r.json()
+                    except ValueError:
+                        return {}
+                    return body if isinstance(body, dict) else {}
                 # 4xx는 우리 쪽 문제라 재시도해도 같은 결과다.
                 if 400 <= r.status_code < 500:
                     log.error("Spring 거부 %s %s: %s",
                               r.status_code, path, r.text[:200])
                     self.failed += 1
-                    return False
+                    return None
                 log.warning("Spring %s 응답 %s (%d/%d)",
                             path, r.status_code, attempt + 1, SPRING_MAX_RETRIES)
             except httpx.HTTPError as e:
@@ -311,4 +347,4 @@ class SpringSink:
 
         log.error("Spring 전송 포기 %s", path)
         self.failed += 1
-        return False
+        return None
