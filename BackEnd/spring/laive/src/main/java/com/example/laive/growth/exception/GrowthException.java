@@ -22,4 +22,16 @@ public class GrowthException extends BusinessException {
     public static GrowthException invalidPeriod() {
         return new GrowthException(GrowthErrorCode.INVALID_GROWTH_PERIOD);
     }
+
+    public static GrowthException actionStateConflict() {
+        return new GrowthException(GrowthErrorCode.GROWTH_ACTION_STATE_CONFLICT);
+    }
+
+    public static GrowthException insufficientActionData() {
+        return new GrowthException(GrowthErrorCode.GROWTH_ACTION_INSUFFICIENT_DATA);
+    }
+
+    public static GrowthException actionGenerationDisabled() {
+        return new GrowthException(GrowthErrorCode.GROWTH_ACTION_GENERATION_DISABLED);
+    }
 }
