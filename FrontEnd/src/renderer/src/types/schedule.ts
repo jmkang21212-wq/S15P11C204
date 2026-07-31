@@ -26,3 +26,46 @@ export interface ScheduleAnnouncement {
   publishStatus: PublishStatus
   publishedAt: string | null
 }
+
+/** GET /calendar-events 응답 본문 (API 8.1). */
+export interface CalendarEventListResponse {
+  items: CalendarEvent[]
+  promises: CalendarPromiseItem[]
+}
+
+/**
+ * 캘린더에 함께 표시할 약속. `PROMISES`가 단일 원천이고 이건 조회 시점에 얹는 읽기 뷰라
+ * 시각 없이 날짜만 있다. 날짜를 옮기려면 `PATCH /promises/{id}`를 쓴다(8.3 일정 API가 아님).
+ * 화면에는 읽기 전용으로만 얹는다 — 확정/무시/PATCH는 `api/promise.ts`가 생긴 뒤의 몫이다.
+ */
+export interface CalendarPromiseItem {
+  promiseId: number
+  content: string
+  dueDate: string
+  status: 'PENDING' | 'ON_HOLD'
+}
+
+/** POST /calendar-events 입력 (API 8.2). status는 서버가 항상 SCHEDULED로 시작한다. */
+export interface CreateCalendarEventInput {
+  platformAccountId: number | null
+  eventType: CalendarEventType
+  title: string
+  memo: string | null
+  startAt: string
+  endAt: string
+}
+
+/**
+ * PATCH /calendar-events/{id} 입력 (API 8.3, BE `PatchValue` 계약).
+ * 필드를 아예 넣지 않으면 "변경 없음", `null`을 넣으면 "값을 비움"이다.
+ * 전 필드 optional인 이유가 그것 — 안 바뀐 필드는 키 자체를 만들지 않아야 한다.
+ */
+export interface UpdateCalendarEventInput {
+  platformAccountId?: number | null
+  eventType?: CalendarEventType
+  title?: string
+  memo?: string | null
+  startAt?: string
+  endAt?: string
+  status?: CalendarEventStatus
+}
