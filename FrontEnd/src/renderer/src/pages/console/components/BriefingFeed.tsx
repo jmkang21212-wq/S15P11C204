@@ -64,11 +64,12 @@ function PromiseActions({ promiseId }: { promiseId: number | undefined }): React
     )
   }
 
-  // AI 서버가 아직 실시간(WS) 이벤트에 promise_id를 안 실어 보낸다 — 그동안은 버튼을 못 붙인다.
+  // AI 서버가 Spring 저장에 실패했거나 저장 자체가 꺼져 있으면 promise_id가 없다
+  // (AI/FRONTEND_API.md §5) — 가리킬 행이 없어 확정/무시를 붙일 수 없다.
   if (promiseId === undefined) {
     return (
       <p className="mt-2.5 text-micro text-muted-foreground">
-        방금 감지된 카드는 아직 확정/무시할 수 없어요. 새로고침 후 다시 시도해 주세요.
+        이 약속은 저장에 실패해 확정/무시할 수 없어요.
       </p>
     )
   }
