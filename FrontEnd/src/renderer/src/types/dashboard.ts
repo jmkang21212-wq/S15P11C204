@@ -3,9 +3,10 @@
  * mock 데이터와 실제 API가 공통으로 따르는 형태.
  */
 
+import type { PromiseStatus } from './promise'
+
 export type CalendarEventStatus = 'SCHEDULED' | 'COMPLETED' | 'CANCELLED'
 export type ReportStatus = 'PROCESSING' | 'COMPLETED' | 'PARTIAL' | 'FAILED'
-export type PromiseStatus = 'DETECTED' | 'PENDING' | 'ON_HOLD' | 'COMPLETED' | 'DISMISSED'
 
 export interface UpcomingBroadcast {
   /** 세션 시작(POST /broadcast-sessions)에 그대로 실려 가는 실제 캘린더 이벤트 ID. 없으면 null. */

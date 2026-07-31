@@ -1,7 +1,10 @@
+import { useState } from 'react'
 import { Button } from '@renderer/components/ui/button'
 import { EmptyState } from '@renderer/components/common/StateView'
 import { cn } from '@renderer/lib/utils'
 import { formatTime } from '@renderer/lib/format'
+import { ApiError } from '@renderer/api/client'
+import { confirmPromise, dismissPromise } from '@renderer/api/promise'
 import type { Briefing, BriefingType } from '@renderer/types/console'
 
 const TYPE_META: Record<BriefingType, { label: string; badge: string }> = {
@@ -9,6 +12,85 @@ const TYPE_META: Record<BriefingType, { label: string; badge: string }> = {
   CHAT_SUMMARY: { label: '채팅 요약', badge: 'text-cyan-700 bg-cyan-50' },
   FAQ: { label: '반복 질문', badge: 'text-violet-700 bg-violet-50' },
   PROMISE: { label: '약속 감지', badge: 'text-amber-700 bg-amber-50' }
+}
+
+type Resolution = 'confirmed' | 'dismissed'
+
+/** 약속 확정/무시 실패 시 사람이 읽을 메시지. 이미 처리된 건은 BE가 409로 구분해 알려준다. */
+function promiseActionErrorMessage(e: unknown, fallback: string): string {
+  if (e instanceof ApiError && e.code === 'PROMISE_NOT_DETECTED') {
+    return '이미 처리된 약속이에요.'
+  }
+  return fallback
+}
+
+/** PROMISE 브리핑 전용 확정/무시 액션. 카드마다 독립적이라 상태를 로컬로 둔다. */
+function PromiseActions({ promiseId }: { promiseId: number | undefined }): React.JSX.Element {
+  const [resolution, setResolution] = useState<Resolution | null>(null)
+  const [pending, setPending] = useState<'confirm' | 'dismiss' | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleConfirm = async (id: number): Promise<void> => {
+    setPending('confirm')
+    setError(null)
+    try {
+      await confirmPromise(id)
+      setResolution('confirmed')
+    } catch (e) {
+      setError(promiseActionErrorMessage(e, '약속 확정에 실패했어요.'))
+    } finally {
+      setPending(null)
+    }
+  }
+
+  const handleDismiss = async (id: number): Promise<void> => {
+    setPending('dismiss')
+    setError(null)
+    try {
+      await dismissPromise(id)
+      setResolution('dismissed')
+    } catch (e) {
+      setError(promiseActionErrorMessage(e, '약속 무시에 실패했어요.'))
+    } finally {
+      setPending(null)
+    }
+  }
+
+  if (resolution) {
+    return (
+      <p className="mt-2.5 text-xs font-semibold text-muted-foreground">
+        {resolution === 'confirmed' ? '약속으로 추가했어요' : '무시했어요'}
+      </p>
+    )
+  }
+
+  // AI 서버가 아직 실시간(WS) 이벤트에 promise_id를 안 실어 보낸다 — 그동안은 버튼을 못 붙인다.
+  if (promiseId === undefined) {
+    return (
+      <p className="mt-2.5 text-micro text-muted-foreground">
+        방금 감지된 카드는 아직 확정/무시할 수 없어요. 새로고침 후 다시 시도해 주세요.
+      </p>
+    )
+  }
+
+  return (
+    <div className="mt-2.5">
+      <div className="flex gap-2">
+        <Button size="sm" disabled={pending !== null} onClick={() => void handleConfirm(promiseId)}>
+          {pending === 'confirm' ? '처리 중…' : '약속 추가'}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={pending !== null}
+          onClick={() => void handleDismiss(promiseId)}
+        >
+          {pending === 'dismiss' ? '처리 중…' : '무시'}
+        </Button>
+      </div>
+      {error && <p className="mt-1.5 text-micro text-destructive">{error}</p>}
+    </div>
+  )
 }
 
 function BriefingItem({ briefing }: { briefing: Briefing }): React.JSX.Element {
@@ -41,20 +123,10 @@ function BriefingItem({ briefing }: { briefing: Briefing }): React.JSX.Element {
       )}
 
       {/* 판정 근거 · 권장 조치 */}
-      {briefing.advice && (
-        <p className="mt-1.5 text-xs text-muted-foreground">{briefing.advice}</p>
-      )}
+      {briefing.advice && <p className="mt-1.5 text-xs text-muted-foreground">{briefing.advice}</p>}
 
       {/* PROMISE 감지 시 확정/무시 액션 */}
-      {briefing.briefingType === 'PROMISE' && (
-        // TODO: POST /promises/{id}/confirm · /dismiss
-        <div className="mt-2.5 flex gap-2">
-          <Button size="sm">약속 추가</Button>
-          <Button size="sm" variant="outline">
-            무시
-          </Button>
-        </div>
-      )}
+      {briefing.briefingType === 'PROMISE' && <PromiseActions promiseId={briefing.promiseId} />}
     </li>
   )
 }

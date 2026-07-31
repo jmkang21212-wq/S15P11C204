@@ -36,8 +36,13 @@ export interface Briefing {
   briefingType: BriefingType
   message: string
   createdAt: string
-  // UI 표현용 확장 필드 — AI 음성 서버 WS 이벤트에서만 온다(스냅샷 DB에는 message뿐)
+  // level·quote·advice는 AI 음성 서버 WS 이벤트에서만 온다(스냅샷 DB에는 message뿐).
   level?: RiskLevel
+  /**
+   * PROMISE 브리핑이 가리키는 promises.id — 확정/무시(POST /promises/{id}/confirm·dismiss)
+   * 호출에 쓴다. 스냅샷(새로고침·재입장 히스토리)은 BE가 채워 보낸다. 실시간(WS) 카드는
+   * AI 서버가 아직 promise_id를 안 실어 보내 undefined로 온다 — 그동안은 버튼을 비활성화한다.
+   */
   promiseId?: number
   /** 근거가 된 발화 원문 (AI/FRONTEND_API.md alert·promise 이벤트의 text) */
   quote?: string
