@@ -18,6 +18,7 @@
         SELECT id AS briefing_id,
                briefing_type,
                message,
+               promise_id,
                created_at
           FROM live_briefings
          WHERE session_id = #{sessionId}

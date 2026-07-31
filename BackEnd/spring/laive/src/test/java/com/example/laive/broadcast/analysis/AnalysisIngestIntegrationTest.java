@@ -139,6 +139,9 @@ class AnalysisIngestIntegrationTest {
                 .containsEntry("start_ms", 30_000L);
 
         assertThat(briefingTypes(sessionId)).containsExactly("RISK");
+        assertThat(jdbcTemplate.queryForMap(
+                "SELECT promise_id FROM live_briefings WHERE session_id = ?", sessionId))
+                .containsEntry("promise_id", null);
     }
 
     /** 뒤늦게 같은 발화가 배치로 와도 행이 늘면 안 된다. */
@@ -179,7 +182,12 @@ class AnalysisIngestIntegrationTest {
                 .isEqualTo(LocalDate.of(2026, 8, 3));
         assertThat(row.get("streamer_id")).isNotNull();
 
-        assertThat(briefingTypes(sessionId)).containsExactly("PROMISE");
+        // 브리핑이 약속 id를 실어야 스냅샷 복구 후에도 확정/무시 버튼이 산다.
+        Map<String, Object> briefing = jdbcTemplate.queryForMap(
+                "SELECT briefing_type, promise_id FROM live_briefings WHERE session_id = ?",
+                sessionId);
+        assertThat(briefing).containsEntry("briefing_type", "PROMISE")
+                .containsEntry("promise_id", promiseId);
     }
 
     /**

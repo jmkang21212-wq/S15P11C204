@@ -154,7 +154,7 @@ public class MyBatisGrowthRepository implements
                 promptVersion, idempotencyKey, requestedAt
         );
         if (id == null) {
-            throw new IllegalStateException("Growth action generation was not inserted.");
+            throw new IllegalStateException("성장 액션 생성 작업 INSERT 결과에 ID가 없습니다.");
         }
         return id;
     }

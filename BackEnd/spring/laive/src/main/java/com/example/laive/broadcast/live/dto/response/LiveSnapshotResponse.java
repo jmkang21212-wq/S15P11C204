@@ -42,7 +42,18 @@ public record LiveSnapshotResponse(
     public record Services(String microphone, String stt, String ai, String collector) {
     }
 
-    public record Briefing(long briefingId, String briefingType, String message, Instant createdAt) {
+    /**
+     * @param promiseId PROMISE 브리핑이 가리키는 promises.id — 새로고침·재입장으로
+     *                  복구된 히스토리 카드가 약속 확정/무시(10.8)를 호출할 때 쓴다.
+     *                  실시간 카드 몫은 AI WS가 싣는다. 그 외 유형은 null
+     */
+    public record Briefing(
+            long briefingId,
+            String briefingType,
+            String message,
+            Long promiseId,
+            Instant createdAt
+    ) {
     }
 
     /**

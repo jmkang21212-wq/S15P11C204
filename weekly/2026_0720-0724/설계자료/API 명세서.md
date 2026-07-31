@@ -866,9 +866,17 @@ Access Token과 Refresh Token은 `PLATFORM_ACCOUNTS`에 암호화하여 저장�
     },
     "briefings": [
       {
+        "briefingId": 502,
+        "briefingType": "PROMISE",
+        "message": "새 약속이 감지되었습니다: 공포게임 방송",
+        "promiseId": 341,
+        "createdAt": "2026-07-21T13:52:00Z"
+      },
+      {
         "briefingId": 501,
         "briefingType": "RISK",
         "message": "정치·비방 소지가 있는 표현이 감지되었습니다.",
+        "promiseId": null,
         "createdAt": "2026-07-21T13:47:00Z"
       }
     ],
@@ -915,6 +923,8 @@ Access Token과 Refresh Token은 `PLATFORM_ACCOUNTS`에 암호화하여 저장�
 - `engagement`는 시청자 수를 알 수 없는 동안 `null`일 수 있다(예시의 `0.214`처럼 항상 숫자가 아니다). 프론트는 null을 처리해야 한다.
 
 `briefings`는 `LIVE_BRIEFINGS`의 **최근 20건을 최신순**으로 내려보낸다 (2026-07-30 구현). AI 분석이 저장하는 `RISK`·`PROMISE`와 여론 요약 `CHAT_SUMMARY`가 실리며, `FAQ`는 아직 쓰는 곳이 없다. 전체 이력은 세션 리포트 몫이다.
+
+`briefings[].promiseId`는 `PROMISE` 브리핑이 가리키는 `PROMISES.id`다 (2026-07-31 구현). 컷오버 병합 후 스냅샷의 `PROMISE` 브리핑은 새로고침·재입장 복구용 히스토리인데, 그 카드에서도 약속 확정/무시(10.8)를 호출하려면 id가 필요하다. 실시간 카드 몫은 AI WS 이벤트가 `promise_id`로 싣는다. `RISK`·`CHAT_SUMMARY`는 `null`이다.
 
 `repeatedQuestions`는 13.6 폴링이 DB에 쌓은 것 중 **답변 완료(dismissed)가 아닌 질문을 askers 내림차순으로 최대 50건** 내려보낸다 (2026-07-30 Spring측 구현 — 단 AI측 라우트가 아직 없어 그 전까지는 빈 배열이다).
 
@@ -1787,7 +1797,7 @@ Spring은 성공 결과를 `TRANSCRIPTS`에 저장한 후 생성된 `transcriptI
 }
 ```
 
-Spring은 후보마다 `PROMISES(streamer_id, session_id, transcript_id, content, status, due_date)`를 `DETECTED` 상태로 저장하고 `LIVE_BRIEFINGS(PROMISE)`를 생성한다.
+Spring은 후보마다 `PROMISES(streamer_id, session_id, transcript_id, content, status, due_date)`를 `DETECTED` 상태로 저장하고 `LIVE_BRIEFINGS(PROMISE)`를 생성한다. 브리핑 행에는 방금 만든 약속의 `promise_id`를 연결해 스냅샷(10.6)이 그대로 노출한다.
 
 ### 13.6 채팅 분석
 

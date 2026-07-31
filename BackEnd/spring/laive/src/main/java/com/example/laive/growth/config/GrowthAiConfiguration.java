@@ -14,7 +14,7 @@ public class GrowthAiConfiguration {
     @ConditionalOnMissingBean(GrowthActionGenerator.class)
     GrowthActionGenerator unavailableGrowthActionGenerator() {
         return input -> {
-            throw new GrowthActionGenerationException("Growth action AI is unavailable.");
+            throw new GrowthActionGenerationException("성장 액션 AI 생성기를 사용할 수 없습니다.");
         };
     }
 }
