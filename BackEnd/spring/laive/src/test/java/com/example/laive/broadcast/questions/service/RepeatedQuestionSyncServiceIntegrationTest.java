@@ -30,7 +30,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 시간순 시나리오로 검증한다. {@code apply(sessionId, result, now)}의 now 주입이
  * 시각 제어점이라 Clock 목킹 없이 유예 경과를 몰 수 있다.
  *
- * <p>설정 기본값 전제: dismiss-grace 60s, reexpose-threshold 10.
+ * <p>설정 기본값 전제: dismiss-grace 60s, reexpose ratio 0.005 / min 5 / max 50 /
+ * fallback 10. 시청자 미상(NO_VIEWERS) 시나리오는 fallback 임계 10으로 판정된다.
  */
 @SpringBootTest(properties = {
         "laive.auth.jwt.secret=test-only-secret-key-with-at-least-32-bytes",
@@ -43,6 +44,9 @@ class RepeatedQuestionSyncServiceIntegrationTest {
     private static final Instant T0 = Instant.parse("2026-07-30T12:00:00Z");
     private static final long Q1 = 1753690000000007L;
     private static final long Q2 = 1753690000000012L;
+
+    /** 시청자 수 미상 — 재노출 임계가 fallback(10)으로 판정되는 경로다. */
+    private static final Integer NO_VIEWERS = null;
 
     @Autowired
     private RepeatedQuestionSyncService syncService;
@@ -71,17 +75,17 @@ class RepeatedQuestionSyncServiceIntegrationTest {
 
     @Test
     void upsertInsertsAndSkipsUnchangedRows() {
-        syncService.apply(sessionId, response(question(Q1, "오늘 몇 시까지 하세요?", "FAQ", 12, 15)), T0);
+        syncService.apply(sessionId, response(question(Q1, "오늘 몇 시까지 하세요?", "FAQ", 12, 15)), NO_VIEWERS, T0);
 
         // 같은 값 재폴링: IS DISTINCT FROM 조건 덕에 행을 건드리지 않아야 한다.
         // type null 케이스도 함께 — (null, null)은 DISTINCT가 아니다.
-        syncService.apply(sessionId, response(question(Q1, "오늘 몇 시까지 하세요?", "FAQ", 12, 15)), T0.plusSeconds(15));
+        syncService.apply(sessionId, response(question(Q1, "오늘 몇 시까지 하세요?", "FAQ", 12, 15)), NO_VIEWERS, T0.plusSeconds(15));
 
         Map<String, Object> row = questionRow(Q1);
         assertThat(row.get("updated_at")).isEqualTo(java.sql.Timestamp.from(T0));
 
         // 값이 바뀌면 갱신된다.
-        syncService.apply(sessionId, response(question(Q1, "오늘 몇 시까지 하세요?", "FAQ", 13, 16)), T0.plusSeconds(30));
+        syncService.apply(sessionId, response(question(Q1, "오늘 몇 시까지 하세요?", "FAQ", 13, 16)), NO_VIEWERS, T0.plusSeconds(30));
         row = questionRow(Q1);
         assertThat(((Number) row.get("askers")).intValue()).isEqualTo(13);
         assertThat(row.get("updated_at")).isEqualTo(java.sql.Timestamp.from(T0.plusSeconds(30)));
@@ -89,19 +93,19 @@ class RepeatedQuestionSyncServiceIntegrationTest {
 
     @Test
     void unchangedNullTypeRowIsNotRewritten() {
-        syncService.apply(sessionId, response(question(Q1, "저게 안맞아?", null, 5, 5)), T0);
-        syncService.apply(sessionId, response(question(Q1, "저게 안맞아?", null, 5, 5)), T0.plusSeconds(15));
+        syncService.apply(sessionId, response(question(Q1, "저게 안맞아?", null, 5, 5)), NO_VIEWERS, T0);
+        syncService.apply(sessionId, response(question(Q1, "저게 안맞아?", null, 5, 5)), NO_VIEWERS, T0.plusSeconds(15));
 
         assertThat(questionRow(Q1).get("updated_at")).isEqualTo(java.sql.Timestamp.from(T0));
     }
 
     @Test
     void upsertNeverTouchesDismissStateOrFirstAskedAt() {
-        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 12, 15)), T0);
+        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 12, 15)), NO_VIEWERS, T0);
         mapper.dismiss(sessionId, Q1, T0.plusSeconds(10));
 
         // 다음 폴링이 값을 갱신해도 dismissed_at은 살아 있어야 한다(전량 교체 금지의 요체).
-        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 14, 18)), T0.plusSeconds(20));
+        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 14, 18)), NO_VIEWERS, T0.plusSeconds(20));
 
         Map<String, Object> row = questionRow(Q1);
         assertThat(row.get("dismissed_at")).isNotNull();
@@ -111,52 +115,52 @@ class RepeatedQuestionSyncServiceIntegrationTest {
 
     @Test
     void baselineStaysNullDuringGraceAndConfirmsFromResponseAfterGrace() {
-        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 12, 15)), T0);
+        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 12, 15)), NO_VIEWERS, T0);
         mapper.dismiss(sessionId, Q1, T0.plusSeconds(10)); // ① askers_at_dismiss = 12
 
         // 유예(60초) 안: baseline 미확정.
-        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 15, 20)), T0.plusSeconds(69));
+        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 15, 20)), NO_VIEWERS, T0.plusSeconds(69));
         assertThat(questionRow(Q1).get("baseline_askers")).isNull();
 
         // 유예 경과: 이번 응답의 askers로 확정 — 관성 유입(12→17)이 baseline에 흡수된다.
-        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 17, 23)), T0.plusSeconds(71));
+        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 17, 23)), NO_VIEWERS, T0.plusSeconds(71));
         assertThat(((Number) questionRow(Q1).get("baseline_askers")).intValue()).isEqualTo(17);
     }
 
     @Test
     void baselineFallsBackToAskersAtDismissWhenQuestionLeftTopN() {
-        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 12, 15)), T0);
+        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 12, 15)), NO_VIEWERS, T0);
         mapper.dismiss(sessionId, Q1, T0.plusSeconds(10)); // askers_at_dismiss = 12
 
         // 유예 경과 후 응답에 Q1이 없다(top-N 밖으로 밀림) → fallback 확정.
-        syncService.apply(sessionId, response(question(Q2, "다른 질문", null, 30, 40)), T0.plusSeconds(80));
+        syncService.apply(sessionId, response(question(Q2, "다른 질문", null, 30, 40)), NO_VIEWERS, T0.plusSeconds(80));
 
         assertThat(((Number) questionRow(Q1).get("baseline_askers")).intValue()).isEqualTo(12);
     }
 
     @Test
     void emptyResponseStillConfirmsBaselineByFallback() {
-        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 12, 15)), T0);
+        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 12, 15)), NO_VIEWERS, T0);
         mapper.dismiss(sessionId, Q1, T0.plusSeconds(10));
 
-        syncService.apply(sessionId, response(), T0.plusSeconds(80)); // 빈 questions
+        syncService.apply(sessionId, response(), NO_VIEWERS, T0.plusSeconds(80)); // 빈 questions
 
         assertThat(((Number) questionRow(Q1).get("baseline_askers")).intValue()).isEqualTo(12);
     }
 
     @Test
     void reexposesWhenAskersGrowBeyondThreshold() {
-        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 12, 15)), T0);
+        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 12, 15)), NO_VIEWERS, T0);
         mapper.dismiss(sessionId, Q1, T0.plusSeconds(10));
-        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 17, 23)), T0.plusSeconds(80)); // baseline 17
+        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 17, 23)), NO_VIEWERS, T0.plusSeconds(80)); // baseline 17
 
         // +9는 부족.
-        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 26, 33)), T0.plusSeconds(100));
+        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 26, 33)), NO_VIEWERS, T0.plusSeconds(100));
         assertThat(questionRow(Q1).get("dismissed_at")).isNotNull();
 
         // +10 도달 → 재노출: dismiss 3컬럼 초기화, reexposed_at 기록.
         Instant reexposeAt = T0.plusSeconds(120);
-        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 27, 35)), reexposeAt);
+        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 27, 35)), NO_VIEWERS, reexposeAt);
 
         Map<String, Object> row = questionRow(Q1);
         assertThat(row.get("dismissed_at")).isNull();
@@ -170,29 +174,63 @@ class RepeatedQuestionSyncServiceIntegrationTest {
     }
 
     @Test
-    void aggregationResetLowersBaselineAndSkipsJudgementThatCycle() {
-        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 30, 40)), T0);
+    void reexposeThresholdScalesWithViewers() {
+        // 시청자 5,000명 → 임계 = clamp(⌈5000 × 0.005⌉, 5, 50) = 25.
+        Integer viewers = 5_000;
+        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 30, 40)), viewers, T0);
         mapper.dismiss(sessionId, Q1, T0.plusSeconds(10));
-        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 32, 45)), T0.plusSeconds(80)); // baseline 32
+        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 32, 45)), viewers, T0.plusSeconds(80)); // baseline 32
+
+        // +24는 부족 — 고정 임계 10이었다면 벌써 재노출됐을 값이다.
+        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 56, 70)), viewers, T0.plusSeconds(100));
+        assertThat(questionRow(Q1).get("dismissed_at")).isNotNull();
+
+        // +25 도달 → 재노출.
+        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 57, 72)), viewers, T0.plusSeconds(120));
+        assertThat(questionRow(Q1).get("dismissed_at")).isNull();
+    }
+
+    @Test
+    void smallChannelUsesMinThreshold() {
+        // 시청자 200명 → ⌈200 × 0.005⌉ = 1이지만 하한 5로 클램프된다.
+        Integer viewers = 200;
+        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 6, 8)), viewers, T0);
+        mapper.dismiss(sessionId, Q1, T0.plusSeconds(10));
+        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 7, 9)), viewers, T0.plusSeconds(80)); // baseline 7
+
+        // +4는 부족(하한 5).
+        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 11, 14)), viewers, T0.plusSeconds(100));
+        assertThat(questionRow(Q1).get("dismissed_at")).isNotNull();
+
+        // +5 도달 → 재노출. 고정 임계 10이었다면 소규모 채널에서 영영 못 오는 값이다.
+        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 12, 16)), viewers, T0.plusSeconds(120));
+        assertThat(questionRow(Q1).get("dismissed_at")).isNull();
+    }
+
+    @Test
+    void aggregationResetLowersBaselineAndSkipsJudgementThatCycle() {
+        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 30, 40)), NO_VIEWERS, T0);
+        mapper.dismiss(sessionId, Q1, T0.plusSeconds(10));
+        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 32, 45)), NO_VIEWERS, T0.plusSeconds(80)); // baseline 32
 
         // 집계 리셋: askers가 4로 곤두박질. 방어가 baseline을 4로 낮추고 이번 판정은 스킵.
-        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 4, 4)), T0.plusSeconds(100));
+        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 4, 4)), NO_VIEWERS, T0.plusSeconds(100));
         Map<String, Object> row = questionRow(Q1);
         assertThat(((Number) row.get("baseline_askers")).intValue()).isEqualTo(4);
         assertThat(row.get("dismissed_at")).isNotNull(); // 재노출되지 않았다
 
         // 다음 폴링부터 낮아진 baseline 기준으로 판정한다: 4 → 14 = +10 → 재노출.
-        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 14, 15)), T0.plusSeconds(120));
+        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 14, 15)), NO_VIEWERS, T0.plusSeconds(120));
         assertThat(questionRow(Q1).get("dismissed_at")).isNull();
     }
 
     @Test
     void redismissAfterReexposureRestartsCycleAndKeepsReexposedAt() {
-        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 12, 15)), T0);
+        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 12, 15)), NO_VIEWERS, T0);
         mapper.dismiss(sessionId, Q1, T0.plusSeconds(10));
-        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 17, 23)), T0.plusSeconds(80));  // baseline 17
+        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 17, 23)), NO_VIEWERS, T0.plusSeconds(80));  // baseline 17
         Instant reexposeAt = T0.plusSeconds(120);
-        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 27, 35)), reexposeAt);          // 재노출
+        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 27, 35)), NO_VIEWERS, reexposeAt);          // 재노출
 
         // 재차 dismiss: ①이 새로 시작되고 reexposed_at은 보존된다(리포트 근거).
         mapper.dismiss(sessionId, Q1, T0.plusSeconds(150));
@@ -205,7 +243,7 @@ class RepeatedQuestionSyncServiceIntegrationTest {
 
     @Test
     void dismissIsIdempotent() {
-        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 12, 15)), T0);
+        syncService.apply(sessionId, response(question(Q1, "질문", "FAQ", 12, 15)), NO_VIEWERS, T0);
 
         assertThat(mapper.dismiss(sessionId, Q1, T0.plusSeconds(10))).isEqualTo(1);
         // 중복 클릭: 0행 — 첫 dismiss의 시각과 askers_at_dismiss가 보존된다.
@@ -218,7 +256,7 @@ class RepeatedQuestionSyncServiceIntegrationTest {
         syncService.apply(sessionId, response(
                 question(Q1, "첫째", "FAQ", 12, 15),
                 question(Q2, "둘째", null, 40, 44)
-        ), T0);
+        ), NO_VIEWERS, T0);
         mapper.dismiss(sessionId, Q1, T0.plusSeconds(10));
 
         List<RepeatedQuestionView> visible = mapper.findVisible(sessionId, 50);

@@ -33,8 +33,9 @@ public record LiveSnapshotResponse(
     }
 
     /**
-     * @param microphone 마이크 연결 상태. 음성 파이프라인 미구현으로 항상 DISCONNECTED
-     * @param stt        STT 상태. 음성 파이프라인 미구현으로 항상 STOPPED
+     * @param microphone 마이크 연결 상태. 음성 경로는 프론트 ↔ AI 직결(WS)이라 Spring이
+     *                   관측하지 못해 항상 DISCONNECTED — 실제 표시는 프론트 몫
+     * @param stt        STT 상태. 같은 이유로 항상 STOPPED
      * @param ai         채팅 감정 분류 파이프라인 상태. 최근 여론 스냅샷 갱신 여부로 판단
      * @param collector  치지직 채팅 수집기 상태. 끊기면 그 구간 채팅이 유실되므로 화면에 노출
      */
