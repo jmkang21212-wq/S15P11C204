@@ -1,11 +1,15 @@
 package com.example.laive.common.ai;
 
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 @Component
-@ConditionalOnBean(ChatClient.class)
+@ConditionalOnProperty(
+        prefix = "spring.ai.model",
+        name = "chat",
+        havingValue = "openai"
+)
 public class SpringAiStructuredAiClient implements StructuredAiClient {
     private final ChatClient chatClient;
 

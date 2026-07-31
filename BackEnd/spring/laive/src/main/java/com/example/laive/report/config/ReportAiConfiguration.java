@@ -6,7 +6,7 @@ import com.example.laive.report.exception.SummaryGenerationException;
 import com.example.laive.report.exception.TriggerAnalysisException;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -18,8 +18,12 @@ import java.util.concurrent.Executor;
 @EnableConfigurationProperties(ReportAiProperties.class)
 public class ReportAiConfiguration {
     @Bean
-    @ConditionalOnBean(ChatClient.Builder.class)
     @ConditionalOnMissingBean
+    @ConditionalOnProperty(
+            prefix = "spring.ai.model",
+            name = "chat",
+            havingValue = "openai"
+    )
     ChatClient reportChatClient(ChatClient.Builder builder) {
         return builder.build();
     }
@@ -36,7 +40,12 @@ public class ReportAiConfiguration {
     }
 
     @Bean
-    @ConditionalOnMissingBean(TriggerNarrativeGenerator.class)
+    @ConditionalOnProperty(
+            prefix = "laive.report.ai",
+            name = "enabled",
+            havingValue = "false",
+            matchIfMissing = true
+    )
     TriggerNarrativeGenerator unavailableTriggerGenerator() {
         return input -> {
             throw new TriggerAnalysisException("리포트 AI가 비활성화되어 있습니다.");
@@ -44,7 +53,12 @@ public class ReportAiConfiguration {
     }
 
     @Bean
-    @ConditionalOnMissingBean(ReportSummaryGenerator.class)
+    @ConditionalOnProperty(
+            prefix = "laive.report.ai",
+            name = "enabled",
+            havingValue = "false",
+            matchIfMissing = true
+    )
     ReportSummaryGenerator unavailableSummaryGenerator() {
         return input -> {
             throw new SummaryGenerationException("리포트 AI가 비활성화되어 있습니다.");
