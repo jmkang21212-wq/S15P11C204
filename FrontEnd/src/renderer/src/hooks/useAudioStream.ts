@@ -20,9 +20,7 @@ const CATEGORY_LABEL: Record<AlertCategory, string> = {
 function alertToBriefing(event: AlertEvent, briefingId: number): Briefing {
   const category = CATEGORY_LABEL[event.category] ?? event.category
   const advice =
-    event.source === 'llm'
-      ? event.reason
-      : event.hits?.map((hit) => `"${hit.matched}"`).join(', ')
+    event.source === 'llm' ? event.reason : event.hits?.map((hit) => `"${hit.matched}"`).join(', ')
 
   return {
     briefingId,
@@ -52,6 +50,8 @@ function promiseToBriefing(event: PromiseEvent, briefingId: number): Briefing {
     briefingId,
     briefingType: 'PROMISE',
     message: event.content,
+    // Spring 저장 실패 시 null — 그때는 확정/무시 버튼을 못 붙이므로 undefined로 통일한다.
+    promiseId: event.promise_id ?? undefined,
     quote: event.text,
     advice: `${deadline} · 확신 ${Math.round(event.confidence * 100)}%`,
     createdAt: new Date(event.spoken_at * 1000).toISOString()
