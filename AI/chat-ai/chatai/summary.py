@@ -14,6 +14,7 @@ LLM 여론 요약 (/summary) — 계약: ../CHAT_AI_API.md 2장
   채팅 30건 미만 422 · 마지막 요약 후 60초 이내 409 · 호출 진행 중 409
 """
 import json
+import logging
 import re
 import time
 from datetime import datetime, timezone
@@ -24,6 +25,8 @@ from .config import (GMS_KEY, SUMMARY_COOLDOWN_SEC, SUMMARY_ENV_MIN,
 from .labels import LABELS
 from .reaction import is_reaction
 from .text_norm import normalize
+
+log = logging.getLogger('chatai.summary')
 from .window import BroadcastWindow
 
 # 방송 환경 문제 안내 — 판정도 문장 생성도 전부 코드가 한다.
@@ -116,7 +119,12 @@ class SummaryService:
 
             metrics = win.metrics(now_ms)
             prompt = self._build_prompt(texts, metrics)
+            t0 = time.perf_counter()
             summary_text = self.llm_fn(prompt)
+            # LLM 지연은 우리 코드가 아니라 GMS 사정이라 따로 남긴다 —
+            # "요약이 느리다"가 추론 문제인지 외부 문제인지 이 줄로 갈린다
+            log.info('LLM 요약 bid=%s %.1fs 입력=%d자 채팅=%d건',
+                     bid, time.perf_counter() - t0, len(prompt), len(texts))
 
             # 환경 문제 안내 — LLM에 안 맡긴다 (판정: 키워드+라벨, 문장: 템플릿).
             # nano가 예시문 복사·칭찬 오인을 반복해 코드로 확정 (2026-07-29 검증)
