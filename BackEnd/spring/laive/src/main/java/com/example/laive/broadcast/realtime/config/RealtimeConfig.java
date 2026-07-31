@@ -39,6 +39,16 @@ public class RealtimeConfig {
                 .baseUrl(properties.baseUrl())
                 .requestFactory(requestFactory)
                 .build();
-        return new HttpChatAiGateway(restClient, properties);
+
+        // 여론 요약은 LLM 생성이 수 초 걸려 별도 Timeout의 클라이언트를 쓴다.
+        // 2초 클라이언트로 부르면 생성 중간에 끊겨 요약이 chat-ai 캐시에만 남는다.
+        JdkClientHttpRequestFactory summaryRequestFactory = new JdkClientHttpRequestFactory();
+        summaryRequestFactory.setReadTimeout(properties.summaryTimeout());
+        RestClient summaryRestClient = restClientBuilder
+                .baseUrl(properties.baseUrl())
+                .requestFactory(summaryRequestFactory)
+                .build();
+
+        return new HttpChatAiGateway(restClient, summaryRestClient, properties);
     }
 }

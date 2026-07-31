@@ -29,7 +29,7 @@ AI 서버는 치지직에 직접 접속하지 않는다. 채팅과 시청자 수
 | 구간 | 상태 |
 |---|---|
 | §1 ingest + §4 DELETE | **양측 구현·E2E 검증 완료.** 배치 도착 시 중계는 Spring `CollectionRelayService`, 채팅 없는 초의 빈 배치 보충은 `RealtimeTicker`(1초), 어댑터·라벨 변환은 `HttpChatAiGateway`(`broadcast/realtime` 패키지). 라벨 저장 → Redis window → live-snapshot → 종료 DELETE까지 확인 |
-| §2 summary | AI측 구현 완료(`server.py`). **Spring 호출부(3분 스케줄러·수동 버튼) 미구현** — API 명세서 §13.6 보류 |
+| §2 summary | **양측 구현 완료 (2026-07-30).** AI측(`server.py`, `chatai/summary.py`). Spring측(`broadcast/summary` 패키지): 3분 AUTO 스케줄러(`ChatSummaryPoller`, PREPARING·LIVE 대상) + 수동 MANUAL API(`POST /api/v1/broadcast-sessions/{id}/chat-summary`, 쿨다운·생성 중·채팅 부족은 200의 status로 전달) + `LIVE_BRIEFINGS(CHAT_SUMMARY)` 저장(`ChatSummaryBriefingService`, 직전 텍스트 비교 dedupe) + live-snapshot `briefings[]` 노출. COOLDOWN이면 `GET /summary`로 캐시 회수(저장 유실 백스톱). 게이트웨이는 `HttpChatAiGateway.requestSummary/getSummary`(전용 15s Timeout, 409·422는 debug만). 파라미터는 `laive.chat-summary.auto-interval`(180s)·`laive.chat-ai.summary-timeout`(15s). **합동 E2E 검증 완료(2026-07-30)**: 채팅 주입 → AUTO 생성·저장 → MANUAL CREATED(환경 문제 안내 포함)·COOLDOWN 응답 → live-snapshot briefings 노출 → AUTO의 COOLDOWN 회수 dedupe(중복 0) → 윈도우 소진 시 422 스킵 → chat-ai 중단 시 MANUAL 503·AUTO warn 지속까지 확인 |
 | §3 questions | **양측 구현 완료 (2026-07-30).** Spring측(`broadcast/questions` 패키지): 15초 폴링(`RepeatedQuestionPoller`) → 변경분만 UPSERT(V11 스키마, dismissed 보존) → 재질문 감지 ①②③(60초 유예·+10명 재노출·리셋 방어) → live-snapshot 노출 + dismiss API + 종료 시 DELETE 직전 마지막 `GET ?limit=50` 마감까지, 파라미터는 `laive.repeated-questions.*`. AI측(`chatai/questions.py`): 라우트 + 임베딩 클러스터링 + FAQ/CONTEXT 판정 + 세대 프리픽스 questionId('생성 규칙' 준수), 단위 테스트 통과. 양측 합동 E2E는 미실시 |
 
 > **⚠ "파이프라인이 없다"는 오해 주의.** Spring은 `CHATAI_BASE_URL`이 비어 있으면

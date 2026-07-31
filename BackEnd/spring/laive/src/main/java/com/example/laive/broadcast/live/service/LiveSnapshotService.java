@@ -33,6 +33,12 @@ public class LiveSnapshotService {
     private static final int DEFAULT_WINDOW_SEC = 180;
 
     /**
+     * 브리핑 피드 최대 건수. 콘솔은 최근 흐름만 보여주면 되고, 전체 이력은
+     * 세션 리포트 몫이다.
+     */
+    private static final int BRIEFING_LIMIT = 20;
+
+    /**
      * 여론 스냅샷이 이 시간 안에 갱신됐으면 AI 파이프라인을 RUNNING으로 본다.
      * 방송 중에는 틱이 매초 ingest를 보내므로 정상일 때 항상 신선하다.
      */
@@ -74,11 +80,27 @@ public class LiveSnapshotService {
         return new LiveSnapshotResponse(
                 session(detail, now),
                 services(sessionId, now),
-                List.of(),
+                briefings(sessionId),
                 sentiment(sessionId),
                 repeatedQuestions(sessionId),
                 lastEventId(sessionId)
         );
+    }
+
+    /**
+     * 최근 브리핑 피드다. AI 분석(RISK·PROMISE)과 여론 요약(CHAT_SUMMARY)이
+     * live_briefings에 쌓이고, 여기서 최신순 최대 {@value BRIEFING_LIMIT}건을
+     * 내려보낸다.
+     */
+    private List<LiveSnapshotResponse.Briefing> briefings(long sessionId) {
+        return liveSnapshotMapper.findRecentBriefings(sessionId, BRIEFING_LIMIT).stream()
+                .map(row -> new LiveSnapshotResponse.Briefing(
+                        row.briefingId(),
+                        row.briefingType(),
+                        row.message(),
+                        row.createdAt()
+                ))
+                .toList();
     }
 
     /**

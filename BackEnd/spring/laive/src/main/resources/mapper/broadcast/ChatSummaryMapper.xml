@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.laive.broadcast.summary.repository.mybatis.ChatSummaryMapper">
+
+    <!-- PREPARING을 포함하는 이유는 반복 질문 폴러와 같다: 시작 직후부터 채팅이
+         모이고, ingest 이력이 없으면 chat-ai가 404를 주므로(계약상 정상) 폴러가
+         조용히 건너뛴다. 채팅 30건 미만도 422 정상 거절이라 LLM 비용이 없다. -->
+    <select id="findAutoSummarySessionIds" resultType="long">
+        SELECT id
+          FROM broadcast_sessions
+         WHERE status IN ('PREPARING', 'LIVE')
+    </select>
+
+    <!-- created_at 동률(같은 초의 연속 insert) 대비 id 보조 정렬. -->
+    <select id="findLatestSummaryMessage" resultType="string">
+        SELECT message
+          FROM live_briefings
+         WHERE session_id = #{sessionId}
+           AND briefing_type = 'CHAT_SUMMARY'
+         ORDER BY created_at DESC, id DESC
+         LIMIT 1
+    </select>
+
+    <select id="insertChatSummaryBriefing" resultType="long" affectData="true" flushCache="true">
+        INSERT INTO live_briefings (session_id, briefing_type, message)
+        VALUES (#{sessionId}, 'CHAT_SUMMARY', #{message})
+        RETURNING id
+    </select>
+
+</mapper>

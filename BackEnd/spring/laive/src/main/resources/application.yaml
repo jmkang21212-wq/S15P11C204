@@ -116,6 +116,14 @@ laive:
     # 계약 권장 2초. 이 대기는 수집기 배치 응답 지연에 그대로 더해지므로,
     # 늘릴 때는 수집기 쪽 HTTP Timeout도 함께 조정해야 한다.
     ingest-timeout: 2s
+    # 여론 요약(POST /summary) 전용. LLM 생성이 수 초 걸려 ingest의 2초와 분리한다.
+    summary-timeout: 15s
+
+  # LLM 여론 요약 AUTO 스케줄러 (계약: AI/CHAT_AI_API.md §2, 명세 13.6)
+  chat-summary:
+    # 계약의 "3분 주기". chat-ai 쪽 쿨다운(60초)·최소 채팅(30건) 가드가 있어
+    # 짧게 잡아도 LLM 비용이 새지 않지만, 화면 갱신 리듬은 이 값이 결정한다.
+    auto-interval: 180s
 
   # 반복 질문 폴링·재질문 감지 (계약: AI/CHAT_AI_API.md §3)
   repeated-questions:
