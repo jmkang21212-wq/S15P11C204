@@ -4,8 +4,8 @@
 
 | 항목 | 내용 |
 | --- | --- |
-| 문서 버전 | v1.5 |
-| 수정일 | 2026-07-22 |
+| 문서 버전 | v1.6 |
+| 수정일 | 2026-07-31 |
 | 기준 문서 | 프로젝트 명세서, LAIVE ERD 수정본, STREAMPILOT UI 목업 v0.2 |
 | API 버전 | v1 |
 | 문서 범위 | 핵심 화면 및 Must 기능 + 일정·약속·성장 목표·채팅 리플레이·내부 AI 분석 API 확장 |
@@ -130,7 +130,7 @@ ERD의 관계와 API의 단일 리소스 식별 규칙을 실제 DDL에서도 �
 | SC-06 세션 리포트 | `GET /broadcast-sessions/{sessionId}/report` |
 | SC-07 하이라이트 / 클립 | 하이라이트 목록, 채팅 리플레이 API |
 | SC-09 성장 리포트 | `GET /growth-reports`, Growth Goal API |
-| SC-10 포트폴리오 | `GET /portfolio/me`, `PATCH /portfolio/me`, 공개 상세 API |
+| SC-10 포트폴리오 | `GET /portfolio/me`, `POST /portfolio/me`(생성), `PATCH /portfolio/me`, `GET /tags`, 공개 상세 API |
 | SC-11 비즈니스 매칭 | `GET /portfolios`, `GET /portfolios/{publicSlug}` |
 
 ---
@@ -243,6 +243,7 @@ ERD의 관계와 API의 단일 리소스 식별 규칙을 실제 DDL에서도 �
 | Password | POST | `/auth/password-resets` | 재설정 토큰으로 비밀번호 설정 |
 | Streamer | GET | `/streamers/me` | 내 프로필 조회 |
 | Streamer | PATCH | `/streamers/me` | 내 프로필 수정 |
+| Streamer | GET | `/tags` | 태그 카탈로그 목록 (프로필·포트폴리오 태그 선택지) |
 | Platform | GET | `/platform-accounts` | 플랫폼 연동 목록 |
 | Platform | GET | `/platform-accounts/{platform}/authorize` | 플랫폼 OAuth 시작 |
 | Platform | GET | `/platform-accounts/{platform}/callback` | 플랫폼 OAuth Callback |
@@ -273,9 +274,10 @@ ERD의 관계와 API의 단일 리소스 식별 규칙을 실제 DDL에서도 �
 | Growth Goal | PATCH | `/growth-goals/{growthGoalId}` | 성장 목표 수정 |
 | Highlight | GET | `/broadcast-sessions/{sessionId}/highlights` | 하이라이트 조회 |
 | Highlight | GET | `/highlights/{highlightId}/chat-replay` | 하이라이트 구간 채팅 리플레이(보류) |
-| Portfolio | GET | `/portfolio/me` | 내 포트폴리오 조회 |
+| Portfolio | GET | `/portfolio/me` | 내 포트폴리오 조회 (미생성 시 404 코드 2종) |
+| Portfolio | POST | `/portfolio/me` | 포트폴리오 생성 (방송 1회 종료 후, 사용자 직접 설정) |
 | Portfolio | PATCH | `/portfolio/me` | 내 포트폴리오 수정 |
-| Portfolio | GET | `/portfolios` | 다른 스트리머 포트폴리오 검색 |
+| Portfolio | GET | `/portfolios` | 다른 스트리머 포트폴리오 검색 (익명 허용) |
 | Portfolio | GET | `/portfolios/{publicSlug}` | 공개 포트폴리오 상세 |
 
 ---
@@ -468,6 +470,32 @@ Refresh Token은 `HttpOnly` 쿠키로 전달한다.
 `PATCH /streamers/me`
 
 수정 가능 필드는 `nickname`, `profileImageUrl`, `bio`, `tagIds`이다.
+
+- 보낸 필드만 반영한다. `bio`·`profileImageUrl`은 명시적 `null`로 비울 수 있다.
+- `tagIds`는 전체 교체이며 배열 순서가 노출 순서다. 빈 배열·`null`은 전부 해제다.
+  카탈로그에 없는 id가 섞이면 `STREAMER_INVALID_TAG` 400이다.
+- 응답은 `GET /streamers/me`와 같은 전체 프로필이다.
+- 여기서 고른 태그가 포트폴리오(12)의 `tags`·태그 검색에 그대로 이어진다.
+  포트폴리오는 태그를 복사하지 않고 조회 시 조인한다.
+
+### 6.7 태그 카탈로그
+
+`GET /tags`
+
+태그는 사용자가 만드는 값이 아니라 시드된 고정 카탈로그에서 고른다. 프로필 편집과
+포트폴리오 생성 화면이 이 목록으로 선택지를 그린다. `tagType` 종류는
+`CONTENT`(콘텐츠) · `GAME`(게임 장르) · `GENRE`(분위기) · `STYLE`(진행 성향)이다.
+
+```json
+{
+  "success": true,
+  "data": [
+    { "tagId": 1, "name": "FPS", "tagType": "GAME" },
+    { "tagId": 2, "name": "저챗", "tagType": "CONTENT" },
+    { "tagId": 3, "name": "하이텐션", "tagType": "STYLE" }
+  ]
+}
+```
 
 ---
 
@@ -1389,6 +1417,27 @@ DETECTED ──confirm──▶ PENDING ◀──▶ ON_HOLD
 
 ## 12. 포트폴리오
 
+포트폴리오 수명주기 규칙 (v1.6 확정):
+
+- **콜드스타트에는 포트폴리오가 없는 게 정상이다.** 종료된 방송 세션(`status='ENDED'`)이
+  1개 이상 생겨야 생성 자격이 생기며, 이 게이트는 백엔드가 강제한다.
+- **자동 구성은 없다.** 생성(12.5)은 사용자가 제목·태그·대표 하이라이트·공개 여부를
+  직접 설정해 제출하는 행위다. 백엔드가 대신 채우는 것은 방송 실적(측정값)뿐이다.
+- `publicSlug`는 생성 시 **무작위 소문자·숫자 10자**로 발급하며 변경 API는 없다.
+  내부 순번 id(streamerId)를 공개 주소에 노출하지 않기 위한 결정이다 — 공개 응답에
+  streamerId를 싣지 않는 원칙과 맞춘다.
+- `contactEmail`(비즈니스 연락처)은 **로그인 이메일과 연동하지 않는다.** 비즈니스
+  메일은 계정 메일과 다를 수 있으므로 자유 입력이며, 서버·클라이언트 모두 로그인
+  이메일을 기본값으로 채우지 않는다. 공개 응답에 나가는 이메일은 본인이 이 필드에
+  직접 입력한 값뿐이다.
+- 실적 5지표(avgViewers·peakViewers·broadcastsPerWeek·totalBroadcastCount·totalChat)는
+  스냅샷이다 — 본인 조회·생성 시 즉시 재계산하고, 매일 04:10 KST 배치가 전체를
+  갱신한다(검색에 노출되는 타인의 숫자는 최대 하루 지연). 산식: 평균·최고 시청자와
+  누적 채팅은 세션 리포트(`COMPLETED`·`PARTIAL`) 집계, 총방송수는 종료 세션 수,
+  주당 방송은 최근 28일 종료 세션 수 ÷ 4의 반올림.
+- 태그는 포트폴리오가 소유하지 않는다 — 프로필(6.6)의 `tagIds`로 편집하고
+  조회 시 조인해 붙인다.
+
 ### 12.1 내 포트폴리오 조회
 
 `GET /portfolio/me`
@@ -1441,7 +1490,16 @@ DETECTED ──confirm──▶ PENDING ◀──▶ ON_HOLD
 }
 ```
 
-`primaryTimeRange`는 최근 방송의 `started_at`, `ended_at`을 집계한 계산 필드다.
+`primaryTimeRange`는 최근 방송의 `started_at`, `ended_at`을 집계한 계산 필드다 —
+최근 90일 종료 세션(최대 30건)의 시작·종료 시(hour) 최빈값을 KST로 뽑아
+`"21:00-01:00"` 형태로 만들고, 대상 방송이 없으면 `"-"`다.
+
+미생성 상태의 404는 두 코드로 나뉜다. 프론트는 이 코드로 화면을 분기한다:
+
+| 코드 | 상황 | 프론트 화면 |
+| --- | --- | --- |
+| `PORTFOLIO_NOT_ELIGIBLE` | 종료된 방송 세션 0개 | "첫 방송을 마치면 만들 수 있어요" |
+| `PORTFOLIO_NOT_CREATED` | 자격은 있으나 미생성 | 생성 가능 안내 + [생성하기] 버튼 → 12.5 |
 
 ### 12.2 내 포트폴리오 수정
 
@@ -1463,6 +1521,17 @@ DETECTED ──confirm──▶ PENDING ◀──▶ ON_HOLD
 
 수정 시 `PORTFOLIOS`와 `PORTFOLIO_HIGHLIGHTS`를 한 트랜잭션으로 반영한다.
 
+- 보낸 필드만 반영하며, 빈 본문 `{}`는 `PORTFOLIO_EMPTY_PATCH` 400이다.
+- `title`은 비울 수 없다(명시적 `null`·공백 → `PORTFOLIO_INVALID_FIELD` 400).
+- `isPublic`이 비공개→공개로 바뀌는 순간 `publishedAt`을 그 시각으로 기록한다
+  (재공개도 갱신). 공개 유지·비공개 전환 시에는 보존한다.
+- `featuredHighlights`는 전달 시 전체 치환이다. 빈 배열·명시적 `null`은 전부
+  해제이며, 개수 상한은 없다. 본인 방송에서 나온 하이라이트가 아니거나
+  id·순서가 겹치면 `PORTFOLIO_HIGHLIGHT_INVALID` 400이다. 응답에는 서버가
+  `clipUrl`·`thumbnailUrl`을 채워 돌려준다.
+- `publicSlug`·`tags`·실적은 이 API의 수정 대상이 아니다.
+- 응답은 12.1과 같은 전체 포트폴리오다.
+
 ### 12.3 다른 스트리머 포트폴리오 검색
 
 `GET /portfolios`
@@ -1482,8 +1551,11 @@ SC-11의 채널명·태그 검색, 카테고리 필터, 규모 필터를 지원�
 검색 조건:
 
 - `PORTFOLIOS.is_public = true`
-- 로그인한 스트리머 자신의 포트폴리오는 제외
+- **인증 없이 호출할 수 있다** (v1.6 변경 — SC-11 공개 디렉터리 `/discover`가
+  비로그인 화면이라 14의 "로그인한 스트리머" 제한을 완화했다).
+  토큰이 있으면 본인 포트폴리오를 제외하고, 익명이면 제외 없이 전체 공개 행이다.
 - 추천 점수나 매칭 적합도는 계산하지 않음
+- `size` 상한 100
 
 ```json
 {
@@ -1521,9 +1593,51 @@ SC-11의 채널명·태그 검색, 카테고리 필터, 규모 필터를 지원�
 `GET /portfolios/{publicSlug}`
 
 - 인증 없이 조회 가능
-- 비공개 포트폴리오는 `404 Not Found`
-- 채팅 원문, 수익, 이메일 로그인 정보, 플랫폼 토큰은 반환하지 않음
-- 응답 구조는 내 포트폴리오와 같지만 `isPublic` 등 편집용 상태는 제외
+- 비공개 포트폴리오는 `404 Not Found` — 미존재와 같은 `PORTFOLIO_NOT_FOUND`로
+  응답해 비공개 포트폴리오의 존재를 노출하지 않는다
+- 채팅 원문, 수익, 이메일 로그인 정보, 플랫폼 토큰은 반환하지 않음.
+  `platformAccounts`도 공개 안전 4필드(platformAccountId·platform·channelId·
+  channelName)만이다 — `connectionStatus`·`connectedAt`은 싣지 않는다
+- 응답 구조는 내 포트폴리오와 같지만 `isPublic`·`publishedAt` 등 편집용 상태는 제외
+
+### 12.5 포트폴리오 생성 (v1.6 신설)
+
+`POST /portfolio/me`
+
+방송 세션을 1회 이상 종료한 스트리머가 태그·대표 하이라이트·공개 여부를 직접
+설정해 만든다. 자동 구성은 하지 않는다 — 태그와 하이라이트 고정은 시스템이 대신
+고를 근거가 없는 데이터라, 알아서 채우는 대신 고르게 한다.
+
+```json
+{
+  "title": "한별 TV",
+  "introduction": "신작과 도전형 콘텐츠를 중심으로 방송합니다.",
+  "contactEmail": "business@example.com",
+  "contactUrl": "https://example.com/contact",
+  "isPublic": false,
+  "tagIds": [1, 3],
+  "featuredHighlights": [
+    { "highlightId": 71, "displayOrder": 1 }
+  ]
+}
+```
+
+| 필드 | 필수 | 규칙 |
+| --- | --- | --- |
+| `title` | Y | 1~100자 |
+| `tagIds` | Y | 카탈로그(`GET /tags`) id 1개 이상, 중복 불가. 프로필 태그(6.6)와 같은 저장소를 교체한다 |
+| `featuredHighlights` | Y | 배열 자체는 필수, **0개 허용**(하이라이트가 없는 방송도 있다), 상한 없음, 본인 소유만 |
+| `isPublic` | Y | `true`면 `publishedAt`을 즉시 기록 |
+| `introduction`, `contactEmail`, `contactUrl` | N | 12.2와 같은 규칙. `contactEmail`은 로그인 이메일과 무관한 자유 입력(자동 채움 금지) |
+
+응답: `201 Created` + 12.1과 같은 전체 포트폴리오 (실적은 생성 즉시 집계된 값).
+
+| 오류 | 상태 | 상황 |
+| --- | --- | --- |
+| `PORTFOLIO_NOT_ELIGIBLE` | 404 | 종료된 방송 세션 0개 |
+| `PORTFOLIO_ALREADY_EXISTS` | 409 | 이미 생성됨 (스트리머당 1개) |
+| `PORTFOLIO_INVALID_FIELD` | 400 | 필수 누락·값 규칙 위반 |
+| `PORTFOLIO_HIGHLIGHT_INVALID` | 400 | 남의 하이라이트·중복 지정 |
 
 ---
 
@@ -2030,9 +2144,10 @@ Spring은 기존 활성 제안을 교체하고 `GROWTH_ACTIONS(growth_goal_id, t
 | 세션·성장 리포트 | 리포트 소유 스트리머 |
 | 성장 목표 조회·수정 | 목표의 `streamer_id`와 로그인 사용자 일치 |
 | 하이라이트 채팅 리플레이 | 하이라이트가 속한 세션 소유 스트리머 |
-| 내 포트폴리오 수정 | 포트폴리오 소유 스트리머 |
-| 포트폴리오 검색 | 로그인한 스트리머 |
+| 내 포트폴리오 조회·생성·수정 | 포트폴리오 소유 스트리머 |
+| 포트폴리오 검색 | Public (v1.6 변경 — 익명 허용, 로그인 시 본인 제외. 12.3 참조) |
 | 공개 포트폴리오 상세 | Public |
+| 태그 카탈로그 조회 | 로그인한 스트리머 |
 
 ERD가 스트리머 중심으로 수정되었으므로 `ADVERTISER` 역할과 광고주 전용 API는 정의하지 않는다.
 
@@ -2069,7 +2184,16 @@ ERD가 스트리머 중심으로 수정되었으므로 `ADVERTISER` 역할과 �
 | `INVALID_GROWTH_PERIOD` | 400 | 성장 리포트 기간 역전·경계 불일치·최대 범위 초과 |
 | `HIGHLIGHT_NOT_FOUND` | 404 | 하이라이트 없음 |
 | `PORTFOLIO_NOT_FOUND` | 404 | 포트폴리오 없음 또는 비공개 |
-| `PORTFOLIO_HIGHLIGHT_INVALID` | 400 | 본인 소유가 아닌 하이라이트 지정 |
+| `PORTFOLIO_NOT_ELIGIBLE` | 404 | 종료된 방송 세션이 없어 아직 생성 불가 (콜드스타트) |
+| `PORTFOLIO_NOT_CREATED` | 404 | 생성 자격은 있으나 미생성 — 프론트는 생성하기 버튼 표시 |
+| `PORTFOLIO_ALREADY_EXISTS` | 409 | 포트폴리오 중복 생성 (스트리머당 1개) |
+| `PORTFOLIO_EMPTY_PATCH` | 400 | 변경할 항목이 없는 수정 요청 |
+| `PORTFOLIO_INVALID_FIELD` | 400 | 포트폴리오 필드 값·필수 항목 위반 |
+| `PORTFOLIO_HIGHLIGHT_INVALID` | 400 | 본인 소유가 아니거나 중복 지정된 하이라이트 |
+| `STREAMER_NOT_FOUND` | 404 | 스트리머 없음 |
+| `STREAMER_EMPTY_PATCH` | 400 | 변경할 항목이 없는 프로필 수정 요청 |
+| `STREAMER_INVALID_FIELD` | 400 | 프로필 필드 값 위반 (닉네임 공백 등) |
+| `STREAMER_INVALID_TAG` | 400 | 태그 카탈로그에 없는 id 또는 중복 지정 |
 | `INTERNAL_AUTH_FAILED` | 401 | 서비스 간 인증 실패 |
 | `AUDIO_CHUNK_INVALID` | 400 | 지원하지 않는 형식·길이의 음성 청크 |
 | `AI_STT_FAILED` | 502 | STT 처리 실패 |
