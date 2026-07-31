@@ -5,13 +5,11 @@ import com.example.laive.common.ai.StructuredAiClient;
 import com.example.laive.growth.config.GrowthAiProperties;
 import com.example.laive.growth.exception.GrowthActionGenerationException;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 
 @Component
-@ConditionalOnBean(StructuredAiClient.class)
 @ConditionalOnProperty(prefix = "laive.growth.ai", name = "enabled", havingValue = "true")
 public class SpringAiGrowthActionGenerator implements GrowthActionGenerator {
     private final StructuredAiClient aiClient;
