@@ -59,6 +59,10 @@ public class AuthSecurityConfig {
                                 // 플랫폼 콜백은 브라우저 리다이렉트라 인증 헤더가 없다.
                                 // 연동 주체는 state로만 판별한다.
                                 "/api/v1/platform-accounts/*/callback",
+                                // 하이라이트 클립 정적 파일. <video>가 Bearer 헤더를 붙이지
+                                // 못하므로 공개다. 배포에서는 nginx가 먼저 받아 가고
+                                // 여기까지 오지 않는다 (CLIP_SPEC.md).
+                                "/clips/**",
                                 "/actuator/health",
                                 "/error"
                         ).permitAll()

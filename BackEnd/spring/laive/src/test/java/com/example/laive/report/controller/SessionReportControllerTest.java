@@ -2,6 +2,8 @@ package com.example.laive.report.controller;
 
 import com.example.laive.common.exception.GlobalExceptionHandler;
 import com.example.laive.common.security.JwtStreamerIdExtractor;
+import com.example.laive.media.config.ClipProperties;
+import com.example.laive.media.storage.ClipUrlResolver;
 import com.example.laive.report.domain.ReportStatus;
 import com.example.laive.report.domain.SentimentCounts;
 import com.example.laive.report.domain.SessionReport;
@@ -17,6 +19,7 @@ import org.springframework.security.web.method.annotation.AuthenticationPrincipa
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
@@ -44,7 +47,7 @@ class SessionReportControllerTest {
                 .build();
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new SessionReportController(service, extractor))
+                .standaloneSetup(new SessionReportController(service, extractor, clipUrlResolver()))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .build();
@@ -53,6 +56,13 @@ class SessionReportControllerTest {
     @AfterEach
     void tearDown() {
         SecurityContextHolder.clearContext();
+    }
+
+    /** 클립 키를 절대 URL로 바꾸는 실제 동작을 그대로 태운다 — 조립 규칙까지 응답에서 검증한다. */
+    private ClipUrlResolver clipUrlResolver() {
+        return new ClipUrlResolver(new ClipProperties(
+                Duration.ofMillis(4_500), 3, "/tmp/clips", "https://laive.test/clips", 200
+        ));
     }
 
     @Test
