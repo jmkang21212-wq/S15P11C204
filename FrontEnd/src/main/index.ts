@@ -7,6 +7,7 @@ import { registerOAuthIpc } from './oauth'
 import { registerBriefingIpc } from './briefing'
 import { registerSessionIpc } from './session'
 import { registerSnapshotIpc } from './snapshot'
+import { registerQuestionIpc } from './question'
 
 /**
  * 렌더러가 넘긴 URL이 외부로 내보내도 되는 주소인지 검증한다.
@@ -165,6 +166,9 @@ app.whenReady().then(() => {
 
   // ── 실시간 콘솔 스냅샷 릴레이 (콘솔 창 → 미니·오버레이 창) ──
   registerSnapshotIpc()
+
+  // ── 반복 질문 답변 완료 요청 릴레이 (미니 창 → 콘솔 창) ──
+  registerQuestionIpc()
 
   createWindow()
 

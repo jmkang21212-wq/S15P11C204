@@ -40,6 +40,8 @@ export class AudioStreamClient {
   /** 스트리밍을 유지해야 하는 상태인지 — 의도치 않은 끊김과 사용자 중지를 구분한다. */
   private desired = false
   private baseSessionId = ''
+  /** 전사·경고를 Spring에 저장할 때 쓰는 broadcast_sessions.id. 없으면 저장만 건너뛴다. */
+  private broadcastSessionId: number | null = null
   private ws: WebSocket | null = null
   private ctx: AudioContext | null = null
   private stream: MediaStream | null = null
@@ -52,10 +54,11 @@ export class AudioStreamClient {
   }
 
   /** 방송 시작 시 호출. baseSessionId에 접속마다 고유 접미사를 붙여 세션을 만든다. */
-  async start(baseSessionId: string): Promise<void> {
+  async start(baseSessionId: string, broadcastSessionId: number | null): Promise<void> {
     if (this.desired) return
     this.desired = true
     this.baseSessionId = baseSessionId
+    this.broadcastSessionId = broadcastSessionId
     this.attempts = 0
     await this.connect()
   }
@@ -92,8 +95,17 @@ export class AudioStreamClient {
 
       ws.onopen = () => {
         // 첫 메시지는 반드시 핸드셰이크 JSON이어야 한다 (10초 제한).
+        // broadcastSessionId를 함께 보낸다 — session_id는 창마다 고유한 임의 문자열이라
+        // AI 서버가 Spring 저장에 쓸 수 없다. 빠지면 위험 발언·약속이 화면에는 뜨지만
+        // DB에 남지 않아 방송 후 리포트에서 조용히 사라진다.
         // TODO: token은 아직 검증되지 않는다. Spring JWT로 교체될 자리.
-        ws.send(JSON.stringify({ session_id: sessionId, token: 'dev' }))
+        ws.send(
+          JSON.stringify({
+            session_id: sessionId,
+            token: 'dev',
+            broadcastSessionId: this.broadcastSessionId
+          })
+        )
       }
       ws.onmessage = (event) => this.handleMessage(event.data)
       ws.onerror = () => this.handlers.onError('AI 서버에 연결할 수 없어요')

@@ -1,13 +1,22 @@
 import { useState } from 'react'
 import { formatCount, formatPercent, formatTime } from '@renderer/lib/format'
 import { topSentiments } from '@renderer/lib/sentiment'
-import type { Briefing, BriefingType, LiveSnapshot } from '@renderer/types/console'
+import type {
+  Briefing,
+  BriefingType,
+  LiveSnapshot,
+  RepeatedQuestion
+} from '@renderer/types/console'
 
 interface MiniWidgetProps {
   /** 세션·여론 등 스냅샷 지표. 조회 실패 시 null이며 브리핑은 그대로 보여준다. */
   data: LiveSnapshot | null
   /** 표시할 브리핑 (실시간 + 스냅샷, 최신순) */
   briefings: Briefing[]
+  /** FAQ 칸에 쓸 반복 질문 (askers 내림차순, 호출부에서 이미 필터링됨) */
+  questions: RepeatedQuestion[]
+  /** 반복 질문 답변 완료 — 콘솔 창에 처리를 요청한다 */
+  onDismissQuestion: (questionId: number) => void
   /** HIGH 위험 강조 상태로 렌더 */
   isHigh: boolean
   /** "콘솔로" — 메인 콘솔 창 포커스 */
@@ -41,6 +50,8 @@ const NO_DRAG = '[-webkit-app-region:no-drag]'
 export default function MiniWidget({
   data,
   briefings,
+  questions,
+  onDismissQuestion,
   isHigh,
   onGoConsole,
   onClose
@@ -102,6 +113,12 @@ export default function MiniWidget({
   const isRisk = category === 'RISK' && current !== undefined
   const shares = data ? topSentiments(data.sentiment) : []
 
+  // FAQ 칸은 브리핑이 아니라 반복 질문 목록에서 온다 (스냅샷의 별도 배열).
+  // 가장 많이 물은 것 하나만 두고, 답하면 다음 질문이 그 자리에 올라온다.
+  const isFaqSlot = category === 'FAQ'
+  const topQuestion = questions[0]
+  const remainingQuestions = Math.max(0, questions.length - 1)
+
   const prev = (): void => setIdx((i) => (i - 1 + total) % total)
   const next = (): void => setIdx((i) => (i + 1) % total)
 
@@ -161,16 +178,43 @@ export default function MiniWidget({
           )}
           <span className={`text-micro font-bold ${meta.accent}`}>
             {meta.label}
-            {current?.level ? ` (${current.level})` : ''}
+            {!isFaqSlot && current?.level ? ` (${current.level})` : ''}
           </span>
-          {current && (
+          {!isFaqSlot && current && (
             <span className="ml-auto font-mono text-micro text-muted-foreground">
               {formatTime(current.createdAt)}
             </span>
           )}
+          {isFaqSlot && topQuestion && (
+            <span className="ml-auto font-mono text-micro text-muted-foreground">
+              {formatCount(topQuestion.askers)}명
+            </span>
+          )}
         </div>
 
-        {current ? (
+        {isFaqSlot ? (
+          topQuestion ? (
+            <>
+              <span className="text-secondary-foreground">{topQuestion.text}</span>
+              <div className={`mt-2 flex items-center gap-2 ${NO_DRAG}`}>
+                {remainingQuestions > 0 && (
+                  <span className="text-micro text-muted-foreground">
+                    {remainingQuestions}건 더
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onDismissQuestion(topQuestion.questionId)}
+                  className="ml-auto rounded-md bg-white/10 px-2.5 py-1 text-micro font-bold text-secondary-foreground"
+                >
+                  답변 완료
+                </button>
+              </div>
+            </>
+          ) : (
+            <span className="text-muted-foreground">아직 반복되는 질문이 없어요</span>
+          )
+        ) : current ? (
           <>
             <span className="text-secondary-foreground">{current.message}</span>
             {current.quote && (
