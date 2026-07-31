@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
+@import './fonts/WantedSansVariable.css';
 @import './theme/palette-studio-light.css';
 @import './theme/semantic.css';
 
@@ -57,9 +58,8 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 
-  /* 타이포: 본문 Wanted Sans / 수치·ID JetBrains Mono
-     실제 폰트 파일 self-host는 후속 작업 — 현재는 폴백 스택 사용 */
-  --font-sans: 'Wanted Sans', 'Pretendard', system-ui, sans-serif;
+  /* 타이포: 본문 Wanted Sans / 수치·ID JetBrains Mono */
+  --font-sans: 'Wanted Sans Variable', 'Pretendard', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
   /* 타이포 스케일 — design.md §1 (text-title/body/caption/metric로 사용) */

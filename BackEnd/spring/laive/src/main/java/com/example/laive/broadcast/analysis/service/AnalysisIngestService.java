@@ -76,7 +76,7 @@ public class AnalysisIngestService {
                 null
         ), "위험 발언");
 
-        mapper.insertBriefing(sessionId, "RISK", alert.briefingMessage());
+        mapper.insertBriefing(sessionId, "RISK", alert.briefingMessage(), null);
         return riskEventId;
     }
 
@@ -105,7 +105,9 @@ public class AnalysisIngestService {
                 detection.dueDate()
         ), "약속");
 
-        mapper.insertBriefing(sessionId, "PROMISE", detection.briefingMessage());
+        // 브리핑에 약속 id를 연결한다 — 스냅샷으로 복구된 히스토리 카드도
+        // 확정/무시(10.8)를 호출할 수 있어야 한다.
+        mapper.insertBriefing(sessionId, "PROMISE", detection.briefingMessage(), promiseId);
         return promiseId;
     }
 

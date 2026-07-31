@@ -6,6 +6,7 @@ import com.example.laive.report.ai.ReportAiResult;
 import com.example.laive.report.domain.HighlightCandidate;
 import com.example.laive.report.domain.ReportStatus;
 import com.example.laive.report.repository.SessionReportGenerationRepository;
+import com.example.laive.growth.service.GrowthActionTransactionService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,17 +20,20 @@ public class ReportGenerationTransactionService {
     private final BroadcastOutboxRepository outboxRepository;
     private final OutboxEventFactory eventFactory;
     private final Clock clock;
+    private final GrowthActionTransactionService growthActions;
 
     public ReportGenerationTransactionService(
             SessionReportGenerationRepository repository,
             BroadcastOutboxRepository outboxRepository,
             OutboxEventFactory eventFactory,
-            Clock clock
+            Clock clock,
+            GrowthActionTransactionService growthActions
     ) {
         this.repository = repository;
         this.outboxRepository = outboxRepository;
         this.eventFactory = eventFactory;
         this.clock = clock;
+        this.growthActions = growthActions;
     }
 
     @Transactional
@@ -74,12 +78,15 @@ public class ReportGenerationTransactionService {
         if (updated != 1) {
             throw new IllegalStateException("PROCESSING 리포트를 완료할 수 없습니다.");
         }
+        growthActions.requestForReport(reportId);
         return partial ? ReportStatus.PARTIAL : ReportStatus.COMPLETED;
     }
 
     @Transactional
     public void partialWithoutSummary(long reportId) {
-        repository.partialReport(reportId, null, clock.instant());
+        if (repository.partialReport(reportId, null, clock.instant()) == 1) {
+            growthActions.requestForReport(reportId);
+        }
     }
 
     @Transactional

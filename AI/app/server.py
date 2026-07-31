@@ -183,8 +183,10 @@ def _dispatch_verdicts() -> None:
 
 def _dispatch_promises() -> None:
     for p in _promise.results():
-        if _spring is not None:
-            _spring.send_promise(p)
+        # 다른 전송과 달리 응답을 기다린다. 저장된 약속의 id를 프론트에 같이
+        # 실어보내야 하는데, 그 id는 POST 응답에만 있기 때문이다. 기다리는 동안
+        # 막히는 것은 이 스레드뿐이라 감지와 오디오는 영향이 없다.
+        promise_id = _spring.send_promise(p) if _spring is not None else None
 
         session = _registry.get(p.session_id)
         if session is None:
@@ -192,6 +194,10 @@ def _dispatch_promises() -> None:
         session.push({
             "type": "promise",
             "seq": p.seq,
+            # PROMISES의 행 id. 프론트는 이 값으로 확정/무시를 호출한다.
+            # Spring 저장이 꺼져 있거나 실패했으면 null이고, 그때는 카드만 뜨고
+            # 확정/무시 버튼은 쓸 수 없다.
+            "promise_id": promise_id,
             "content": p.content,
             "text": p.raw_text,
             "deadline_text": p.deadline_text,

@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.UUID;
 import com.example.laive.report.event.ReportFinalizationRequestedEvent;
 import com.example.laive.report.event.TriggerAnalysisRequestedEvent;
+import com.example.laive.growth.event.GrowthActionGenerationRequestedEvent;
 
 /**
  * 이벤트 식별자, 버전, 중복 방지 Key와 JSON 직렬화를 한곳에서 생성한다.
@@ -137,6 +138,29 @@ public class OutboxEventFactory {
                 "report:" + reportId + ":finalize",
                 new ReportFinalizationRequestedEvent(
                         eventId, SCHEMA_VERSION, sessionId, reportId, occurredAt
+                ),
+                occurredAt
+        );
+    }
+
+    public PendingOutboxEvent growthActionGenerationRequested(
+            long generationId,
+            long goalId,
+            long goalRevision,
+            Long sourceReportId,
+            String promptVersion,
+            String deduplicationKey,
+            Instant occurredAt
+    ) {
+        UUID eventId = UUID.randomUUID();
+        return pending(
+                eventId,
+                goalId,
+                BroadcastOutboxEventType.GROWTH_ACTION_GENERATION_REQUESTED,
+                deduplicationKey,
+                new GrowthActionGenerationRequestedEvent(
+                        eventId, SCHEMA_VERSION, generationId, goalId, goalRevision,
+                        sourceReportId, promptVersion, occurredAt
                 ),
                 occurredAt
         );

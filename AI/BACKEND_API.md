@@ -18,7 +18,7 @@ AI 서버가 방송 중 실시간으로 세 가지를 Spring에 보내 저장한
 
 프론트는 AI 서버와 WebSocket으로 경고만 주고받는다. **저장은 전적으로 AI → Spring 경로**로 이뤄지며, 프론트 화면 동작과 무관하다.
 
-**구현 상태: AI · Spring 완료. 프론트 작업 남음** (아래 "프론트가 해야 할 일" 참고)
+**구현 상태: AI · Spring · 프론트 연동 완료** (2026-07-31 — 아래 "프론트 연동" 참고)
 
 ---
 
@@ -130,15 +130,11 @@ POST /internal/v1/sessions/{sessionId}/promises
 
 `PROMISES`에 `DETECTED` 상태로 저장되고 `LIVE_BRIEFINGS(PROMISE)`가 생성된다.
 
-**기한은 AI가 이미 계산해서 보낸다.** `"2주 안으로"` 같은 한국어 표현을 Spring이 파싱할 일은 없다. `deadlineAt`은 세 경우가 있다.
+**기한은 AI가 이미 계산해서 보낸다.** `"2주 안으로"` 같은 한국어 표현을 Spring이 파싱할 일은 없다.
 
-| 경우 | `deadlineAt` |
-|---|---|
-| 기한 있음 (`"2주 안으로"`) | 절대 시각 |
-| 기한 미정 (`"다음에 꼭"`) | `null` |
-| 조건부 (`"구독자 1000명 되면"`) | `null` |
+**AI는 기한이 있는 약속만 보낸다.** 날짜를 계산할 수 없는 약속(`"다음에 꼭 할게요"`)과 날짜 없는 조건부 약속(`"구독자 1000명 되면"`)은 감지 단계에서 버린다. 캘린더 등록과 이행 판정이 약속 기능의 목적이라 날짜가 없으면 쓸 수 없기 때문이다. 따라서 이 엔드포인트로 오는 `deadlineAt`은 **항상 값이 있다.**
 
-Spring은 이 값을 `due_date`(DATE)로 변환해 저장한다. `null`이면 기한 미정 약속이다(명세 1.5).
+Spring은 이 값을 `due_date`(DATE)로 변환해 저장한다. 스키마상 `due_date`는 여전히 NULL을 허용하는데, 스트리머가 확정(10.8) 단계에서 날짜를 비우거나 직접 만든 약속이 있을 수 있어서다(명세 1.5). 이 경로로만 들어오는 값이 아니라는 뜻이다.
 
 같은 약속을 반복해서 말해도 15분 안에는 한 번만 온다. 중복 제거는 AI가 한다.
 
@@ -181,36 +177,19 @@ AI는 벽시계 시각(ISO 8601 UTC)을 보내고, DB는 방송 시작 기준 �
 
 ---
 
-## 프론트가 해야 할 일
+## 프론트 연동 (완료 — 2026-07-31)
 
-**현재 이 작업이 안 돼 있어 DB 저장이 동작하지 않는다.** AI·Spring은 준비 완료 상태다.
+세 가지가 모두 반영되어 DB 저장이 동작한다.
 
-| # | 문제 | 위치 |
+| # | 반영 내용 | 위치 |
 |---|---|---|
-| 1 | `POST /broadcast-sessions` 미연동 → 진짜 세션 번호가 없음 | `api/broadcastSessions.ts` (`USE_MOCK = true`) |
-| 2 | 번호를 문자열에 묻어 전달 (`` `session${sid}` ``) | `BroadcastConsolePage.tsx:38` |
-| 3 | 핸드셰이크에 번호 자리 없음 | `AudioStreamClient.ts:96` |
+| 1 | `POST /broadcast-sessions` 실연동 (`USE_MOCK = false`) — 진짜 세션 번호 확보 | `api/broadcastSessions.ts` |
+| 2 | 세션 번호를 **숫자 그대로** `useAudioStream` → `AudioStreamClient`에 전달 | `BroadcastConsolePage.tsx` |
+| 3 | 핸드셰이크에 `broadcastSessionId` 포함 | `AudioStreamClient.ts` `connect()` |
 
-1번이 선행되어야 한다. 현재 세션 번호는 하드코딩 상수 `9002`다.
+`session_id`의 UUID 접미사 규칙은 그대로다 — 접속마다 `AudioStreamClient`가 새로 붙인다(탭 충돌 방지, AI 내부 라우팅).
 
-**작업 순서**
-
-1. 방송 시작 시 `POST /api/v1/broadcast-sessions` 호출 → 응답의 `data.sessionId` 보관
-   (요청 필수값: `platformAccountId`, `title`)
-2. 그 번호를 `AudioStreamClient`까지 **숫자 그대로** 전달
-3. 핸드셰이크에 추가
-
-```js
-ws.send(JSON.stringify({
-  session_id: sessionId,        // 기존 그대로 (UUID 접미사 유지)
-  token: 'dev',
-  broadcastSessionId: 9002,     // ← 추가
-}))
-```
-
-`session_id`의 UUID 접미사 규칙은 **바꾸지 말 것.** 탭 충돌 방지와 AI 내부 라우팅에 계속 쓴다.
-
-**확인 방법** — AI 로그에 아래 경고가 사라지면 성공이다.
+**동작 확인** — AI 로그에 아래 경고가 나오면 `broadcastSessionId` 전달이 빠진 것이다(감지·프론트 표시는 되지만 Spring 저장만 건너뛴다).
 
 ```
 broadcastSessionId가 없어 Spring 저장을 건너뜁니다: session_id=...
@@ -259,4 +238,4 @@ SPRING_PROMISE_PATH    = "/internal/v1/sessions/{session_id}/promises"
 | Spring SQL | `resources/mapper/broadcast/AnalysisMapper.xml` |
 | 통합 테스트 | `broadcast/analysis/AnalysisIngestIntegrationTest.java` |
 
-> 명세서 §13.5는 Spring이 AI를 호출하는 방식으로 적혀 있으나, 구현은 AI가 Spring으로 push한다. 실시간 콘솔 특성상 감지 즉시 밀어주는 편이 자연스럽고 큐·재시도·배치가 이미 AI 쪽에 있기 때문이다. 명세 갱신이 필요하다.
+> 명세서 §13.4·13.5는 초안에서 Spring이 AI를 호출하는 방향으로 적혀 있었으나, 2026-07-31 실제 구현(AI가 Spring으로 push)에 맞춰 갱신됐다. 요청·응답 규격의 정본은 이 문서다.

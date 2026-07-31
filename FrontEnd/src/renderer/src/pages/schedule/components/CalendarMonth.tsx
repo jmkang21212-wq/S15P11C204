@@ -1,82 +1,44 @@
-import { Button } from '@renderer/components/ui/button'
 import { cn } from '@renderer/lib/utils'
 import { formatTime } from '@renderer/lib/format'
-import type { CalendarEvent } from '@renderer/types/schedule'
+import { getMonthGridDays, toDateKey } from './calendarGrid'
+import type { CalendarEvent, CalendarPromiseItem } from '@renderer/types/schedule'
 
 interface CalendarMonthProps {
   year: number
   month: number // 0-indexed
   events: CalendarEvent[]
+  /** 기한이 잡힌 진행 중 약속 — 읽기 전용 칩으로만 표시한다 (확정/무시 API 연동 전). */
+  promises: CalendarPromiseItem[]
   selectedEventId: number | null
-  onPrevMonth: () => void
-  onNextMonth: () => void
   onSelectEvent: (event: CalendarEvent) => void
-  onAddEvent: () => void
 }
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
 
-function dateKey(d: Date): string {
-  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+/**
+ * 셀 날짜(자정~다음 자정)와 일정 구간이 겹치는지.
+ * BE `findRange`가 포함이 아니라 겹침으로 조회하므로(여러 날짜짜리 DAY_OFF가 경계를
+ * 걸칠 수 있다), 화면도 시작일 하나에만 꽂지 않고 걸치는 모든 날짜 셀에 그린다.
+ */
+function overlapsDay(event: CalendarEvent, day: Date): boolean {
+  const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate())
+  const dayEnd = new Date(dayStart)
+  dayEnd.setDate(dayEnd.getDate() + 1)
+  return new Date(event.startAt) < dayEnd && new Date(event.endAt) > dayStart
 }
 
 export default function CalendarMonth({
   year,
   month,
   events,
+  promises,
   selectedEventId,
-  onPrevMonth,
-  onNextMonth,
-  onSelectEvent,
-  onAddEvent
+  onSelectEvent
 }: CalendarMonthProps): React.JSX.Element {
-  // 일정을 날짜별로 그룹화 (로컬 날짜 기준)
-  const eventsByDay = new Map<string, CalendarEvent[]>()
-  for (const e of events) {
-    const key = dateKey(new Date(e.startAt))
-    const list = eventsByDay.get(key) ?? []
-    list.push(e)
-    eventsByDay.set(key, list)
-  }
-
-  // 6주 × 7일 그리드 생성
-  const startWeekday = new Date(year, month, 1).getDay()
-  const gridStart = new Date(year, month, 1 - startWeekday)
-  const cells = Array.from({ length: 42 }, (_, i) => {
-    const d = new Date(gridStart)
-    d.setDate(gridStart.getDate() + i)
-    return d
-  })
+  const cells = getMonthGridDays(year, month)
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden p-6">
-      {/* 헤더 */}
-      <div className="mb-4 flex items-center gap-3">
-        <div className="flex rounded-lg bg-muted p-0.5">
-          <span className="rounded-md bg-card px-3.5 py-1.5 text-xs font-semibold shadow-sm">
-            월
-          </span>
-          <span className="px-3.5 py-1.5 text-xs font-semibold text-muted-foreground">주</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon-sm" onClick={onPrevMonth} aria-label="이전 달">
-            ◀
-          </Button>
-          <span className="text-base font-bold">
-            {year}년 {month + 1}월
-          </span>
-          <Button variant="outline" size="icon-sm" onClick={onNextMonth} aria-label="다음 달">
-            ▶
-          </Button>
-        </div>
-        <span className="rounded-lg border border-dashed px-3 py-1.5 text-xs text-muted-foreground">
-          추천 시간대 보기 (준비 중)
-        </span>
-        <Button className="ml-auto" size="sm" onClick={onAddEvent}>
-          + 일정 추가
-        </Button>
-      </div>
-
+    <div className="flex flex-1 flex-col overflow-hidden px-6 pb-6">
       {/* 요일 헤더 */}
       <div className="grid grid-cols-7 border-b">
         {WEEKDAYS.map((w, i) => (
@@ -97,7 +59,9 @@ export default function CalendarMonth({
       <div className="grid flex-1 grid-cols-7 grid-rows-6 overflow-hidden">
         {cells.map((d, i) => {
           const inMonth = d.getMonth() === month
-          const dayEvents = eventsByDay.get(dateKey(d)) ?? []
+          const dayEvents = events.filter((e) => overlapsDay(e, d))
+          const dayKey = toDateKey(d)
+          const dayPromises = promises.filter((p) => p.dueDate === dayKey)
           return (
             <div
               key={i}
@@ -121,8 +85,9 @@ export default function CalendarMonth({
                     key={e.calendarEventId}
                     type="button"
                     onClick={() => onSelectEvent(e)}
+                    title={e.title}
                     className={cn(
-                      'truncate rounded px-1.5 py-0.5 text-left text-micro leading-tight',
+                      'flex w-full flex-col rounded px-1.5 py-1 text-left text-caption leading-tight',
                       e.eventType === 'DAY_OFF'
                         ? 'bg-muted text-muted-foreground'
                         : 'bg-accent text-accent-foreground',
@@ -130,10 +95,20 @@ export default function CalendarMonth({
                     )}
                   >
                     {e.eventType === 'BROADCAST' && (
-                      <b className="font-mono">{formatTime(e.startAt)} </b>
+                      <span className="font-bold opacity-70">{formatTime(e.startAt)}</span>
                     )}
-                    {e.title}
+                    <span className="line-clamp-2 break-words">{e.title}</span>
                   </button>
+                ))}
+                {/* 약속 — 확정/무시 API가 아직 없어 클릭 불가한 읽기 전용 칩으로만 얹는다. */}
+                {dayPromises.map((p) => (
+                  <div
+                    key={p.promiseId}
+                    title={p.content}
+                    className="rounded border border-dashed border-warning/40 bg-warning/5 px-1.5 py-1 text-left text-caption leading-tight text-warning"
+                  >
+                    <span className="line-clamp-2 break-words">🔖 {p.content}</span>
+                  </div>
                 ))}
               </div>
             </div>

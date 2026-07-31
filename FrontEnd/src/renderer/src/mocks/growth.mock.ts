@@ -125,6 +125,10 @@ export const MOCK_GROWTH_GOALS: GrowthGoal[] = [
     status: 'ACTIVE',
     currentValue: 2138,
     progressRate: 0.8552,
+    actionGeneration: {
+      status: 'COMPLETED', stale: false, generatedAt: '2026-07-25T12:00:00Z',
+      sourceReportId: 501, promptVersion: 'growth-action-v1', errorCode: null
+    },
     actions: [
       {
         growthActionId: 91,
@@ -148,6 +152,10 @@ export const MOCK_GROWTH_GOALS: GrowthGoal[] = [
     status: 'ACHIEVED',
     currentValue: 48_200,
     progressRate: 1.0711,
+    actionGeneration: {
+      status: 'COMPLETED', stale: false, generatedAt: '2026-07-25T12:00:00Z',
+      sourceReportId: 501, promptVersion: 'growth-action-v1', errorCode: null
+    },
     actions: [
       {
         growthActionId: 93,
@@ -167,6 +175,10 @@ export const MOCK_GROWTH_GOALS: GrowthGoal[] = [
     status: 'ACTIVE',
     currentValue: 1_290,
     progressRate: 0.4031,
+    actionGeneration: {
+      status: 'WAITING_FOR_DATA', stale: false, generatedAt: null,
+      sourceReportId: null, promptVersion: 'growth-action-v1', errorCode: null
+    },
     actions: []
   }
 ]

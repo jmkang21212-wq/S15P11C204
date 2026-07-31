@@ -57,7 +57,8 @@ public class HighlightStateMachine {
     }
 
     /**
-     * 판정하지 않는 틱(워밍업·저활동·시청자 결측·수집 공백)을 반영한다.
+     * 정보가 없어 판정하지 못하는 틱(워밍업·시청자 결측·수집 공백)을 반영한다.
+     * 저활동 틱은 {@link #onQuietTick}으로 — 그쪽은 정보 부재가 아니라 신호다.
      *
      * <p>연속 카운트는 건드리지 않는다 — 판정 불가가 "진입/이탈 조건 미충족"으로
      * 해석되면 공백 한 번에 진행 중이던 진입이 리셋된다. 단 ACTIVE 구간의
@@ -69,6 +70,27 @@ public class HighlightStateMachine {
             return Optional.of(finalizeSegment(now, now));
         }
         return Optional.empty();
+    }
+
+    /**
+     * 저활동 틱(가드 3 — 윈도우 채팅이 minWindowChats 미만)을 반영한다.
+     *
+     * <p>ACTIVE 중의 저활동은 "판정 불가"가 아니라 채팅이 식었다는 적극적
+     * 신호이므로 이탈 연속 카운트에 산입한다. 이게 없으면 소규모 채널에서
+     * 급증이 끝나도 판정 가능한 틱이 없어 구간이 maxActive까지 늘어진다.
+     * IDLE·COOLDOWN에서는 {@link #onSkippedTick}과 같이 동결한다.
+     *
+     * <p>z·engagement를 받지 않는다 — 저활동 틱의 지표는 신뢰할 수 없다는 것이
+     * 가드 3의 전제라, 피크 갱신에 쓰면 자기모순이다.
+     */
+    public Optional<HighlightCandidate> onQuietTick(Instant now) {
+        if (phase != Phase.ACTIVE) {
+            return Optional.empty();
+        }
+        if (!now.isBefore(activeSince.plus(params.maxActive()))) {
+            return Optional.of(finalizeSegment(now, now));
+        }
+        return countExit(now);
     }
 
     /** 방송 종료 시 ACTIVE 구간을 종료 시각으로 강제 확정한다(가드 5). */
@@ -112,18 +134,23 @@ public class HighlightStateMachine {
         }
 
         if (z <= params.zExit()) {
-            if (consecutiveExit == 0) {
-                exitFirstAt = now;
-            }
-            consecutiveExit++;
-            if (consecutiveExit >= params.exitTicks()) {
-                // 끝은 이탈이 시작된 첫 틱이다. 확정 틱(now)으로 두면
-                // 식은 뒤의 exitTicks초가 구간에 붙는다.
-                return Optional.of(finalizeSegment(exitFirstAt, now));
-            }
-        } else {
-            consecutiveExit = 0;
-            exitFirstAt = null;
+            return countExit(now);
+        }
+        consecutiveExit = 0;
+        exitFirstAt = null;
+        return Optional.empty();
+    }
+
+    /** 이탈 표 하나를 반영한다. 정상 이탈 틱과 저활동 틱이 같은 스트릭을 공유한다. */
+    private Optional<HighlightCandidate> countExit(Instant now) {
+        if (consecutiveExit == 0) {
+            exitFirstAt = now;
+        }
+        consecutiveExit++;
+        if (consecutiveExit >= params.exitTicks()) {
+            // 끝은 이탈이 시작된 첫 틱이다. 확정 틱(now)으로 두면
+            // 식은 뒤의 exitTicks초가 구간에 붙는다.
+            return Optional.of(finalizeSegment(exitFirstAt, now));
         }
         return Optional.empty();
     }

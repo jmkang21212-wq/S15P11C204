@@ -14,7 +14,8 @@ public record GrowthGoal(
         GrowthMetricUnit unit,
         LocalDate periodStart,
         LocalDate periodEnd,
-        GrowthGoalStatus status
+        GrowthGoalStatus status,
+        long revision
 ) {
     public static GrowthGoal create(
             long streamerId,
@@ -26,7 +27,7 @@ public record GrowthGoal(
     ) {
         GrowthGoal goal = new GrowthGoal(
                 0, streamerId, metricType, targetValue, unit,
-                periodStart, periodEnd, GrowthGoalStatus.ACTIVE
+                periodStart, periodEnd, GrowthGoalStatus.ACTIVE, 1
         );
         goal.validate();
         return goal;
@@ -54,7 +55,8 @@ public record GrowthGoal(
                 nextUnit == null ? unit : nextUnit,
                 nextStart == null ? periodStart : nextStart,
                 nextEnd == null ? periodEnd : nextEnd,
-                resolvedStatus
+                resolvedStatus,
+                revision + 1
         );
         updated.validate();
         return updated;
@@ -65,7 +67,7 @@ public record GrowthGoal(
                 || unit == null || unit != metricType.unit()
                 || periodStart == null || periodEnd == null || periodEnd.isBefore(periodStart)
                 || ChronoUnit.DAYS.between(periodStart, periodEnd) + 1 > GrowthPeriod.MAX_DAYS
-                || status == null) {
+                || status == null || revision <= 0) {
             throw GrowthException.invalidGoal();
         }
     }

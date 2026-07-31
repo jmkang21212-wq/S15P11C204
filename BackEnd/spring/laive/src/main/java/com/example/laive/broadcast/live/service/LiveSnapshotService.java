@@ -98,6 +98,7 @@ public class LiveSnapshotService {
                         row.briefingId(),
                         row.briefingType(),
                         row.message(),
+                        row.promiseId(),
                         row.createdAt()
                 ))
                 .toList();
@@ -144,8 +145,8 @@ public class LiveSnapshotService {
     }
 
     private LiveSnapshotResponse.Services services(long sessionId, Instant now) {
-        // 음성 파이프라인(마이크·STT)은 미구현이다. 있는 척하지 않는다.
-        // TODO: STT 경로가 생기면 실제 상태로 교체한다.
+        // 마이크·STT는 프론트 ↔ AI 음성 서버 직결(WS)이라 Spring이 관측할 수 없다.
+        // 고정값을 내려보내고, 실제 상태 표시는 프론트가 자기 연결 상태로 한다.
         String ai = sentimentSnapshotStore.readSentimentRecordedAt(sessionId)
                 .filter(recordedAt -> recordedAt.plus(AI_FRESHNESS).isAfter(now))
                 .map(recordedAt -> "RUNNING")

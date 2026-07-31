@@ -21,6 +21,12 @@ const api = {
       ipcRenderer.invoke('obs:connect', { url, password }),
     disconnect: (): Promise<void> => ipcRenderer.invoke('obs:disconnect'),
     getState: (): Promise<ObsState> => ipcRenderer.invoke('obs:get-state'),
+    /**
+     * 지난번 연결에 성공한 접속 정보. 없으면 null.
+     * 비밀번호는 main이 OS 암호화(safeStorage)로 보관한다 — 렌더러는 저장에 관여하지 않는다.
+     */
+    getCredentials: (): Promise<{ url: string; password: string } | null> =>
+      ipcRenderer.invoke('obs:get-credentials'),
     startStream: (): Promise<void> => ipcRenderer.invoke('obs:start-stream'),
     stopStream: (): Promise<void> => ipcRenderer.invoke('obs:stop-stream'),
     /** 상태 변경 구독. 반환 함수를 호출하면 구독 해제. */
@@ -70,6 +76,19 @@ const api = {
       const listener = (_e: IpcRendererEvent, snapshot: unknown): void => callback(snapshot)
       ipcRenderer.on('snapshot:state', listener)
       return () => ipcRenderer.removeListener('snapshot:state', listener)
+    }
+  },
+  /**
+   * 반복 질문 답변 완료 요청 — 미니 창은 토큰이 없어 API를 직접 부를 수 없으므로
+   * 인증을 가진 콘솔 창이 대신 호출하도록 요청만 넘긴다 (릴레이 방향이 반대다).
+   */
+  question: {
+    requestDismiss: (sessionId: number, questionId: number): void =>
+      ipcRenderer.send('question:dismiss-request', { sessionId, questionId }),
+    onDismissRequest: (callback: (payload: unknown) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, payload: unknown): void => callback(payload)
+      ipcRenderer.on('question:dismiss-request', listener)
+      return () => ipcRenderer.removeListener('question:dismiss-request', listener)
     }
   }
 }

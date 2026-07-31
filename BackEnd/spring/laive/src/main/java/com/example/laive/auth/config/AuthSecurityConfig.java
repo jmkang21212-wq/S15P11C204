@@ -59,6 +59,13 @@ public class AuthSecurityConfig {
                                 // 플랫폼 콜백은 브라우저 리다이렉트라 인증 헤더가 없다.
                                 // 연동 주체는 state로만 판별한다.
                                 "/api/v1/platform-accounts/*/callback",
+                                // 공개 포트폴리오 탐색 (API 12.3, 12.4). 검색은 공개
+                                // 디렉터리(/discover)가 로그인 없이 쓰는 화면이라 익명을
+                                // 허용하고, 토큰이 있으면 컨트롤러가 본인을 제외한다.
+                                // 한 세그먼트 패턴이라 /portfolio/me(내 것, 인증 필수)와
+                                // 겹치지 않는다.
+                                "/api/v1/portfolios",
+                                "/api/v1/portfolios/*",
                                 // 하이라이트 클립 정적 파일. <video>가 Bearer 헤더를 붙이지
                                 // 못하므로 공개다. 배포에서는 nginx가 먼저 받아 가고
                                 // 여기까지 오지 않는다 (CLIP_SPEC.md).

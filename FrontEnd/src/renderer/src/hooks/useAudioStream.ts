@@ -20,9 +20,7 @@ const CATEGORY_LABEL: Record<AlertCategory, string> = {
 function alertToBriefing(event: AlertEvent, briefingId: number): Briefing {
   const category = CATEGORY_LABEL[event.category] ?? event.category
   const advice =
-    event.source === 'llm'
-      ? event.reason
-      : event.hits?.map((hit) => `"${hit.matched}"`).join(', ')
+    event.source === 'llm' ? event.reason : event.hits?.map((hit) => `"${hit.matched}"`).join(', ')
 
   return {
     briefingId,
@@ -52,6 +50,8 @@ function promiseToBriefing(event: PromiseEvent, briefingId: number): Briefing {
     briefingId,
     briefingType: 'PROMISE',
     message: event.content,
+    // Spring 저장 실패 시 null — 그때는 확정/무시 버튼을 못 붙이므로 undefined로 통일한다.
+    promiseId: event.promise_id ?? undefined,
     quote: event.text,
     advice: `${deadline} · 확신 ${Math.round(event.confidence * 100)}%`,
     createdAt: new Date(event.spoken_at * 1000).toISOString()
@@ -70,8 +70,15 @@ export interface UseAudioStreamResult {
 /**
  * 방송 음성을 AI 서버로 스트리밍하고, 돌아오는 경고·약속을 브리핑으로 노출한다.
  * 방송 시작/종료에서 start·stop을 호출한다.
+ *
+ * @param baseSessionId AI 서버 세션 식별용 문자열. 접속마다 고유 접미사가 붙는다
+ * @param broadcastSessionId broadcast_sessions.id. AI 서버가 이 값으로 전사·경고를
+ *        Spring에 저장한다. null이면 실시간 표시는 되지만 DB 저장이 건너뛰어진다
  */
-export function useAudioStream(baseSessionId: string): UseAudioStreamResult {
+export function useAudioStream(
+  baseSessionId: string,
+  broadcastSessionId: number | null
+): UseAudioStreamResult {
   const [status, setStatus] = useState<AudioStreamStatus>('IDLE')
   const [error, setError] = useState<string | null>(null)
   const [briefings, setBriefings] = useState<Briefing[]>([])
@@ -109,8 +116,8 @@ export function useAudioStream(baseSessionId: string): UseAudioStreamResult {
 
   const start = useCallback(() => {
     setError(null)
-    void clientRef.current?.start(baseSessionId)
-  }, [baseSessionId])
+    void clientRef.current?.start(baseSessionId, broadcastSessionId)
+  }, [baseSessionId, broadcastSessionId])
 
   const stop = useCallback(() => {
     clientRef.current?.stop()
