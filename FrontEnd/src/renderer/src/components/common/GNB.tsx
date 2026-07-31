@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -8,11 +9,13 @@ import {
   TrendingUp,
   UserRound,
   Handshake,
+  LogOut,
   type LucideIcon
 } from 'lucide-react'
 import { cn } from '@renderer/lib/utils'
 import { PATHS } from '@renderer/routes/paths'
 import { useAuth } from '@renderer/auth/authStore'
+import { logout } from '@renderer/api/auth'
 import { usePlatformAccounts } from '@renderer/hooks/usePlatformAccounts'
 import Avatar from '@renderer/components/common/Avatar'
 
@@ -55,6 +58,41 @@ export default function GNB({
   const navigate = useNavigate()
   const { streamer } = useAuth()
   const { accounts } = usePlatformAccounts()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
+  const accountRef = useRef<HTMLDivElement>(null)
+
+  // 메뉴 밖을 누르면 닫는다. 좁은 GNB에서 메뉴가 열린 채 남으면 다른 조작을 가린다.
+  useEffect(() => {
+    if (!menuOpen) return
+    const handlePointerDown = (event: MouseEvent): void => {
+      if (!accountRef.current?.contains(event.target as Node)) setMenuOpen(false)
+    }
+    const handleEscape = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', handlePointerDown)
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [menuOpen])
+
+  /**
+   * 로그아웃. authStore가 비워지면 RequireAuth가 로그인 화면으로 보내므로
+   * 여기서 별도로 이동시키지 않는다.
+   * 서버 요청이 실패해도 logout()이 로컬 상태는 정리한다.
+   */
+  const handleLogout = async (): Promise<void> => {
+    setLoggingOut(true)
+    try {
+      await logout()
+    } finally {
+      setMenuOpen(false)
+      setLoggingOut(false)
+    }
+  }
   const primary = accounts?.find((a) => a.connectionStatus === 'CONNECTED') ?? accounts?.[0] ?? null
   const linkStatus: 'connected' | 'reauth' | 'none' =
     primary === null
@@ -149,13 +187,41 @@ export default function GNB({
           </button>
         )}
         {!collapsed && (
-          <div className="flex items-center gap-2">
-            <Avatar
-              src={streamer?.profileImageUrl ?? null}
-              alt={streamer?.nickname ?? '프로필'}
-              size="size-7"
-            />
-            <span className="text-sm font-medium">{streamer?.nickname ?? '-'}</span>
+          <div ref={accountRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setMenuOpen((open) => !open)}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              className="flex w-full items-center gap-2 rounded-md p-1 transition-colors hover:bg-accent/50"
+            >
+              <Avatar
+                src={streamer?.profileImageUrl ?? null}
+                alt={streamer?.nickname ?? '프로필'}
+                size="size-7"
+              />
+              <span className="flex-1 truncate text-left text-sm font-medium">
+                {streamer?.nickname ?? '-'}
+              </span>
+            </button>
+
+            {menuOpen && (
+              <div
+                role="menu"
+                className="absolute bottom-full left-0 z-50 mb-1 w-full overflow-hidden rounded-md border bg-card shadow-md"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={loggingOut}
+                  onClick={() => void handleLogout()}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-destructive transition-colors hover:bg-accent/50 disabled:opacity-60"
+                >
+                  <LogOut className="size-4" strokeWidth={1.8} aria-hidden />
+                  {loggingOut ? '로그아웃 중…' : '로그아웃'}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
