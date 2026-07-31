@@ -33,10 +33,12 @@ public class RepeatedQuestionSyncService {
     }
 
     /**
-     * @param now 판정 기준 시각. 폴러가 주입한다 — 테스트가 유예 경과를 이 값으로 몬다
+     * @param viewers 판정 시점 시청자 수. 재노출 임계가 이 값에 비례한다 —
+     *                null이면 fallback 임계를 쓴다(수신 5분 초과·종료 마감 폴링)
+     * @param now     판정 기준 시각. 폴러가 주입한다 — 테스트가 유예 경과를 이 값으로 몬다
      */
     @Transactional
-    public void apply(long sessionId, ChatAiQuestionsResult result, Instant now) {
+    public void apply(long sessionId, ChatAiQuestionsResult result, Integer viewers, Instant now) {
         List<Long> responseIds = result.questions().stream()
                 .map(ChatAiQuestionsResult.Question::questionId)
                 .toList();
@@ -49,10 +51,12 @@ public class RepeatedQuestionSyncService {
         // 빈 응답이어도 돈다 — 모든 dismissed 질문이 "응답에 없음" 경로다.
         mapper.confirmBaselineByFallback(sessionId, graceCutoff, responseIds, now);
         mapper.lowerBaselineOnShrink(sessionId, now);
-        int reexposed = mapper.reexpose(sessionId, properties.reexposeThreshold(), now);
+        int threshold = properties.reexpose().thresholdFor(viewers);
+        int reexposed = mapper.reexpose(sessionId, threshold, now);
         if (reexposed > 0) {
-            log.info("재질문 감지로 {}건을 다시 노출합니다(답변이 시청자에게 닿지 않은 신호): sessionId={}",
-                    reexposed, sessionId);
+            log.info("재질문 감지로 {}건을 다시 노출합니다(답변이 시청자에게 닿지 않은 신호): "
+                            + "sessionId={} threshold={} viewers={}",
+                    reexposed, sessionId, threshold, viewers);
         }
     }
 }
