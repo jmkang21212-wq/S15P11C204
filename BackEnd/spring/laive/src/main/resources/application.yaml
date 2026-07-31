@@ -148,19 +148,21 @@ laive:
 
   # CHAT_SURGE 하이라이트 판정 파라미터 (알고리즘: AI/chat-ai/HIGHLIGHT_SPEC.md)
   # 전부 백테스트 미검증 초기값이다. 실방송 DEBUG 로그(ts, engagement, z, state)가 튜닝 근거다.
+  # 명세가 튜닝을 전제하는 값들이라 재배포 없이 조정할 수 있게 환경변수 훅을 걸어 둔다.
   highlight:
-    engage-window: 60s     # 유니크 채터 윈도우. ingest의 180초와 다른 이유는 스펙 §0
-    baseline-size: 900     # 900틱 = 15분
-    z-enter: 3.0
-    enter-ticks: 3
-    z-exit: 1.5
-    exit-ticks: 15
-    lead: 30s              # 확정 시 시작점 소급 — 반응은 원인보다 늦다
-    max-active: 5m
-    cooldown: 30s
-    warmup: 3m             # 방송 시작 인사 러시 오탐 방지 (가드 1)
-    min-window-chats: 10   # 저활동 틱 판정 생략 (가드 3)
-    mad-epsilon: 0.001     # MAD 하한 (가드 2)
+    engage-window: "${HIGHLIGHT_ENGAGE_WINDOW:60s}"   # 유니크 채터 윈도우. ingest의 180초와 다른 이유는 스펙 §0
+    baseline-size: "${HIGHLIGHT_BASELINE_SIZE:900}"   # 900틱 = 15분
+    z-enter: "${HIGHLIGHT_Z_ENTER:3.0}"
+    enter-ticks: "${HIGHLIGHT_ENTER_TICKS:3}"
+    z-exit: "${HIGHLIGHT_Z_EXIT:1.5}"
+    exit-ticks: "${HIGHLIGHT_EXIT_TICKS:8}"           # 소규모 채널은 판정 가능 틱이 드물어 15면 확정 기회가 없다
+    lead: "${HIGHLIGHT_LEAD:30s}"                     # 확정 시 시작점 소급 — 반응은 원인보다 늦다
+    max-active: "${HIGHLIGHT_MAX_ACTIVE:4m}"          # lead 포함 270s — 리포트 자격 상한 300s(DeterministicHighlightGenerator) 이내
+    cooldown: "${HIGHLIGHT_COOLDOWN:30s}"
+    warmup: "${HIGHLIGHT_WARMUP:3m}"                  # 방송 시작 인사 러시 오탐 방지 (가드 1)
+    min-window-chats: "${HIGHLIGHT_MIN_WINDOW_CHATS:4}"  # 저활동 틱 판정 생략 (가드 3). 절대량 방어는 mad-floor-chatters가 맡는다
+    mad-epsilon: "${HIGHLIGHT_MAD_EPSILON:0.001}"     # MAD 절대 하한 (가드 2)
+    mad-floor-chatters: "${HIGHLIGHT_MAD_FLOOR_CHATTERS:0.5}"  # MAD 동적 하한(채터 수 단위) — max(ε, 이 값/viewers)
     tick-interval: 1s
 
   report:

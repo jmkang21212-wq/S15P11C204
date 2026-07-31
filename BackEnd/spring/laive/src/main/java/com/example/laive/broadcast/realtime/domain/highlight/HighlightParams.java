@@ -19,7 +19,10 @@ import java.time.Duration;
  * @param cooldown       확정 직후 판정을 쉬는 시간
  * @param warmup         방송 시작 후 판정을 쉬는 시간(가드 1 — 인사 러시 오탐 방지)
  * @param minWindowChats 윈도우 채팅이 이보다 적으면 그 틱은 판정하지 않는다(가드 3)
- * @param madEpsilon     MAD 하한(가드 2 — 같은 값이 절반을 넘으면 MAD가 0이 된다)
+ * @param madEpsilon     MAD 절대 하한(가드 2 — 같은 값이 절반을 넘으면 MAD가 0이 된다)
+ * @param madFloorChatters MAD 동적 하한(채터 수 단위). 실제 하한은
+ *                       max(madEpsilon, madFloorChatters / viewers)로, 채터 수 단위라
+ *                       채널 규모와 무관하게 같은 의미를 갖는다. 0이면 비활성(ε만 적용)
  */
 public record HighlightParams(
         Duration engageWindow,
@@ -33,6 +36,7 @@ public record HighlightParams(
         Duration cooldown,
         Duration warmup,
         int minWindowChats,
-        double madEpsilon
+        double madEpsilon,
+        double madFloorChatters
 ) {
 }

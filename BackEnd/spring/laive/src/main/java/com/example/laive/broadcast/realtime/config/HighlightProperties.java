@@ -25,13 +25,14 @@ public record HighlightProperties(
         Duration warmup,
         int minWindowChats,
         double madEpsilon,
+        double madFloorChatters,
         Duration tickInterval
 ) {
 
     public HighlightParams toParams() {
         return new HighlightParams(
                 engageWindow, baselineSize, zEnter, enterTicks, zExit, exitTicks,
-                lead, maxActive, cooldown, warmup, minWindowChats, madEpsilon
+                lead, maxActive, cooldown, warmup, minWindowChats, madEpsilon, madFloorChatters
         );
     }
 }

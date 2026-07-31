@@ -39,10 +39,11 @@ public class BaselineBuffer {
     /**
      * engagement의 z-score를 계산한다. baseline이 비어 있으면 호출하면 안 된다.
      *
-     * @param madEpsilon MAD 하한(가드 2). 값 절반 이상이 같으면 MAD가 0이 되어
-     *                   0으로 나누게 된다
+     * @param madFloor MAD 하한(가드 2). 값 절반 이상이 같으면 MAD가 0이 되어
+     *                 0으로 나누게 된다. 호출자가 절대 하한(ε)과 채터 수 단위의
+     *                 동적 하한 중 큰 쪽을 계산해 넘긴다
      */
-    public double zScore(double engagement, double madEpsilon) {
+    public double zScore(double engagement, double madFloor) {
         double[] snapshot = Arrays.copyOf(values, size);
         Arrays.sort(snapshot);
         double median = medianOfSorted(snapshot);
@@ -52,7 +53,7 @@ public class BaselineBuffer {
             deviations[i] = Math.abs(snapshot[i] - median);
         }
         Arrays.sort(deviations);
-        double mad = Math.max(medianOfSorted(deviations), madEpsilon);
+        double mad = Math.max(medianOfSorted(deviations), madFloor);
 
         return (engagement - median) / (MAD_SCALE * mad);
     }
