@@ -114,15 +114,23 @@ class RealtimeSessionState {
             return skipped(now, "empty-baseline");
         }
 
+        // 가드 2 확장: MAD 하한을 채터 수 단위로도 잡는다. 소규모 채널은 baseline이
+        // 같은 값으로 도배되어 MAD가 붕괴하는데, ε=0.001만으로는 채터 1명 변화에
+        // z가 폭발해 임계가 변별력을 잃는다. 채터 수 단위라 규모 불변이며, 하한이
+        // 지배할 때 진입 문턱은 median 대비 채터 약 +zEnter×1.4826×madFloorChatters명이다.
+        double madFloor = Math.max(params.madEpsilon(), params.madFloorChatters() / viewers);
+
         // z는 현재 값을 넣기 전의 baseline으로 계산한다. 자기 자신이 포함되면
         // 급증 값이 median을 끌어올려 z가 눌린다.
-        double z = baseline.zScore(engagement, params.madEpsilon());
+        double z = baseline.zScore(engagement, madFloor);
 
         Optional<HighlightCandidate> confirmed;
         if (window.chatCount() < params.minWindowChats()) {
             // 가드 3: 저활동 틱은 판정하지 않는다. 채팅 몇 건으로 계산한
-            // engagement는 분모(시청자)만 흔들려도 z가 널뛴다.
-            confirmed = machine.onSkippedTick(now);
+            // engagement는 분모(시청자)만 흔들려도 z가 널뛴다. 단 ACTIVE 중에는
+            // 이탈 카운트에 산입한다 — 저활동은 판정 불가가 아니라 채팅이
+            // 식었다는 신호다.
+            confirmed = machine.onQuietTick(now);
         } else {
             confirmed = machine.onTick(now, z, engagement);
         }

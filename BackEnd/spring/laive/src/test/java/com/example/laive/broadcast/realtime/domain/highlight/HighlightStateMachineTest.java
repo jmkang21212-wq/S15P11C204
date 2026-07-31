@@ -24,7 +24,8 @@ class HighlightStateMachineTest {
             Duration.ofSeconds(30),
             Duration.ofMinutes(3),
             10,
-            0.001
+            0.001,
+            0.5   // madFloorChatters — 상태기계는 읽지 않는다
     );
 
     @Test
@@ -139,13 +140,99 @@ class HighlightStateMachineTest {
     void skippedTickKeepsStreaksButEnforcesMaxActive() {
         HighlightStateMachine machine = enterActive();
 
-        // 판정 불가 틱은 이탈 카운트를 건드리지 않는다.
+        // 판정 불가 틱은 이탈 카운트를 건드리지 않는다(연장도 리셋도 안 함).
         for (int i = 0; i < 14; i++) {
             machine.onTick(at(10 + i), 1.0, 0.05);
         }
         assertThat(machine.onSkippedTick(at(24))).isEmpty();
         // 카운트가 리셋되지 않았다면 다음 이탈 틱에서 확정된다.
         assertThat(machine.onTick(at(25), 1.0, 0.05)).isPresent();
+    }
+
+    @Test
+    void quietTicksCountTowardExitAndEndAtFirstQuietTick() {
+        HighlightStateMachine machine = enterActive();
+
+        // 저활동 틱은 이탈 표다. exitTicks(15)를 채우면 확정된다.
+        Optional<HighlightCandidate> confirmed = Optional.empty();
+        for (int i = 0; i < 15; i++) {
+            confirmed = machine.onQuietTick(at(10 + i));
+        }
+
+        assertThat(confirmed).isPresent();
+        // 끝은 이탈 스트릭의 첫 틱 — 저활동 틱이어도 같다.
+        assertThat(confirmed.orElseThrow().endedAt()).isEqualTo(at(10));
+        assertThat(machine.phase()).isEqualTo(HighlightStateMachine.Phase.COOLDOWN);
+    }
+
+    @Test
+    void mixedQuietAndJudgedExitTicksShareOneStreak() {
+        HighlightStateMachine machine = enterActive();
+
+        // 정상 이탈 7표 + 저활동 1표 + 정상 이탈 7표 = 15표에서 확정.
+        for (int i = 0; i < 7; i++) {
+            assertThat(machine.onTick(at(10 + i), 1.0, 0.05)).isEmpty();
+        }
+        assertThat(machine.onQuietTick(at(17))).isEmpty();
+        Optional<HighlightCandidate> confirmed = Optional.empty();
+        for (int i = 0; i < 7; i++) {
+            confirmed = machine.onTick(at(18 + i), 1.0, 0.05);
+        }
+
+        assertThat(confirmed).isPresent();
+        assertThat(confirmed.orElseThrow().endedAt()).isEqualTo(at(10));
+    }
+
+    @Test
+    void judgedBounceResetsQuietExitStreak() {
+        HighlightStateMachine machine = enterActive();
+
+        // 저활동 5표 뒤 정상 반등 틱만이 스트릭을 리셋한다.
+        for (int i = 0; i < 5; i++) {
+            assertThat(machine.onQuietTick(at(10 + i))).isEmpty();
+        }
+        assertThat(machine.onTick(at(15), 4.0, 0.2)).isEmpty();
+
+        // 새 스트릭이 저활동 틱으로 시작하면 그 틱이 구간의 끝이 된다.
+        Optional<HighlightCandidate> confirmed = Optional.empty();
+        for (int i = 0; i < 15; i++) {
+            confirmed = machine.onQuietTick(at(16 + i));
+        }
+        assertThat(confirmed.orElseThrow().endedAt()).isEqualTo(at(16));
+    }
+
+    @Test
+    void quietTickEnforcesMaxActive() {
+        HighlightStateMachine machine = enterActive();
+
+        // 계속 뜨거워 이탈 표가 없는 채로 상한 직전까지 간다.
+        for (int i = 10; i < 302; i++) {
+            assertThat(machine.onTick(at(i), 6.0, 0.2)).isEmpty();
+        }
+        // 진입 확정(t2) + 5분 = t302. 저활동 틱도 상한을 지킨다.
+        Optional<HighlightCandidate> confirmed = machine.onQuietTick(at(302));
+        assertThat(confirmed.orElseThrow().endedAt()).isEqualTo(at(302));
+    }
+
+    @Test
+    void quietTickFreezesEnterStreakInIdleAndCooldown() {
+        // IDLE: 저활동 틱은 진입 스트릭을 리셋하지 않는다(동결).
+        HighlightStateMachine machine = new HighlightStateMachine(PARAMS);
+        machine.onTick(at(0), 5.0, 0.1);
+        machine.onTick(at(1), 5.0, 0.1);
+        assertThat(machine.onQuietTick(at(2))).isEmpty();
+        assertThat(machine.phase()).isEqualTo(HighlightStateMachine.Phase.IDLE);
+        machine.onTick(at(3), 5.0, 0.1);
+        assertThat(machine.phase()).isEqualTo(HighlightStateMachine.Phase.ACTIVE);
+
+        // COOLDOWN: 저활동 틱은 아무것도 하지 않는다.
+        HighlightStateMachine cooled = enterActive();
+        for (int i = 0; i < 15; i++) {
+            cooled.onTick(at(10 + i), 1.0, 0.05);
+        }
+        assertThat(cooled.phase()).isEqualTo(HighlightStateMachine.Phase.COOLDOWN);
+        assertThat(cooled.onQuietTick(at(26))).isEmpty();
+        assertThat(cooled.phase()).isEqualTo(HighlightStateMachine.Phase.COOLDOWN);
     }
 
     /** t0~t2에 z=5를 넣어 ACTIVE로 만든다. 진입 확정 틱은 t2다. */

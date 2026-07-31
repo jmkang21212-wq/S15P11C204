@@ -24,16 +24,26 @@ class RealtimeSessionStateTest {
     private static final int VIEWERS = 100;
 
     private static HighlightParams params(int minWindowChats) {
+        // 동적 하한 0.0 = max(ε, 0)이라 ε만 남아, 기존 가드 시나리오의 z 수치가 보존된다.
+        return params(minWindowChats, 0.0);
+    }
+
+    private static HighlightParams params(int minWindowChats, double madFloorChatters) {
+        return params(minWindowChats, madFloorChatters, 1.5);
+    }
+
+    private static HighlightParams params(int minWindowChats, double madFloorChatters, double zExit) {
         return new HighlightParams(
                 Duration.ofSeconds(10), 60,
                 3.0, 2,
-                1.5, 3,
+                zExit, 3,
                 Duration.ofSeconds(5),
                 Duration.ofSeconds(120),
                 Duration.ofSeconds(10),
                 Duration.ofSeconds(10),   // 워밍업 10초
                 minWindowChats,
-                0.001
+                0.001,
+                madFloorChatters
         );
     }
 
@@ -134,6 +144,79 @@ class RealtimeSessionStateTest {
             }
         }
         assertThat(confirmed).isPresent();
+    }
+
+    @Test
+    void dynamicMadFloorSuppressesSmallChannelNoise() {
+        // 소규모 채널(시청자 20명): baseline이 같은 값으로 도배되어 MAD가 붕괴한다.
+        // 동적 하한이 없으면(0.0 → ε=0.001) 채터 +1명에 z가 폭발해 진입한다.
+        int viewers = 20;
+
+        RealtimeSessionState floored = new RealtimeSessionState(1L, START, params(3, 0.5));
+        RealtimeSessionState bare = new RealtimeSessionState(1L, START, params(3, 0.0));
+        for (int t = 0; t < 11; t++) {
+            feedSteady(floored, t);
+            feedSteady(bare, t);
+            floored.tick(at(t), viewers);
+            bare.tick(at(t), viewers);
+        }
+
+        // 같은 +1명 bump: engagement 0.15 → 0.20.
+        for (int t = 11; t < 16; t++) {
+            floored.feedChats(at(t), List.of("u1", "u2", "u3", "extra"));
+            bare.feedChats(at(t), List.of("u1", "u2", "u3", "extra"));
+            // 하한 0.5/20 = 0.025 → z ≈ 1.35로 진입하지 않는다.
+            assertThat(floored.tick(at(t), viewers)).isEmpty();
+            bare.tick(at(t), viewers);
+        }
+
+        assertThat(floored.forceFinalize(at(16))).isEmpty();
+        // 하한이 없으면 같은 bump가 z ≈ 34로 진입한다 — 대조 검증.
+        assertThat(bare.forceFinalize(at(16))).isPresent();
+    }
+
+    @Test
+    void quietTicksWhileActiveConfirmSegment() {
+        // zExit를 도달 불가능하게 두면 정상 판정 틱은 이탈 표를 못 낸다.
+        // 그런데도 확정된다면 저활동 틱(가드 3)이 이탈 표로 산입됐다는 뜻이다.
+        RealtimeSessionState state =
+                new RealtimeSessionState(1L, START, params(3, 0.0, -100.0));
+        int t = warmUpWithSteadyChat(state);
+
+        // t=11, 12에 급증 → enterTicks=2로 ACTIVE. 마지막 채팅 공급은 t=12다.
+        for (; t < 13; t++) {
+            feedSteady(state, t);
+            feedNewcomers(state, t, 3);
+            state.tick(at(t), VIEWERS);
+        }
+
+        // 공급 중단 → 윈도우(10초)가 t=23에 비면서 저활동 틱이 시작된다.
+        Optional<HighlightCandidate> confirmed = Optional.empty();
+        for (; confirmed.isEmpty() && t < 30; t++) {
+            confirmed = state.tick(at(t), VIEWERS);
+        }
+
+        // exitTicks=3: t=23, 24, 25에서 확정. 끝은 첫 저활동 틱이다.
+        assertThat(confirmed.orElseThrow().endedAt()).isEqualTo(at(23));
+    }
+
+    @Test
+    void missingViewersDuringActiveDoesNotCountExit() {
+        RealtimeSessionState state = new RealtimeSessionState(1L, START, params(3));
+        int t = warmUpWithSteadyChat(state);
+
+        // ACTIVE 진입.
+        for (; t < 13; t++) {
+            feedSteady(state, t);
+            feedNewcomers(state, t, 3);
+            state.tick(at(t), VIEWERS);
+        }
+
+        // 시청자 결측(가드 4)은 저활동(가드 3)과 달리 이탈 표가 아니다 — 동결.
+        for (int i = 0; i < 10; i++, t++) {
+            assertThat(state.tick(at(t), null)).isEmpty();
+        }
+        assertThat(state.forceFinalize(at(t))).isPresent();
     }
 
     /** 워밍업(10초) 동안 같은 3명이 매초 채팅해 baseline을 0.03으로 채운다. */
