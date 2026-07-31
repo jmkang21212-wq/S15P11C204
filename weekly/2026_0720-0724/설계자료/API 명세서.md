@@ -1555,7 +1555,7 @@ SC-11의 채널명·태그 검색, 카테고리 필터, 규모 필터를 지원�
 | Spring → 채팅 AI | DELETE | `/broadcasts/{sessionId}` | 방송 종료 시 윈도우·요약 캐시 정리 (구현·검증 완료) |
 | Spring → 채팅 AI | GET | `/broadcasts/{sessionId}/questions` | 반복 질문 Top N 폴링(Spring측 구현 완료, AI측 라우트 미구현 — 계약은 `AI/CHAT_AI_API.md` §3) |
 | Spring → FastAPI | POST | `/internal/v1/ai/promise-detection` | STT에서 약속 후보 추출 |
-| Spring → FastAPI | POST | `/internal/v1/ai/growth-actions` | 성장 목표의 다음 액션 제안 |
+| Client → Spring | POST | `/api/v1/growth-goals/{growthGoalId}/actions/regenerate` | 성장 액션 수동 재생성 요청 |
 
 세션 리포트 생성은 내부 API가 아니다. Spring이 자기 DB의 트리거·전사·채팅을 읽어 LLM을 직접 호출한다(13.7). 따라서 `session-reports` 요청, `highlight-detection` 요청, `analysis-results` Callback 세 Endpoint는 두지 않는다.
 
@@ -1956,35 +1956,23 @@ LLM 호출은 DB 트랜잭션 밖에서, 앱 공용 스케줄러와 분리한 �
 
 트리거가 곧 하이라이트 후보이므로 별도 탐지 요청을 두지 않는다. 클립으로 만들 트리거를 골라 `HIGHLIGHTS(report_id, trigger_id, start_ms, end_ms)`에 저장하고, 클립 생성 후 `clip_url`과 `thumbnail_url`을 갱신한다. 모든 트리거가 클립이 되지는 않으므로 두 테이블은 분리해 둔다.
 
-성장 다음 액션 생성:
-
-`POST /internal/v1/ai/growth-actions`
-
-```json
-{
-  "growthGoalId": 21,
-  "metricType": "AVG_VIEWERS",
-  "targetValue": 2500,
-  "currentValue": 2138,
-  "metricsObjectKey": "streamers/101/analysis/growth-input.json"
-}
-```
+성장 다음 액션은 FastAPI 내부 API를 사용하지 않는다. 목표 생성·수정 또는 리포트 완료 시
+Transactional Outbox가 작업을 등록하고 Spring AI가 Spring Boot 프로세스 안에서 생성한다.
+수동 재생성은 JWT 인증이 적용된 `POST /api/v1/growth-goals/{growthGoalId}/actions/regenerate`를 사용한다.
 
 ```json
 {
   "success": true,
   "data": {
-    "actions": [
-      {
-        "title": "롤토체스 편성 확대",
-        "content": "최근 6주 유입 근거를 바탕으로 주 2회 편성을 권장합니다."
-      }
-    ]
+    "generationId": 301,
+    "status": "PENDING",
+    "requestedAt": "2026-08-01T03:00:00Z"
   }
 }
 ```
 
-Spring은 기존 활성 제안을 교체하고 `GROWTH_ACTIONS(growth_goal_id, title, content)`에 저장한다.
+성공 시 Spring은 기존 제안을 한 트랜잭션에서 교체한다. 실패 전까지 기존 제안은 유지되고
+`GET /api/v1/growth-goals`의 `actionGeneration.stale`로 최신성 여부를 제공한다.
 
 ### 13.8 분석 결과와 ERD 매핑
 
@@ -2110,7 +2098,7 @@ ERD가 스트리머 중심으로 수정되었으므로 `ADVERTISER` 역할과 �
 - [ ]  8종 라벨 집합이 채팅 분류 모델 버전에 묶여 있으므로 모델 교체 시 컬럼 마이그레이션 절차 합의
 - [ ]  화면 캡처 도입 시점과 방식. 트리거는 사후 판정이라 발생 시점에 캡처할 수 없으므로 상시 링버퍼 캡처 또는 VOD 사후 추출 중 선택
 - [ ]  `AI/BACKEND_API.md`의 STT·위험 발언·약속 전송 방향과 13.4·13.5의 불일치 정리 (AI가 Spring을 호출하는 실제 구현과 반대로 적혀 있다)
-- [ ]  성장 액션 생성(`/internal/v1/ai/growth-actions`)도 Spring 내부 LLM 호출로 옮길지 결정. 현재 리포트만 옮겨 두 방식이 공존한다
+- [x]  성장 액션 생성을 Spring AI 내부 LLM 호출로 이전하고 FastAPI 계약 제거
 - [ ]  목업에 표시된 하이라이트 점수·탐지 사유가 필요하면 `HIGHLIGHTS` 컬럼 추가
 - [ ]  실제 채팅 닉네임이 필요하면 `VIEWER_PROFILES`에 공개용 표시명 저장 정책과 컬럼 추가 검토
 - [ ]  목업의 후원 채팅 리플레이가 필요하면 후원 이벤트 테이블 추가 검토
