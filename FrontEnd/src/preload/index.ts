@@ -1,7 +1,12 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
-type ObsState = { status: 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED'; streaming: boolean }
+type ObsState = {
+  status: 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED'
+  streaming: boolean
+  recording: boolean
+}
+type ObsRecordStatus = { outputActive: boolean; outputDuration: number }
 
 // Custom APIs for renderer
 const api = {
@@ -29,6 +34,11 @@ const api = {
       ipcRenderer.invoke('obs:get-credentials'),
     startStream: (): Promise<void> => ipcRenderer.invoke('obs:start-stream'),
     stopStream: (): Promise<void> => ipcRenderer.invoke('obs:stop-stream'),
+    startRecord: (): Promise<void> => ipcRenderer.invoke('obs:start-record'),
+    /** 녹화를 멈추고 결과 파일 경로를 반환한다. */
+    stopRecord: (): Promise<{ outputPath: string }> => ipcRenderer.invoke('obs:stop-record'),
+    /** outputDuration은 밀리초 — 서버의 baseTimecodeMs와 단위가 같다. */
+    getRecordStatus: (): Promise<ObsRecordStatus> => ipcRenderer.invoke('obs:get-record-status'),
     /** 상태 변경 구독. 반환 함수를 호출하면 구독 해제. */
     onState: (callback: (state: ObsState) => void): (() => void) => {
       const listener = (_e: IpcRendererEvent, state: ObsState): void => callback(state)

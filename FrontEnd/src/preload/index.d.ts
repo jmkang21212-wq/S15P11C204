@@ -6,6 +6,13 @@ export type ObsConnStatus = 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED'
 export interface ObsState {
   status: ObsConnStatus
   streaming: boolean
+  recording: boolean
+}
+
+/** GetRecordStatus 응답 중 클립 계산에 쓰는 필드만. outputDuration은 밀리초 단위다. */
+export interface ObsRecordStatus {
+  outputActive: boolean
+  outputDuration: number
 }
 
 /** 지난번 연결에 성공한 OBS 접속 정보. 비밀번호 보관은 main(safeStorage)이 맡는다. */
@@ -21,6 +28,10 @@ export interface ObsBridge {
   getState: () => Promise<ObsState>
   /** 저장된 접속 정보. 없으면 null. 연결 성공 시 main이 자동으로 갱신한다. */
   getCredentials: () => Promise<ObsCredentials | null>
+  startRecord: () => Promise<void>
+  /** 녹화를 멈추고 결과 파일 경로를 반환한다. */
+  stopRecord: () => Promise<{ outputPath: string }>
+  getRecordStatus: () => Promise<ObsRecordStatus>
   startStream: () => Promise<void>
   stopStream: () => Promise<void>
   /** 상태 변경 구독. 반환 함수 호출로 구독 해제. */

@@ -19,6 +19,7 @@ type ObsConnStatus = 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED'
 interface ObsState {
   status: ObsConnStatus
   streaming: boolean
+  recording: boolean
 }
 
 /** 렌더러에 돌려주는 복원된 접속 정보. */
@@ -72,7 +73,7 @@ function saveCredentials(url: string, password: string): void {
 }
 
 let obs: OBSWebSocket | null = null
-const state: ObsState = { status: 'DISCONNECTED', streaming: false }
+const state: ObsState = { status: 'DISCONNECTED', streaming: false, recording: false }
 
 /** 현재 상태를 열린 모든 창(메인·미니)에 브로드캐스트한다. */
 function broadcastState(): void {
@@ -83,7 +84,10 @@ function broadcastState(): void {
 
 function setStatus(status: ObsConnStatus): void {
   state.status = status
-  if (status !== 'CONNECTED') state.streaming = false
+  if (status !== 'CONNECTED') {
+    state.streaming = false
+    state.recording = false
+  }
   broadcastState()
 }
 
@@ -94,6 +98,12 @@ function ensureClient(): OBSWebSocket {
   client.on('ConnectionClosed', () => setStatus('DISCONNECTED'))
   client.on('StreamStateChanged', (data) => {
     state.streaming = data.outputActive
+    broadcastState()
+  })
+  // 콘솔의 "방송 종료" 버튼 외에 OBS 쪽에서 직접 녹화를 멈춘 경우(단축키·UI)의 보조 경로.
+  // outputPath는 여기서도 오지만, 종료 흐름은 명세대로 StopRecord의 반환값을 정본으로 쓴다.
+  client.on('RecordStateChanged', (data) => {
+    state.recording = data.outputActive
     broadcastState()
   })
   obs = client
@@ -108,8 +118,12 @@ export function registerObsIpc(): void {
       setStatus('CONNECTING')
       try {
         await client.connect(url, password || undefined)
-        const status = await client.call('GetStreamStatus')
-        state.streaming = status.outputActive
+        const streamStatus = await client.call('GetStreamStatus')
+        state.streaming = streamStatus.outputActive
+        // 콘솔을 재시작한 사이 OBS가 이미 녹화 중이었을 수 있다(예: 앱 크래시 후 재실행).
+        // 실제 상태를 반영해야 "방송 시작"이 중복으로 StartRecord를 부르지 않는다.
+        const recordStatus = await client.call('GetRecordStatus')
+        state.recording = recordStatus.outputActive
         setStatus('CONNECTED')
         // 연결에 성공한 값만 저장한다 — 틀린 정보를 저장해 두면 다음 실행의 자동 연결이
         // 매번 실패하고, 사용자는 왜 안 되는지 알기 어렵다.
@@ -140,5 +154,35 @@ export function registerObsIpc(): void {
   ipcMain.handle('obs:stop-stream', async () => {
     if (!obs || state.status !== 'CONNECTED') throw new Error('OBS가 연결되어 있지 않아요')
     await obs.call('StopStream')
+  })
+
+  ipcMain.handle('obs:start-record', async () => {
+    if (!obs || state.status !== 'CONNECTED') throw new Error('OBS가 연결되어 있지 않아요')
+    await obs.call('StartRecord')
+    state.recording = true
+    broadcastState()
+  })
+
+  /**
+   * 녹화를 멈추고 결과 파일 경로를 반환한다.
+   * outputPath는 StopRecord 응답 형태 그대로다(obs-websocket-js 타입 정의로 확인 완료) —
+   * 서버가 받는 필드명(outputPath)과 이름이 같아 변환 없이 그대로 넘기면 된다.
+   */
+  ipcMain.handle('obs:stop-record', async () => {
+    if (!obs || state.status !== 'CONNECTED') throw new Error('OBS가 연결되어 있지 않아요')
+    const result = await obs.call('StopRecord')
+    state.recording = false
+    broadcastState()
+    return { outputPath: result.outputPath }
+  })
+
+  /**
+   * outputDuration은 밀리초 단위다 — 서버의 baseTimecodeMs와 단위가 일치해 변환이 필요 없다
+   * (obs-websocket-js 타입 정의로 확인 완료).
+   */
+  ipcMain.handle('obs:get-record-status', async () => {
+    if (!obs || state.status !== 'CONNECTED') throw new Error('OBS가 연결되어 있지 않아요')
+    const result = await obs.call('GetRecordStatus')
+    return { outputActive: result.outputActive, outputDuration: result.outputDuration }
   })
 }
