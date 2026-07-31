@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
 import { useLiveSnapshot } from '@renderer/hooks/useLiveSnapshot'
 import { useAudioStream } from '@renderer/hooks/useAudioStream'
+import { useObs } from '@renderer/hooks/useObs'
+import { useRecordingReporter } from '@renderer/hooks/useRecordingReporter'
 import { mergeBriefings } from '@renderer/lib/briefings'
 import type { CurrentSessionContext } from '@renderer/hooks/useCurrentSession'
 import { Skeleton } from '@renderer/components/ui/skeleton'
@@ -62,6 +64,12 @@ export default function BroadcastConsolePage(): React.JSX.Element {
 
   const { snapshot: data, loading, error } = useLiveSnapshot(sid, 'owner')
   const audio = useAudioStream(`session${sid}`, sid)
+  // BroadcastControl(ConsoleStatusBar 하위)도 각자 useObs()를 구독한다 — 둘 다 main의
+  // 'obs:state' 브로드캐스트를 그대로 받는 구독일 뿐이라 상태가 어긋나지 않는다.
+  // 여기서 따로 구독하는 이유는 60초 기준점 보고를 이 페이지가 owner로 소유해야 해서다.
+  const obs = useObs()
+  const getRecordStatus = obs.getRecordStatus
+  useRecordingReporter(sid, obs.recording, getRecordStatus)
   // 브리핑 병합 컷오버(마운트 시각 고정) — 이 시각 이후의 RISK·PROMISE는
   // WS(useAudioStream)가 전담하고, 스냅샷에서는 이전 것만 히스토리로 받는다.
   const [briefingCutoff] = useState(() => new Date().toISOString())

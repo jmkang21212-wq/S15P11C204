@@ -19,8 +19,14 @@ import { usePrimaryPlatformAccount } from '@renderer/hooks/usePlatformAccounts'
 import { ApiError } from '@renderer/api/client'
 import { endSession, fetchCurrentSession, startSession } from '@renderer/api/broadcastSessions'
 import { getDashboard } from '@renderer/api/dashboard'
+import { finishRecording, startRecording } from '@renderer/api/recording'
 import { PATHS } from '@renderer/routes/paths'
 import type { ObsConnStatus } from '@renderer/types/obs'
+
+/** 녹화가 돌고 있었는데 결과 경로를 못 얻었을 때 FAILED 보고에 채우는 자리표시자.
+ * FinishRecordingRequest.outputPath는 @NotBlank라 빈 문자열을 보낼 수 없고, FAILED
+ * 보고는 서버가 클립 작업을 만들지 않아 이 값이 실제로 쓰이지 않는다. */
+const NO_OUTPUT_PATH = '(recording failed - no output path)'
 
 const STATUS_LABEL: Record<ObsConnStatus, string> = {
   DISCONNECTED: '미연결',
@@ -181,11 +187,22 @@ export default function BroadcastControl({
         category: null,
         language: DEFAULT_LANGUAGE
       })
-      // 세션이 먼저다. 송출이 실패해도 세션은 살려 둔다 — 사용자가 OBS만 다시 켜면 되니까.
+      // 세션이 먼저다. OBS·녹화 보고가 실패해도 세션은 살려 둔다 — 사용자가 OBS만
+      // 다시 손보면 되지, 방송 자체를 다시 시작할 필요는 없어야 한다.
       try {
         await obs.startStream()
+        await obs.startRecord()
+        // baseWallClock·baseTimecodeMs는 같은 순간에 읽어야 한다 — GetRecordStatus 응답
+        // 직후를 "같은 순간"으로 본다.
+        const recordStatus = await obs.getRecordStatus()
+        const now = new Date().toISOString()
+        await startRecording(result.sessionId, {
+          startedAt: now,
+          baseWallClock: now,
+          baseTimecodeMs: recordStatus.outputDuration
+        })
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'OBS 송출을 시작하지 못했어요.')
+        setError(e instanceof Error ? e.message : 'OBS 송출·녹화를 시작하지 못했어요.')
       }
       setShowStartForm(false)
       onStarted(result.sessionId)
@@ -224,9 +241,29 @@ export default function BroadcastControl({
     setBusy(true)
     setError(null)
 
-    // OBS 정리는 최선 노력이다. 실패해도 아래 세션 종료는 반드시 진행한다.
+    // OBS·녹화 정리는 최선 노력이다. 실패해도 아래 세션 종료는 반드시 진행한다 —
+    // OBS 사고 때문에 분석 세션이 LIVE로 남아버리면 사용자가 손쓸 방법이 없다.
     if (obs.streaming) {
       await obs.stopStream().catch(() => undefined)
+    }
+    if (obs.recording) {
+      try {
+        const { outputPath } = await obs.stopRecord()
+        await finishRecording(sessionId, {
+          endedAt: new Date().toISOString(),
+          outputPath,
+          status: 'COMPLETED'
+        })
+      } catch {
+        // 녹화가 돌고 있었는데 결과 파일 경로를 못 얻었다 — COMPLETED로 잘못 보고하면
+        // 서버가 존재하지 않(거나 잘린)는 파일로 클립 작업을 만든다. FAILED로 보고해
+        // 그 세션의 클립 작업 자체가 생기지 않게 한다.
+        await finishRecording(sessionId, {
+          endedAt: new Date().toISOString(),
+          outputPath: NO_OUTPUT_PATH,
+          status: 'FAILED'
+        }).catch(() => undefined)
+      }
     }
     onStop()
 
@@ -320,6 +357,12 @@ export default function BroadcastControl({
           <p className="text-micro leading-relaxed text-muted-foreground">
             OBS · 도구 → WebSocket 서버 설정에서 서버를 활성화해야 해요. 방송은 OBS가 연결된 뒤에
             시작할 수 있어요. 연결에 성공하면 접속 정보를 기억해 다음부터 자동으로 연결해요.
+          </p>
+          {/* 하이라이트 클립을 정확히 잘라내려면 OBS 녹화 설정이 이 두 가지를 지켜야 한다. */}
+          <p className="border-t pt-2 text-micro leading-relaxed text-muted-foreground">
+            녹화 설정 확인: <strong className="font-medium">스트림 인코더 재사용</strong>을 켜야
+            게임 프레임이 안 떨어지고, <strong className="font-medium">자동 분할</strong>은 꺼야
+            해요(켜져 있으면 파일이 쪼개지면서 타임코드가 리셋돼 엉뚱한 구간이 잘려요).
           </p>
         </div>
       )}

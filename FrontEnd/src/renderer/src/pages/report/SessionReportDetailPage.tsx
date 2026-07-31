@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { MessageSquare, Sparkles, TrendingUp, Users } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@renderer/components/ui/card'
@@ -13,6 +13,7 @@ import HighlightList from './components/HighlightList'
 import { PartialSummaryNotice, ReportProcessingCard } from './components/ReportStatusNotice'
 import { fetchSessionReport, REPORT_NOT_FOUND } from '@renderer/api/sessionReport'
 import { useAsyncData } from '@renderer/hooks/useAsyncData'
+import { triggerClipWorker } from '@renderer/hooks/useClipWorker'
 import { openExternal } from '@renderer/lib/desktopBridge'
 import { formatCount, formatPercent } from '@renderer/lib/format'
 import { PATHS } from '@renderer/routes/paths'
@@ -58,6 +59,22 @@ export default function SessionReportDetailPage(): React.JSX.Element {
     const id = window.setInterval(refetch, 10_000)
     return () => window.clearInterval(id)
   }, [data, refetch])
+
+  // 리포트가 PROCESSING을 벗어나는 순간 = 하이라이트가 막 확정된 시점이다.
+  // 이 화면엔 클립 완료를 알려주는 별도 push가 없어, 폴링으로 그 전환을 감지해
+  // 클립 워커를 깨운다. FAILED로 끝나도 호출 자체는 무해하다(그 세션엔 작업이 없을 뿐).
+  const wasProcessing = useRef(false)
+  useEffect(() => {
+    if (!data) return
+    if (isProcessing(data)) {
+      wasProcessing.current = true
+      return
+    }
+    if (wasProcessing.current) {
+      wasProcessing.current = false
+      triggerClipWorker()
+    }
+  }, [data])
 
   const goBack = (): void => {
     navigate(PATHS.sessionReport)

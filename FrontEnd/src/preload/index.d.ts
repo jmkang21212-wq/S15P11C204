@@ -38,6 +38,27 @@ export interface ObsBridge {
   onState: (callback: (state: ObsState) => void) => () => void
 }
 
+/** clip:cut 요청 — ClipJob(api/clips.ts)에서 ffmpeg에 필요한 필드만 추린 것. */
+export interface ClipCutRequest {
+  recordingPath: string
+  clipStartSec: number
+  clipDurationSec: number
+}
+
+export type ClipCutResult =
+  | { ok: true; clip: Uint8Array; thumbnail: Uint8Array }
+  | {
+      ok: false
+      /** true면 재시도해도 같은 실패(녹화본 소실 등) — 즉시 포기해야 한다. */
+      permanent: boolean
+      reason: string
+    }
+
+export interface ClipBridge {
+  /** ffmpeg로 컷+썸네일을 만든다. 업로드는 렌더러가 반환된 바이트로 직접 한다. */
+  cut: (request: ClipCutRequest) => Promise<ClipCutResult>
+}
+
 /**
  * 렌더러에 노출하는 앱 전용 브릿지.
  * 화면별로 늘리지 말고 공통 동작만 여기에 둔다.
@@ -65,6 +86,8 @@ export interface LaiveApi {
   snapshot: SnapshotBridge
   /** 반복 질문 답변 완료 요청 릴레이 (미니 창 → 콘솔 창). */
   question: QuestionBridge
+  /** 하이라이트 클립 컷 (ffmpeg). */
+  clip: ClipBridge
 }
 
 /** 반복 질문 dismiss 요청 payload. */

@@ -7,6 +7,10 @@ type ObsState = {
   recording: boolean
 }
 type ObsRecordStatus = { outputActive: boolean; outputDuration: number }
+type ClipCutRequest = { recordingPath: string; clipStartSec: number; clipDurationSec: number }
+type ClipCutResult =
+  | { ok: true; clip: Uint8Array; thumbnail: Uint8Array }
+  | { ok: false; permanent: boolean; reason: string }
 
 // Custom APIs for renderer
 const api = {
@@ -100,6 +104,11 @@ const api = {
       ipcRenderer.on('question:dismiss-request', listener)
       return () => ipcRenderer.removeListener('question:dismiss-request', listener)
     }
+  },
+  /** 하이라이트 클립 컷 — ffmpeg 실행은 main이 하고, 업로드(HTTP)는 렌더러가 한다. */
+  clip: {
+    cut: (request: ClipCutRequest): Promise<ClipCutResult> =>
+      ipcRenderer.invoke('clip:cut', request)
   }
 }
 
