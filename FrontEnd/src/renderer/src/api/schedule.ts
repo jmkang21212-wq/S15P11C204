@@ -14,13 +14,15 @@ import type {
 const BASE = '/calendar-events'
 
 /**
- * 기간별 일정 목록. `from`/`to`는 ISO-8601 instant, 조회 범위는 최대 62일(BE 강제).
- * 응답의 `promises`(기한 잡힌 약속)는 별도 렌더 작업 전까지 쓰지 않는다 (API 8.1).
+ * 기간별 일정·약속 목록. `from`/`to`는 ISO-8601 instant, 조회 범위는 최대 62일(BE 강제).
+ * `items`는 일정, `promises`는 기한이 잡힌 진행 중 약속이다 (API 8.1).
  */
-export async function getCalendarEvents(from: string, to: string): Promise<CalendarEvent[]> {
+export async function getCalendarSchedule(
+  from: string,
+  to: string
+): Promise<CalendarEventListResponse> {
   const query = new URLSearchParams({ from, to })
-  const data = await apiFetch<CalendarEventListResponse>(`${BASE}?${query}`)
-  return data.items
+  return apiFetch<CalendarEventListResponse>(`${BASE}?${query}`)
 }
 
 /** 201 Created. SCHEDULED 상태로 생성된다. */

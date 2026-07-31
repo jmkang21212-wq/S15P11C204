@@ -6,16 +6,15 @@ import { cn } from '@renderer/lib/utils'
 import type { CalendarEvent, CalendarEventType } from '@renderer/types/schedule'
 
 interface EventFormProps {
-  event: CalendarEvent | null
+  event: CalendarEvent
   /** BROADCAST로 새로 전환할 때 채울 대표 연동 계정. 없으면 null. */
   primaryPlatformAccountId: number | null
-  /** 저장/취소 요청 진행 중이면 버튼을 잠근다. */
+  /** 저장 요청 진행 중이면 버튼을 잠근다. */
   saving?: boolean
-  /** 직전 저장/취소 실패 메시지 (BE ApiError.message). */
+  /** 직전 저장 실패 메시지 (BE ApiError.message). */
   error?: string | null
   onSave: (event: CalendarEvent) => void
   onClose: () => void
-  onDelete: (event: CalendarEvent) => void
 }
 
 function toTimeInput(iso: string): string {
@@ -23,17 +22,34 @@ function toTimeInput(iso: string): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-function withTime(iso: string, time: string): string {
+function toDateInput(iso: string): string {
   const d = new Date(iso)
-  const [h, m] = time.split(':').map(Number)
-  d.setHours(h, m, 0, 0)
-  return d.toISOString()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+/** `<input type="date">` 값(yyyy-MM-dd)과 `<input type="time">` 값(HH:mm)을 로컬 기준으로 합친다. */
+function combineDateTime(date: string, time: string): string {
+  const [y, m, d] = date.split('-').map(Number)
+  const [h, min] = time.split(':').map(Number)
+  return new Date(y, m - 1, d, h, min, 0, 0).toISOString()
+}
+
+/** DAY_OFF는 시간 UI가 없어 하루 종일(자정~다음 자정)로 고정한다. */
+function dayOffRange(date: string): { startAt: string; endAt: string } {
+  const [y, m, d] = date.split('-').map(Number)
+  return {
+    startAt: new Date(y, m - 1, d).toISOString(),
+    endAt: new Date(y, m - 1, d + 1).toISOString()
+  }
 }
 
 /**
  * 선택된 일정이 바뀌면 폼이 초기화돼야 하므로, 부모(SchedulePage)가
- * `key={event?.calendarEventId ?? 'empty'}`로 이 컴포넌트를 매번 새로
- * 마운트한다. 그래서 아래 초기값은 effect 없이 한 번만 평가되면 된다.
+ * `key`(일정 id, 신규는 별도 nonce)로 이 컴포넌트를 매번 새로 마운트한다.
+ * 그래서 아래 초기값은 effect 없이 한 번만 평가되면 된다.
  */
 export default function EventForm({
   event,
@@ -41,29 +57,17 @@ export default function EventForm({
   saving = false,
   error = null,
   onSave,
-  onClose,
-  onDelete
+  onClose
 }: EventFormProps): React.JSX.Element {
-  const [eventType, setEventType] = useState<CalendarEventType>(event?.eventType ?? 'BROADCAST')
+  const [eventType, setEventType] = useState<CalendarEventType>(event.eventType)
   const [platformAccountId, setPlatformAccountId] = useState<number | null>(
-    event?.platformAccountId ?? primaryPlatformAccountId
+    event.platformAccountId ?? primaryPlatformAccountId
   )
-  const [title, setTitle] = useState(event?.title ?? '')
-  const [startTime, setStartTime] = useState(event ? toTimeInput(event.startAt) : '21:00')
-  // 부모가 항상 event를 넘길 때만 쓰이는 값이라(아래 !event 분기가 먼저 반환) 실제로는
-  // blankEvent의 기본 종료 시각(23:00)과 맞춰 둔다 — '24:00'은 <input type="time">에 무효하다.
-  const [endTime, setEndTime] = useState(event ? toTimeInput(event.endAt) : '23:00')
-  const [memo, setMemo] = useState(event?.memo ?? '')
-
-  if (!event) {
-    return (
-      <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-        날짜의 일정을 선택하거나
-        <br />
-        “+ 일정 추가”를 눌러 새 일정을 만드세요.
-      </div>
-    )
-  }
+  const [title, setTitle] = useState(event.title)
+  const [date, setDate] = useState(toDateInput(event.startAt))
+  const [startTime, setStartTime] = useState(toTimeInput(event.startAt))
+  const [endTime, setEndTime] = useState(toTimeInput(event.endAt))
+  const [memo, setMemo] = useState(event.memo ?? '')
 
   /** BE는 DAY_OFF에 platformAccountId=null을 허용·기대한다. BROADCAST로 되돌리면 대표 계정을 다시 채운다. */
   const handleTypeChange = (t: CalendarEventType): void => {
@@ -76,14 +80,18 @@ export default function EventForm({
   }
 
   const handleSave = (): void => {
+    const { startAt, endAt } =
+      eventType === 'BROADCAST'
+        ? { startAt: combineDateTime(date, startTime), endAt: combineDateTime(date, endTime) }
+        : dayOffRange(date)
     onSave({
       ...event,
       eventType,
       platformAccountId,
       title,
       memo: memo || null,
-      startAt: withTime(event.startAt, startTime),
-      endAt: withTime(event.endAt, endTime)
+      startAt,
+      endAt
     })
   }
 
@@ -127,6 +135,11 @@ export default function EventForm({
         <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} />
       </div>
 
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="date">날짜</Label>
+        <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+      </div>
+
       {eventType === 'BROADCAST' && (
         <div className="flex flex-col gap-1.5">
           <Label>시간</Label>
@@ -151,17 +164,9 @@ export default function EventForm({
 
       {error && <p className="text-xs text-destructive">{error}</p>}
 
-      <div className="flex gap-2">
-        <Button className="flex-1" onClick={handleSave} disabled={saving}>
-          {saving ? '저장 중…' : '저장'}
-        </Button>
-        {!isNew && (
-          // 취소는 BE에 DELETE가 없어 PATCH status=CANCELLED로 처리한다 (API 8.3).
-          <Button variant="outline" onClick={() => onDelete(event)} disabled={saving}>
-            {saving ? '처리 중…' : '일정 취소'}
-          </Button>
-        )}
-      </div>
+      <Button className="w-full" onClick={handleSave} disabled={saving}>
+        {saving ? '저장 중…' : '저장'}
+      </Button>
     </div>
   )
 }

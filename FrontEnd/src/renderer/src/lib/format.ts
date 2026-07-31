@@ -61,6 +61,20 @@ export function formatDateTime(iso: string): string {
   return DATE_TIME_FORMAT.format(d)
 }
 
+const DATE_FORMAT = new Intl.DateTimeFormat('ko-KR', {
+  year: 'numeric',
+  month: 'numeric',
+  day: 'numeric',
+  weekday: 'short'
+})
+
+/** ISO 문자열을 시각 없이 `2026. 7. 20. (월)` 형태로. 종일 일정(휴방) 표기용. */
+export function formatDate(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return '-'
+  return DATE_FORMAT.format(d)
+}
+
 const TIME_FORMAT = new Intl.DateTimeFormat('ko-KR', {
   hour: '2-digit',
   minute: '2-digit',

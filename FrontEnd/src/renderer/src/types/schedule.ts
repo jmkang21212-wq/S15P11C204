@@ -36,7 +36,7 @@ export interface CalendarEventListResponse {
 /**
  * 캘린더에 함께 표시할 약속. `PROMISES`가 단일 원천이고 이건 조회 시점에 얹는 읽기 뷰라
  * 시각 없이 날짜만 있다. 날짜를 옮기려면 `PATCH /promises/{id}`를 쓴다(8.3 일정 API가 아님).
- * 렌더는 이번 작업 범위 밖 — 타입만 정의해 둔다.
+ * 화면에는 읽기 전용으로만 얹는다 — 확정/무시/PATCH는 `api/promise.ts`가 생긴 뒤의 몫이다.
  */
 export interface CalendarPromiseItem {
   promiseId: number
