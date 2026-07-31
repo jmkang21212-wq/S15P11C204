@@ -6,7 +6,7 @@ import { useCurrentSession } from '@renderer/hooks/useCurrentSession'
 import MiniWidget from './components/MiniWidget'
 
 /** HIGH 위험이 도착하면 이 시간 동안만 창을 강조 상태로 둔다 (목업 SC-03 부속). */
-const HIGH_EMPHASIS_MS = 15000
+const HIGH_EMPHASIS_MS = 5000
 
 /**
  * SC-03 부속: 미니 모드 창의 내용.

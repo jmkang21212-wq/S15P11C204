@@ -11,6 +11,7 @@ import { PATHS } from '@renderer/routes/paths'
 import ConsoleStatusBar from './components/ConsoleStatusBar'
 import BriefingFeed from './components/BriefingFeed'
 import SentimentPanel from './components/SentimentPanel'
+import ChatSummaryButton from './components/ChatSummaryButton'
 import RepeatedQuestions from './components/RepeatedQuestions'
 
 const AUDIO_STATUS_LABEL = {
@@ -104,6 +105,8 @@ export default function BroadcastConsolePage(): React.JSX.Element {
           {data ? (
             <>
               <SentimentPanel sentiment={data.sentiment} />
+              {/* 요약은 3분 주기로도 생성되지만, 지금 분위기를 바로 보고 싶을 때 쓴다 */}
+              <ChatSummaryButton sessionId={sid} />
               <RepeatedQuestions sessionId={sid} questions={data.repeatedQuestions} />
               {/* 폴링이 일시적으로 실패하면 직전 값을 유지하고 갱신 실패만 알린다 */}
               {error && <p className="text-caption text-warning">최신 정보로 갱신하지 못했어요</p>}
