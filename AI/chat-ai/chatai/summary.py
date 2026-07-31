@@ -17,16 +17,23 @@ import json
 import logging
 import re
 import time
+import uuid
 from datetime import datetime, timezone
 
-from .config import (GMS_KEY, SUMMARY_COOLDOWN_SEC, SUMMARY_ENV_MIN,
-                     SUMMARY_FOCUS_THRESH, SUMMARY_MIN_CHATS,
-                     SUMMARY_NEUTRAL_QUOTA, SUMMARY_SAMPLE_MAX, UID_TTL, WINDOW_SEC)
+from .config import (GMS_KEY, LLM_MAX_RETRIES, LLM_TIMEOUT_SEC,
+                     SUMMARY_COOLDOWN_SEC, SUMMARY_ENV_MIN, SUMMARY_FOCUS_THRESH,
+                     SUMMARY_MIN_CHATS, SUMMARY_NEUTRAL_QUOTA, SUMMARY_SAMPLE_MAX,
+                     UID_TTL, WINDOW_SEC)
 from .labels import LABELS
 from .reaction import is_reaction
 from .text_norm import normalize
 
 log = logging.getLogger('chatai.summary')
+
+# in-flight 락 TTL. LLM 최악 지연(timeout × (재시도+1))보다 넉넉해야 한다 —
+# 짧으면 호출 도중 락이 풀려 중복 LLM 호출이 일어난다.
+# 여유를 두는 이유: 프롬프트 조립·Redis 조회 시간이 LLM 앞뒤로 붙는다.
+LOCK_TTL_SEC = LLM_TIMEOUT_SEC * (LLM_MAX_RETRIES + 1) + 15
 from .window import BroadcastWindow
 
 # 방송 환경 문제 안내 — 판정도 문장 생성도 전부 코드가 한다.
@@ -91,9 +98,12 @@ class SummaryService:
             raise SummaryRejected(503, {'reason': 'LLM_UNCONFIGURED',
                                         'detail': 'GMS_KEY가 설정되지 않았습니다'})
 
-        # in-flight 락 (방송별) — LLM 호출 중 중복 요청 차단. EX 30 = 죽어도 자동 해제
+        # in-flight 락 (방송별) — LLM 호출 중 중복 요청 차단.
+        # 값에 고유 토큰을 넣는 이유: 무조건 delete 하면 TTL 만료 후 다른 요청이
+        # 새로 잡은 락을 내가 지워버린다. 해제 시 내 것인지 확인하고 지운다.
         lock_key = f'chat:{bid}:lock'
-        if not self.r.set(lock_key, '1', nx=True, ex=30):
+        token = uuid.uuid4().hex
+        if not self.r.set(lock_key, token, nx=True, ex=LOCK_TTL_SEC):
             raise SummaryRejected(409, {'reason': 'IN_FLIGHT'})
 
         try:
@@ -146,7 +156,31 @@ class SummaryService:
                        ex=UID_TTL)
             return {k: v for k, v in result.items() if not k.startswith('_')}
         finally:
-            self.r.delete(lock_key)
+            self._release(lock_key, token, bid)
+
+    # ------------------------------------------------------------------ 락 해제
+
+    # 내 토큰일 때만 삭제 (compare-and-delete). Redis에서 원자 실행되므로
+    # "확인하고 지우는 사이에 만료되어 남의 락을 지우는" 경합이 생기지 않는다.
+    _RELEASE_LUA = """
+    if redis.call('get', KEYS[1]) == ARGV[1] then
+        return redis.call('del', KEYS[1])
+    end
+    return 0
+    """
+
+    def _release(self, lock_key, token, bid):
+        try:
+            freed = self.r.eval(self._RELEASE_LUA, 1, lock_key, token)
+        except Exception:
+            # 해제 실패는 치명적이지 않다 — TTL이 지워준다. 요청 자체는 성공시킨다
+            log.warning('락 해제 실패 bid=%s — TTL(%d초)로 자동 해제됨', bid, LOCK_TTL_SEC)
+            return
+        if not freed:
+            # 내 락이 이미 없다 = LLM이 LOCK_TTL_SEC를 넘겼고 그 사이 다른 요청이
+            # 락을 새로 잡았다는 뜻. 중복 LLM 호출이 일어났을 수 있다.
+            log.warning('락이 만료된 뒤 완료됨 bid=%s — LLM이 %d초를 초과했다. '
+                        'CHATAI_LLM_TIMEOUT/LOCK TTL을 확인할 것', bid, LOCK_TTL_SEC)
 
     # ------------------------------------------------------------ 샘플링·프롬프트
 

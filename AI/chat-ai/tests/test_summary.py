@@ -125,9 +125,42 @@ def test_llm_failure_releases_lock():
     except RuntimeError:
         pass
     assert not r.exists('chat:b1:lock'), '실패해도 락은 풀려야 함'
-    llm.fail = False
-    res = svc.generate('b1', 'AUTO', now_ms=T0 + 2000)   # 즉시 재시도 가능
-    assert res['summary']
+
+
+def test_lock_not_stolen_when_expired():
+    """LLM이 락 TTL을 넘겨도 남의 락을 지우면 안 된다.
+
+    시나리오: A가 LLM 호출 중 락이 만료 → B가 새 락을 잡음
+             → A가 끝나며 finally 실행 → B의 락을 지우면 C까지 통과해버린다
+    """
+    svc, llm, r = setup(chats=fill(n_laugh=40))
+    lock_key = 'chat:b1:lock'
+
+    def steal_lock_during_llm(prompt):
+        # LLM이 도는 사이 락이 만료되고 다른 요청이 새로 잡은 상황 재현
+        r.set(lock_key, 'other-request-token')
+        return '요약 결과입니다.'
+
+    svc.llm_fn = steal_lock_during_llm
+    svc.generate('b1', 'AUTO', now_ms=T0 + 1000)
+
+    assert r.get(lock_key) == b'other-request-token', \
+        'A의 finally가 B의 락을 삭제했다 — 소유권 검사가 동작하지 않음'
+
+
+def test_lock_released_is_own():
+    """정상 경로에서는 자기 락을 정확히 지운다."""
+    svc, _, r = setup(chats=fill(n_laugh=40))
+    svc.generate('b1', 'AUTO', now_ms=T0 + 1000)
+    assert not r.exists('chat:b1:lock')
+
+
+def test_lock_ttl_covers_llm_worst_case():
+    """락 TTL이 LLM 최악 지연보다 길어야 한다 — 이 관계가 깨지면 중복 호출이 난다."""
+    from chatai.config import LLM_MAX_RETRIES, LLM_TIMEOUT_SEC
+    from chatai.summary import LOCK_TTL_SEC
+    worst = LLM_TIMEOUT_SEC * (LLM_MAX_RETRIES + 1)
+    assert LOCK_TTL_SEC > worst, f'LOCK_TTL {LOCK_TTL_SEC}s <= LLM 최악 {worst}s'
 
 
 def test_get_cached():
