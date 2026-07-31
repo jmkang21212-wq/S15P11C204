@@ -38,6 +38,11 @@ GMS_BASE_URL = 'https://gms.ssafy.io/gmsapi/api.openai.com/v1'
 SUMMARY_MODEL = 'gpt-5-nano'      # GMS 사용량 제한이 mini보다 여유로움 (품질 비교: 2026-07-29)
 SUMMARY_REASONING = 'low'         # nano는 minimal에서 지시 이해가 흔들림 — low로 보정
 
+# LLM 호출 상한. OpenAI SDK 기본 재시도는 2회라 그냥 두면 최악 지연이 timeout×3이 된다.
+# 이 값이 곧 in-flight 락 TTL의 근거이므로(summary.LOCK_TTL) 바꿀 때 함께 볼 것.
+LLM_TIMEOUT_SEC = int(os.getenv('CHATAI_LLM_TIMEOUT', '20'))
+LLM_MAX_RETRIES = int(os.getenv('CHATAI_LLM_MAX_RETRIES', '1'))   # 최악 20×2 = 40초
+
 SUMMARY_MIN_CHATS = int(os.getenv('CHATAI_SUMMARY_MIN_CHATS', '30'))    # 미만이면 422
 SUMMARY_COOLDOWN_SEC = int(os.getenv('CHATAI_SUMMARY_COOLDOWN', '60'))  # 이내 재요청 409
 SUMMARY_SAMPLE_MAX = 300          # LLM 입력 채팅 상한

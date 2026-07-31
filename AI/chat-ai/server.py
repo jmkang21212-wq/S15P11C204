@@ -45,11 +45,17 @@ questions = None
 
 
 def _make_llm_fn():
-    """GMS(OpenAI 호환 프록시) 호출 함수. 키가 없으면 None — /summary만 꺼진다."""
+    """GMS(OpenAI 호환 프록시) 호출 함수. 키가 없으면 None — /summary만 꺼진다.
+
+    max_retries를 명시적으로 지정한다. SDK 기본값이 2라 최악 지연이
+    timeout×3이 되는데, 그 값을 모르면 in-flight 락 TTL을 정할 수 없다
+    (summary.py의 LOCK_TTL이 이 상한에 맞춰져 있다).
+    """
     if not GMS_KEY:
         return None
     from openai import OpenAI
-    client = OpenAI(api_key=GMS_KEY, base_url=GMS_BASE_URL, timeout=20)
+    client = OpenAI(api_key=GMS_KEY, base_url=GMS_BASE_URL,
+                    timeout=LLM_TIMEOUT_SEC, max_retries=LLM_MAX_RETRIES)
 
     def call(prompt):
         r = client.chat.completions.create(
