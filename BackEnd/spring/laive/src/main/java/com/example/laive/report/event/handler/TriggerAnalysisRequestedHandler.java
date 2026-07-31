@@ -23,7 +23,7 @@ public class TriggerAnalysisRequestedHandler implements BroadcastOutboxEventHand
     public TriggerAnalysisRequestedHandler(
             ObjectMapper objectMapper,
             TriggerAnalysisService service,
-            @Qualifier("reportAiExecutor") Executor executor
+            @Qualifier("analysisAiExecutor") Executor executor
     ) {
         this.objectMapper = objectMapper;
         this.service = service;
