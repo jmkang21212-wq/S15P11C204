@@ -2,6 +2,7 @@ package com.example.laive.growth.service;
 
 import com.example.laive.growth.domain.GrowthGoal;
 import com.example.laive.growth.domain.GrowthGoalStatus;
+import com.example.laive.growth.domain.GrowthActionTriggerType;
 import com.example.laive.growth.exception.GrowthException;
 import com.example.laive.growth.repository.GrowthGoalCommandRepository;
 import org.springframework.stereotype.Service;
@@ -10,9 +11,14 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class GrowthGoalCommandService {
     private final GrowthGoalCommandRepository repository;
+    private final GrowthActionTransactionService actionTransactions;
 
-    public GrowthGoalCommandService(GrowthGoalCommandRepository repository) {
+    public GrowthGoalCommandService(
+            GrowthGoalCommandRepository repository,
+            GrowthActionTransactionService actionTransactions
+    ) {
         this.repository = repository;
+        this.actionTransactions = actionTransactions;
     }
 
     @Transactional
@@ -27,7 +33,10 @@ public class GrowthGoalCommandService {
         );
         repository.lockScope(streamerId, goal.metricType());
         ensureNoOverlap(goal, null);
-        return repository.insert(goal);
+        long id = repository.insert(goal);
+        GrowthGoal saved = repository.findOwnedForUpdate(streamerId, id).orElseThrow();
+        actionTransactions.request(saved, null, GrowthActionTriggerType.GOAL_CREATED, null);
+        return id;
     }
 
     @Transactional
@@ -52,6 +61,15 @@ public class GrowthGoalCommandService {
         if (repository.update(updated) != 1) {
             throw GrowthException.stateConflict();
         }
+        if (updated.status() == GrowthGoalStatus.ACTIVE
+                && (current.status() != GrowthGoalStatus.ACTIVE
+                || materiallyChanged(current, updated))) {
+            actionTransactions.request(
+                    updated, null, GrowthActionTriggerType.GOAL_UPDATED, null
+            );
+        } else if (updated.status() != GrowthGoalStatus.ACTIVE) {
+            actionTransactions.supersedeBeforeRevision(updated);
+        }
     }
 
     private void ensureNoOverlap(GrowthGoal goal, Long excludedGoalId) {
@@ -64,5 +82,13 @@ public class GrowthGoalCommandService {
         )) {
             throw GrowthException.stateConflict();
         }
+    }
+
+    private boolean materiallyChanged(GrowthGoal current, GrowthGoal updated) {
+        return current.metricType() != updated.metricType()
+                || current.targetValue().compareTo(updated.targetValue()) != 0
+                || current.unit() != updated.unit()
+                || !current.periodStart().equals(updated.periodStart())
+                || !current.periodEnd().equals(updated.periodEnd());
     }
 }
