@@ -1,4 +1,6 @@
-import { ipcMain, BrowserWindow } from 'electron'
+import { app, ipcMain, BrowserWindow, safeStorage } from 'electron'
+import { join } from 'path'
+import { readFileSync, writeFileSync } from 'fs'
 // default import는 CJS 상호운용에서 생성자로 안 잡히는 경우가 있어 named export를 쓴다.
 import { OBSWebSocket } from 'obs-websocket-js'
 
@@ -6,6 +8,10 @@ import { OBSWebSocket } from 'obs-websocket-js'
  * OBS(obs-websocket 5.x) 연결·제어를 main 프로세스에서 관리한다.
  * 렌더러는 CSP·보안상 직접 소켓을 열지 않고 IPC로 이 모듈에 요청한다.
  * OBS 미실행/미연결 시에도 앱이 죽지 않도록 모든 실패를 graceful하게 처리한다.
+ *
+ * 접속 정보도 여기서 보관한다 — 소켓 소유자가 자격 증명도 함께 갖는 편이 응집도가 높고,
+ * 비밀번호를 렌더러(localStorage)에 두지 않을 수 있다. authStore가 Access Token을
+ * 메모리에만 두는 것과 같은 이유로, 평문 비밀번호를 디스크에 남기지 않는다.
  */
 
 type ObsConnStatus = 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED'
@@ -13,6 +19,56 @@ type ObsConnStatus = 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED'
 interface ObsState {
   status: ObsConnStatus
   streaming: boolean
+}
+
+/** 렌더러에 돌려주는 복원된 접속 정보. */
+interface ObsCredentials {
+  url: string
+  password: string
+}
+
+/** 디스크에 저장되는 형태. 비밀번호는 OS 암호화를 거친 base64로만 저장한다. */
+interface StoredCredentials {
+  url: string
+  passwordEnc?: string
+}
+
+function credentialsPath(): string {
+  return join(app.getPath('userData'), 'obs-credentials.json')
+}
+
+/** 저장된 접속 정보를 읽는다. 없거나 읽을 수 없으면 null — 사용자가 다시 입력하면 된다. */
+function loadCredentials(): ObsCredentials | null {
+  try {
+    const stored = JSON.parse(readFileSync(credentialsPath(), 'utf-8')) as StoredCredentials
+    if (typeof stored?.url !== 'string') return null
+    let password = ''
+    if (stored.passwordEnc && safeStorage.isEncryptionAvailable()) {
+      password = safeStorage.decryptString(Buffer.from(stored.passwordEnc, 'base64'))
+    }
+    return { url: stored.url, password }
+  } catch {
+    // 파일 없음 · JSON 깨짐 · 복호화 실패(다른 사용자 계정으로 복사된 경우 등)
+    return null
+  }
+}
+
+/**
+ * 연결에 성공한 접속 정보를 저장한다.
+ *
+ * safeStorage를 쓸 수 없는 환경(libsecret이 없는 일부 Linux)에서는 **비밀번호를 저장하지
+ * 않고 주소만** 남긴다. 편의를 위해 평문 비밀번호를 디스크에 흘리지는 않는다.
+ */
+function saveCredentials(url: string, password: string): void {
+  const stored: StoredCredentials = { url }
+  if (password && safeStorage.isEncryptionAvailable()) {
+    stored.passwordEnc = safeStorage.encryptString(password).toString('base64')
+  }
+  try {
+    writeFileSync(credentialsPath(), JSON.stringify(stored), 'utf-8')
+  } catch {
+    // 저장 실패는 다음 실행에 다시 입력하면 그만이다 — 연결 자체를 막지 않는다.
+  }
 }
 
 let obs: OBSWebSocket | null = null
@@ -55,6 +111,9 @@ export function registerObsIpc(): void {
         const status = await client.call('GetStreamStatus')
         state.streaming = status.outputActive
         setStatus('CONNECTED')
+        // 연결에 성공한 값만 저장한다 — 틀린 정보를 저장해 두면 다음 실행의 자동 연결이
+        // 매번 실패하고, 사용자는 왜 안 되는지 알기 어렵다.
+        saveCredentials(url, password ?? '')
         return { ...state }
       } catch (e) {
         // OBS 미실행·WebSocket 서버 꺼짐·비밀번호 오류 등 → graceful
@@ -70,6 +129,8 @@ export function registerObsIpc(): void {
   })
 
   ipcMain.handle('obs:get-state', () => ({ ...state }))
+
+  ipcMain.handle('obs:get-credentials', () => loadCredentials())
 
   ipcMain.handle('obs:start-stream', async () => {
     if (!obs || state.status !== 'CONNECTED') throw new Error('OBS가 연결되어 있지 않아요')

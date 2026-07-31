@@ -21,6 +21,12 @@ const api = {
       ipcRenderer.invoke('obs:connect', { url, password }),
     disconnect: (): Promise<void> => ipcRenderer.invoke('obs:disconnect'),
     getState: (): Promise<ObsState> => ipcRenderer.invoke('obs:get-state'),
+    /**
+     * 지난번 연결에 성공한 접속 정보. 없으면 null.
+     * 비밀번호는 main이 OS 암호화(safeStorage)로 보관한다 — 렌더러는 저장에 관여하지 않는다.
+     */
+    getCredentials: (): Promise<{ url: string; password: string } | null> =>
+      ipcRenderer.invoke('obs:get-credentials'),
     startStream: (): Promise<void> => ipcRenderer.invoke('obs:start-stream'),
     stopStream: (): Promise<void> => ipcRenderer.invoke('obs:stop-stream'),
     /** 상태 변경 구독. 반환 함수를 호출하면 구독 해제. */
