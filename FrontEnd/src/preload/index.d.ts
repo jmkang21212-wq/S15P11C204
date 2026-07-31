@@ -8,10 +8,19 @@ export interface ObsState {
   streaming: boolean
 }
 
+/** 지난번 연결에 성공한 OBS 접속 정보. 비밀번호 보관은 main(safeStorage)이 맡는다. */
+export interface ObsCredentials {
+  url: string
+  /** 저장된 비밀번호. 없거나 OS 암호화를 쓸 수 없는 환경이면 빈 문자열. */
+  password: string
+}
+
 export interface ObsBridge {
   connect: (url: string, password?: string) => Promise<ObsState>
   disconnect: () => Promise<void>
   getState: () => Promise<ObsState>
+  /** 저장된 접속 정보. 없으면 null. 연결 성공 시 main이 자동으로 갱신한다. */
+  getCredentials: () => Promise<ObsCredentials | null>
   startStream: () => Promise<void>
   stopStream: () => Promise<void>
   /** 상태 변경 구독. 반환 함수 호출로 구독 해제. */

@@ -3,19 +3,19 @@ import { cn } from '@renderer/lib/utils'
 import { formatMs, formatCount } from '@renderer/lib/format'
 import type { ConsoleServices, LiveSnapshotSession } from '@renderer/types/console'
 import type { UseAudioStreamResult } from '@renderer/hooks/useAudioStream'
-import ObsControl from './ObsControl'
-import SessionControl from './SessionControl'
+import BroadcastControl from './BroadcastControl'
 
 interface ConsoleStatusBarProps {
-  /** "분석 종료"가 걸 세션 ID. 호출부가 라우트/현재 세션에서 이미 확정한 값이라
-   * 스냅샷 조회 성패와 무관하게 항상 있다. */
-  sessionId: number
-  /** 스냅샷 조회 실패 시 null — 그래도 음성 제어·분석 종료는 계속 쓸 수 있어야 한다. */
+  /** 진행 중 세션 ID. 아직 방송을 시작하지 않았으면 null(준비 모드)이다. */
+  sessionId: number | null
+  /** 스냅샷 조회 실패 시 null — 그래도 음성 제어·방송 종료는 계속 쓸 수 있어야 한다. */
   session: LiveSnapshotSession | null
   services: ConsoleServices | null
   onOpenMini: () => void
   /** 음성 스트리밍 — 마이크·STT 상태와 방송 시작/종료 연동에 함께 쓴다. */
   audio: UseAudioStreamResult
+  /** 방송 시작 성공 — 라우팅과 음성 분석 시작 타이밍은 페이지가 맡는다. */
+  onStarted: (sessionId: number) => void
 }
 
 type DotState = 'ok' | 'pending' | 'off'
@@ -39,7 +39,8 @@ export default function ConsoleStatusBar({
   session,
   services,
   onOpenMini,
-  audio
+  audio,
+  onStarted
 }: ConsoleStatusBarProps): React.JSX.Element {
   // 마이크·STT는 백엔드가 항상 미연결로 내려준다(음성 파이프라인 미구현).
   // 실제 상태는 프론트 음성 스트림만 알고 있으므로 그 값을 쓴다.
@@ -92,11 +93,13 @@ export default function ConsoleStatusBar({
         <ServiceDot label="수집기" state={collectorState} />
       </div>
 
-      {/* 음성 분석 단독 제어 — OBS 없이도 켜고 끌 수 있게 둔다 */}
+      {/* 음성 분석 단독 제어 — 방송 중 마이크 문제로 다시 켜야 할 때 쓴다.
+          세션 전에는 막는다: 전사·경고를 저장할 곳이 없어 브리핑이 유실된다. */}
       <Button
         size="sm"
         variant={audio.status === 'STREAMING' ? 'secondary' : 'outline'}
-        disabled={audio.status === 'CONNECTING'}
+        disabled={audio.status === 'CONNECTING' || sessionId === null}
+        title={sessionId === null ? '방송을 시작하면 사용할 수 있어요' : undefined}
         onClick={audio.status === 'STREAMING' ? audio.stop : audio.start}
       >
         {audio.status === 'CONNECTING'
@@ -111,11 +114,8 @@ export default function ConsoleStatusBar({
         미니 모드
       </Button>
 
-      {/* LAIVE 분석 세션 종료 */}
-      <SessionControl sessionId={sessionId} />
-
-      {/* OBS 연결 + 방송 송출(연동 시 음성 분석도 함께 시작/정지) */}
-      <ObsControl onBroadcastStart={audio.start} onBroadcastStop={audio.stop} />
+      {/* OBS 연결 + 방송 시작/종료 — 세션과 송출을 한 버튼이 함께 제어한다 */}
+      <BroadcastControl sessionId={sessionId} onStarted={onStarted} onStop={audio.stop} />
 
       {audio.error && (
         <span className="max-w-48 truncate text-xs text-destructive" title={audio.error}>
