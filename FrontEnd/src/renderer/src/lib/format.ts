@@ -22,8 +22,9 @@ export function formatClipLength(ms: number): string {
   return m > 0 ? `${m}분 ${s}초` : `${s}초`
 }
 
-/** 방송 길이를 `3시간 28분` 형태로. */
-export function formatDuration(startedAt: string, endedAt: string): string {
+/** 방송 길이를 `3시간 28분` 형태로. 진행 중(endedAt null)이면 '-'. */
+export function formatDuration(startedAt: string, endedAt: string | null): string {
+  if (endedAt === null) return '-'
   const ms = new Date(endedAt).getTime() - new Date(startedAt).getTime()
   if (!Number.isFinite(ms) || ms <= 0) return '-'
   const totalMin = Math.round(ms / 60000)

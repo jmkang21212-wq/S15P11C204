@@ -8,7 +8,8 @@ export type ReportStatus = 'PROCESSING' | 'COMPLETED' | 'PARTIAL' | 'FAILED'
 export type PromiseStatus = 'DETECTED' | 'PENDING' | 'ON_HOLD' | 'COMPLETED' | 'DISMISSED'
 
 export interface UpcomingBroadcast {
-  calendarEventId: number
+  /** 세션 시작(POST /broadcast-sessions)에 그대로 실려 가는 실제 캘린더 이벤트 ID. 없으면 null. */
+  calendarEventId: number | null
   title: string
   startAt: string
   endAt: string

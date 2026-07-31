@@ -100,7 +100,7 @@ ERD의 관계와 API의 단일 리소스 식별 규칙을 실제 DDL에서도 �
 | `TRIGGERS.transcript_id` | 트리거 구간에 겹치는 STT 청크가 없는 경우 |
 | `TRIGGERS.narrative`, `analyzed_at` | 리포트 생성 전이거나 LLM 분석이 실패한 트리거 |
 | `TRIGGERS.screen_context` | 화면 캡처 도입 전. 현재 전 구간 `NULL` |
-| `PROMISES.due_date` | 목업의 “기한 미정” 약속 |
+| `PROMISES.due_date` | 목업의 “기한 미정” 약속. 조건부 약속(“구독자 1000명 되면”)도 날짜로 환산할 수 없어 여기 해당한다 |
 | `HIGHLIGHTS.clip_url`, `thumbnail_url` | 하이라이트 구간 탐지 후 클립 생성 전 또는 생성 실패 상태 |
 | `PORTFOLIOS.published_at` | 아직 공개하지 않은 포트폴리오 |
 
@@ -265,7 +265,7 @@ ERD의 관계와 API의 단일 리소스 식별 규칙을 실제 DDL에서도 �
 | Promise | GET | `/promises` | 약속 전체 목록 |
 | Promise | POST | `/promises/{promiseId}/confirm` | 감지 약속 확정 |
 | Promise | POST | `/promises/{promiseId}/dismiss` | 감지 약속 무시 |
-| Promise | PATCH | `/promises/{promiseId}` | 확정 약속 상태 변경 |
+| Promise | PATCH | `/promises/{promiseId}` | 확정 약속 수정 (상태·내용·기한) |
 | Report | GET | `/broadcast-sessions/{sessionId}/report` | 세션 리포트 조회 |
 | Report | GET | `/growth-reports` | 성장 지표 조회 |
 | Growth Goal | GET | `/growth-goals` | 성장 목표와 다음 액션 조회 |
@@ -561,6 +561,14 @@ Access Token과 Refresh Token은 `PLATFORM_ACCOUNTS`에 암호화하여 저장�
         "endAt": "2026-07-25T00:00:00Z",
         "status": "SCHEDULED"
       }
+    ],
+    "promises": [
+      {
+        "promiseId": 31,
+        "content": "공포게임 방송",
+        "dueDate": "2026-08-14",
+        "status": "PENDING"
+      }
     ]
   }
 }
@@ -569,6 +577,19 @@ Access Token과 Refresh Token은 `PLATFORM_ACCOUNTS`에 암호화하여 저장�
 - `eventType`은 `BROADCAST`, `DAY_OFF` 중 하나다.
 - `status`는 `SCHEDULED`, `COMPLETED`, `CANCELLED` 중 하나다.
 - `DAY_OFF` 일정은 `platformAccountId = null`을 허용한다.
+
+`promises`는 캘린더에 함께 표시할 약속이다 (10.8).
+
+- 기한이 조회 범위에 들고 `status`가 `PENDING` 또는 `ON_HOLD`인 것만 담는다.
+  확정 전(`DETECTED`)과 종료된(`COMPLETED`, `DISMISSED`) 약속은 제외한다.
+  사람이 확정하며 날짜를 넣은 것만 일정으로 본다.
+- 약속은 `CALENDAR_EVENTS`에 복사하지 않고 조회 시점에 얹는다. 복사하면 같은 약속이
+  두 행이 되어 상태가 갈라진다(약속은 `COMPLETED`인데 일정은 `SCHEDULED`로 남는 식).
+  `PROMISES`가 단일 원천이고 캘린더는 읽기 뷰다.
+- 따라서 캘린더에서 약속의 날짜를 옮기려면 `PATCH /promises/{promiseId}`에 `dueDate`를
+  보낸다. 일정 수정 API(8.3)로는 약속을 바꿀 수 없다.
+- `PROMISES.due_date`가 `DATE`이므로 `from`·`to`를 **Asia/Seoul 기준 날짜**로 변환해
+  비교한다. UTC로 자르면 경계 하루가 어긋난다.
 
 ### 8.2 일정 생성
 
@@ -863,9 +884,14 @@ Access Token과 Refresh Token은 `PLATFORM_ACCOUNTS`에 암호화하여 저장�
     },
     "repeatedQuestions": [
       {
-        "questionId": 81,
-        "question": "오늘 몇 시까지 하세요?",
-        "occurrenceCount": 42
+        "questionId": 1753690000000007,
+        "text": "오늘 몇 시까지 하세요?",
+        "type": "FAQ",
+        "askers": 42,
+        "messages": 51,
+        "reasked": false,
+        "firstAskedAt": "2026-07-21T12:06:40Z",
+        "lastAskedAt": "2026-07-21T13:03:20Z"
       }
     ],
     "lastEventId": "1753089600123-0"
@@ -888,7 +914,53 @@ Access Token과 Refresh Token은 `PLATFORM_ACCOUNTS`에 암호화하여 저장�
 - `analyzedChat`이 0이면 `dominant`와 `distribution`은 `null`이다. 채팅이 없거나 분류 호출이 계속 실패한 상태다.
 - `engagement`는 시청자 수를 알 수 없는 동안 `null`일 수 있다(예시의 `0.214`처럼 항상 숫자가 아니다). 프론트는 null을 처리해야 한다.
 
-`briefings`와 `repeatedQuestions`는 위험 발언·반복 질문 파이프라인(13.4~13.5) 구현 전까지 **항상 빈 배열**이다. 필드를 미리 두는 이유는 프론트가 스키마를 한 번만 맞추면 되기 때문이다.
+`briefings`는 `LIVE_BRIEFINGS`의 **최근 20건을 최신순**으로 내려보낸다 (2026-07-30 구현). AI 분석이 저장하는 `RISK`·`PROMISE`와 여론 요약 `CHAT_SUMMARY`가 실리며, `FAQ`는 아직 쓰는 곳이 없다. 전체 이력은 세션 리포트 몫이다.
+
+`repeatedQuestions`는 13.6 폴링이 DB에 쌓은 것 중 **답변 완료(dismissed)가 아닌 질문을 askers 내림차순으로 최대 50건** 내려보낸다 (2026-07-30 Spring측 구현 — 단 AI측 라우트가 아직 없어 그 전까지는 빈 배열이다).
+
+- `questionId` — AI가 발급하는 불투명 식별자. **16자리 정수**이므로 프론트는 반드시 number 그대로 다루되 해석하지 말 것(JS Number 정밀도 2^53 안이다).
+- `text` — 질문 묶음의 대표 표현. 폴링마다 바뀔 수 있다.
+- `type` — `FAQ`(화면을 안 봐도 답할 수 있음) | `CONTEXT`(지금 화면이 필요함) | `null`(판정 전). **서버는 거르지 않는다** — "전체 / FAQ만" 토글은 프론트 몫이다. FAQ는 소수(실측 상위 30개 중 13개 정도)라 서버가 상위 5개만 내려보내면 필터 후 화면이 비므로 전량을 준다. 상위 N 컷도 프론트가 한다.
+- `askers` — 몇 명이 물었나(유니크). 화면에 표시할 숫자이자 정렬 기준.
+- `messages` — 총 메시지 수. `askers`와 크게 벌어지면 한 명의 도배다.
+- `reasked` — 답변 완료 처리 후 같은 질문이 임계(+10명) 이상 다시 늘어 재노출됐다. "답이 시청자에게 닿지 않았다"는 신호이므로 배지 등으로 구분 표시를 권장한다.
+
+**답변 완료 처리** (2026-07-30 구현):
+
+`POST /broadcast-sessions/{sessionId}/repeated-questions/{questionId}/dismiss`
+
+```json
+{ "success": true, "data": { "questionId": 1753690000000007, "dismissedAt": "2026-07-21T13:05:00Z" } }
+```
+
+- 처리된 질문은 다음 스냅샷부터 `repeatedQuestions`에서 사라진다. 이후 재질문 감지(13.6)로 되살아날 수 있다.
+- **멱등**이다. 이미 처리된 질문에 다시 호출해도 200이며 첫 처리 시각이 온다 — 중복 클릭이 재질문 판정 유예를 재시작하지 않는다.
+- `404` — 세션이 없거나 타인 세션이거나(존재를 숨긴다), 그 세션에 해당 `questionId`가 없다.
+
+**수동 여론 요약** (2026-07-30 구현):
+
+`POST /broadcast-sessions/{sessionId}/chat-summary`
+
+요청 본문은 없다. Spring이 chat-ai에 `{"mode":"MANUAL"}`로 요약 생성을 위임하고(13.6), 성공하면 `LIVE_BRIEFINGS(CHAT_SUMMARY)`로 저장한 뒤 결과를 돌려준다. 쿨다운·생성 중·채팅 부족은 **오류가 아니라 200의 `status`**로 내려간다 — 버튼 상태를 그리는 정보이기 때문이다.
+
+```json
+{ "success": true, "data": { "status": "CREATED",
+    "summary": "신곡 무대에 환호가 집중되고 있습니다.",
+    "generatedAt": "2026-07-21T13:03:00Z", "nextAvailableAt": "2026-07-21T13:04:00Z" } }
+```
+
+`status`별 필드 (해당 없는 필드는 생략된다):
+
+| status | 함께 오는 필드 | 프론트 처리 |
+| --- | --- | --- |
+| `CREATED` | `summary`, `generatedAt`, `nextAvailableAt` | 요약 표시. `nextAvailableAt`까지 버튼 비활성화 + 카운트다운 |
+| `COOLDOWN` | `retryAfterSec`, `nextAvailableAt` | 버튼 비활성화 + 카운트다운. 마지막 요약은 `briefings`에 이미 있다 |
+| `IN_FLIGHT` | `retryAfterSec`(약 2) | "생성 중" 표시. 재요청하지 말 것 — 완성분은 2~3초 폴링의 `briefings`로 내려온다 |
+| `NOT_ENOUGH_CHATS` | `chatCount`, `required` | "요약할 채팅이 부족합니다" 안내 (아직 ingest가 없는 방송도 `chatCount: 0`으로 온다) |
+
+- `404` — 세션이 없거나 타인 세션이다(존재를 숨긴다).
+- `503 SUMMARY_UNAVAILABLE` — chat-ai 미연결·타임아웃·LLM 실패. 잠시 후 재시도 안내.
+- 생성된 요약은 `briefings[]`에도 `CHAT_SUMMARY`로 실려 나간다. AUTO 스케줄러(13.6)가 같은 요약을 중복 저장하지 않도록 서버가 직전 텍스트와 비교해 거른다.
 
 `lastEventId`는 해당 세션 Redis Stream의 최신 이벤트 ID다. 아직 생성된 이벤트가 없으면 `"0-0"`을 반환한다. 폴링 체제에서는 소비자가 없지만, WebSocket(10.7)을 되살릴 때 프론트 스키마가 바뀌지 않도록 유지한다.
 
@@ -955,6 +1027,21 @@ wss://api.example.com/ws/v1/broadcast-sessions/{sessionId}?ticket={wsTicket}&las
 
 AI가 약속 발언을 감지하면 `PROMISES`에 `DETECTED` 상태로 저장하고, `BRIEFING_CREATED.data.promiseId`로 식별자를 전달한다. 사용자가 목업의 “약속 추가”를 누르면 확정하고 “무시”를 누르면 제외한다.
 
+상태 전이는 아래 한 방향이며, 확정 전후로 쓰는 API가 다르다.
+
+```
+DETECTED ──confirm──▶ PENDING ◀──▶ ON_HOLD
+    │                    │
+    └──dismiss──▶        └──▶ COMPLETED
+              DISMISSED
+```
+
+- `DETECTED`에서 나가는 길은 확정·무시(10.8.2) 두 개뿐이다.
+- 확정 이후의 이동(`PENDING`·`ON_HOLD`·`COMPLETED`)은 수정 API(10.8.3)가 담당한다.
+- `DISMISSED`는 종착점이다. 되살리려면 별도 API가 필요하며 현재 정의하지 않는다.
+
+**기한의 시간대**: AI가 보낸 절대 시각(`deadlineAt`)을 `PROMISES.due_date`로 저장할 때는 **Asia/Seoul 기준 날짜**로 변환한다. UTC로 자르면 `15:00~23:59Z` 구간의 약속이 하루 일찍 저장되며, 자정을 넘겨 방송하는 경우 실제로 발생한다. 캘린더 조회(8.1)의 범위 비교도 같은 기준을 쓴다.
+
 #### 10.8.1 약속 전체 목록
 
 `GET /promises?page=0&size=20&status=PENDING`
@@ -1001,23 +1088,34 @@ AI가 약속 발언을 감지하면 `PROMISES`에 `DETECTED` 상태로 저장하
 
 확정 시 사용자가 수정한 `content`, `due_date`를 반영하고 `status`를 `DETECTED`에서 `PENDING`으로 변경한다. 성공 응답은 변경된 약속을 반환한다.
 
+두 필드 모두 선택이다. `content`를 생략하면 AI가 추출한 문구를 그대로 쓰고, `dueDate`를 생략하면 기한 미정으로 확정한다. `dueDate`를 넣으면 그 시점부터 캘린더(8.1)에 표시된다.
+
 무시:
 
 `POST /promises/{promiseId}/dismiss`
 
 무시 시 `status`를 `DISMISSED`로 변경하고 `204 No Content`를 반환한다. 두 API 모두 현재 상태가 `DETECTED`가 아니면 `409 Conflict`를 반환한다.
 
-#### 10.8.3 확정 약속 상태 변경
+#### 10.8.3 확정 약속 수정
 
 `PATCH /promises/{promiseId}`
 
 ```json
 {
-  "status": "COMPLETED"
+  "status": "COMPLETED",
+  "content": "구독자 추첨 이벤트 진행",
+  "dueDate": "2026-08-20"
 }
 ```
 
-변경 가능한 `status`는 `PENDING`, `COMPLETED`, `ON_HOLD` 중 하나다. `DETECTED`, `DISMISSED` 상태는 확정·무시 전용 API로만 변경한다.
+세 필드 모두 선택이며 **보낸 것만 반영한다**. 캘린더에서 약속을 끌어 날짜를 옮기면 `{"dueDate": "2026-08-20"}` 하나만 보낸다.
+
+`content`와 `dueDate`를 여는 이유는 확정 이후에 기한을 바꿀 경로가 달리 없기 때문이다. 확정 API(10.8.2)는 `DETECTED` 상태에서만 동작하므로, 상태만 받는 설계로는 캘린더에서 일정을 옮길 수 없다.
+
+- 변경 가능한 `status`는 `PENDING`, `COMPLETED`, `ON_HOLD` 중 하나다. `DETECTED`, `DISMISSED` 상태는 확정·무시 전용 API로만 변경한다.
+- `dueDate`에 `null`을 명시하면 기한을 지우고, 필드를 생략하면 기존 값을 유지한다. 두 경우를 구분하므로 한 번 넣은 기한을 다시 비울 수 있다. 기한을 지우면 캘린더(8.1)에서 빠진다.
+- 현재 상태가 `DETECTED`나 `DISMISSED`면 `409 Conflict`를 반환한다.
+- `status`가 허용 목록 밖이거나 세 필드를 모두 생략하면 `400 Bad Request`를 반환한다.
 
 ---
 
@@ -1451,10 +1549,11 @@ SC-11의 채널명·태그 검색, 카테고리 필터, 규모 필터를 지원�
 | FastAPI → Spring | POST | `/internal/v1/sessions/{sessionId}/transcripts:batch` | STT 결과 배치 저장 |
 | Spring → FastAPI | POST | `/internal/v1/ai/stt` | 음성 청크 STT 변환 |
 | Spring → FastAPI | POST | `/internal/v1/ai/risk-speech` | 위험 발언 분류와 조언 생성 |
-| Spring → 채팅 AI | POST | `/broadcasts/{sessionId}/ingest` | 1초 배치 채팅 분류와 실시간 윈도우 지표 |
-| Spring → 채팅 AI | POST | `/broadcasts/{sessionId}/summary` | LLM 여론 요약(보류 — 채팅 AI 미구현) |
-| Spring → 채팅 AI | DELETE | `/broadcasts/{sessionId}` | 방송 종료 시 윈도우·요약 캐시 정리 |
-| Spring → FastAPI | POST | `/internal/v1/ai/repeated-questions` | 반복 질문 추출 |
+| Spring → 채팅 AI | POST | `/broadcasts/{sessionId}/ingest` | 1초 배치 채팅 분류와 실시간 윈도우 지표 (구현·검증 완료 — 13.6) |
+| Spring → 채팅 AI | POST | `/broadcasts/{sessionId}/summary` | LLM 여론 요약 생성 (양측 구현 완료 2026-07-30 — 13.6) |
+| Spring → 채팅 AI | GET | `/broadcasts/{sessionId}/summary` | 마지막 요약 캐시 회수 (COOLDOWN 백스톱 — 13.6) |
+| Spring → 채팅 AI | DELETE | `/broadcasts/{sessionId}` | 방송 종료 시 윈도우·요약 캐시 정리 (구현·검증 완료) |
+| Spring → 채팅 AI | GET | `/broadcasts/{sessionId}/questions` | 반복 질문 Top N 폴링(Spring측 구현 완료, AI측 라우트 미구현 — 계약은 `AI/CHAT_AI_API.md` §3) |
 | Spring → FastAPI | POST | `/internal/v1/ai/promise-detection` | STT에서 약속 후보 추출 |
 | Spring → FastAPI | POST | `/internal/v1/ai/growth-actions` | 성장 목표의 다음 액션 제안 |
 
@@ -1696,6 +1795,8 @@ Spring은 후보마다 `PROMISES(streamer_id, session_id, transcript_id, content
 
 `POST /broadcasts/{sessionId}/ingest`
 
+> **구현 현황 (2026-07-30).** 구현·E2E 검증 완료. 트리거는 둘이다 — 수집기 배치가 도착하면 `CollectionRelayService`가 저장 트랜잭션 **밖에서** 먼저 중계해 응답 라벨을 붙여 한 번의 INSERT로 저장하고, 채팅이 없던 초는 `RealtimeTicker`(1초)가 빈 배치로 보충한다. 어댑터와 라벨 코드 변환은 `HttpChatAiGateway`(`broadcast/realtime` 패키지) 한 곳이다. **주의: `CHATAI_BASE_URL` 미설정 시 no-op 게이트웨이로 기동한다** — 경고 로그 한 줄 외에는 조용히 AI 호출이 생략되고 라벨이 전부 `NULL`로 저장되며 10.6의 `services.ai`가 `STOPPED`로 남아, 파이프라인이 없는 것으로 오해하기 쉽다. 로컬에서도 `.env`에 넣어야 동작한다. 검증 범위: 배치 → 라벨 저장 → Redis window → live-snapshot 중계 → 빈 배치 보충 → 종료 시 `DELETE /broadcasts/{sessionId}`(204, 이후 404)까지 확인.
+
 **1초마다 호출하며 그 1초 동안 수신한 채팅을 전부 싣는다.** 채팅이 없어도 빈 배열로 호출해야 윈도우가 시간에 따라 미끄러지고 시청자 수가 갱신된다.
 
 ```json
@@ -1746,35 +1847,35 @@ Spring의 처리는 두 갈래다.
 
 라벨 집합은 채팅 분류 모델 버전에 묶여 있다. 모델을 교체해 라벨이 바뀌면 이 표와 `CHAT_MESSAGES`·`REPORTS`·`TRIGGERS`의 컬럼을 함께 마이그레이션해야 한다.
 
-LLM 여론 요약 (보류 — 2026-07-29):
+LLM 여론 요약 (계약 정본 `AI/CHAT_AI_API.md` §2, 양측 구현 완료 2026-07-30):
 
 `POST /broadcasts/{sessionId}/summary`
 
-> **보류.** chat-ai 서버에 `/summary` Endpoint가 아직 구현되어 있지 않아 Spring 쪽 스케줄러·저장 경로도 만들지 않았다. AI 서버 구현이 끝나면 아래 규칙대로 잇는다.
+> ~~보류~~ **구현 완료 (2026-07-30).** chat-ai 쪽은 `POST`/`GET /broadcasts/{id}/summary`(422/409 가드 포함), Spring 쪽은 `broadcast/summary` 패키지 — 3분 주기 AUTO 스케줄러(`ChatSummaryPoller`, PREPARING·LIVE 세션 대상), 수동 MANUAL API(10.6의 `POST .../chat-summary`), `LIVE_BRIEFINGS(CHAT_SUMMARY)` 저장 경로(`ChatSummaryBriefingService`)까지 모두 붙었다.
 
 3분 주기 스케줄러는 `{"mode":"AUTO"}`, 프론트 버튼은 `{"mode":"MANUAL"}`로 호출한다. Spring은 성공 응답의 `summary`로 `LIVE_BRIEFINGS(CHAT_SUMMARY)`를 생성한다. 윈도우 채팅 부족(`422`)과 쿨다운·중복 호출(`409`)은 정상 거절이므로 오류로 기록하지 않는다.
 
-반복 질문 분석:
+Spring 저장·회수 규칙 (구현 반영, 2026-07-30):
 
-`POST /internal/v1/ai/repeated-questions`
+- **dedupe.** `LIVE_BRIEFINGS`에는 중복 방지 키가 없다. AUTO와 MANUAL이 같은 요약을 각자 저장하지 않도록, 저장 전 세션의 마지막 `CHAT_SUMMARY` message와 텍스트를 비교해 같으면 건너뛴다(트랜잭션 안, `ChatSummaryBriefingService.append`).
+- **COOLDOWN 회수 백스톱.** AUTO가 `409 COOLDOWN`을 받으면 `GET /summary`로 마지막 캐시 요약을 회수해 dedupe-append한다 — MANUAL이 생성만 하고 저장 전에 죽은(타임아웃·재시작) 요약을 다음 주기가 복구한다. `409 IN_FLIGHT`는 생성 중인 쪽이 저장하므로 건너뛴다.
+- **Timeout 분리.** 요약은 LLM 생성이 수 초 걸려 ingest의 2초와 분리된 전용 Timeout(`laive.chat-ai.summary-timeout`, 기본 15s)을 쓴다. AUTO 주기는 `laive.chat-summary.auto-interval`(기본 180s)이다.
+- **거절의 전달.** 게이트웨이는 409·422 본문(`retryAfterSec` 등)을 삼키지 않고 sealed 결과(`ChatAiSummaryCall`)로 호출자에 넘긴다 — MANUAL API가 버튼 카운트다운을 그리는 근거다.
 
-요청의 `messages` 형식은 채팅 요약 API와 동일하다.
+반복 질문 분석 (계약 개정 2026-07-30, Spring측 구현 완료):
 
-```json
-{
-  "success": true,
-  "data": {
-    "items": [
-      {
-        "question": "오늘 몇 시까지 하세요?",
-        "occurrenceCount": 42
-      }
-    ]
-  }
-}
-```
+`GET /broadcasts/{sessionId}/questions?limit=50`
 
-`REPEATED_QUESTIONS`는 이력 테이블이 아니라 세션의 현재 Top 질문 상태로 사용한다. Spring은 해당 세션의 기존 행을 새 결과로 한 트랜잭션 안에서 교체하고 필요하면 `LIVE_BRIEFINGS(FAQ)`를 생성한다.
+> **개정.** 초안의 `POST /internal/v1/ai/repeated-questions`(Spring이 messages를 실어 보내고 `{question, occurrenceCount}`를 받는 방식)는 폐기됐다. 정본은 `AI/CHAT_AI_API.md` §3 — 채팅은 이미 1초 ingest로 AI에 흘러가고 있으므로 다시 실어 보낼 필요가 없고, **Spring이 15초 주기로 위 GET을 폴링**해 Top 질문 목록(`questionId`·`text`·`type`·`askers` 등)을 받는다.
+
+> **구현 현황 (2026-07-30).** Spring측은 구현 완료다(`broadcast/questions` 패키지) — 15초 폴링(`RepeatedQuestionPoller`, PREPARING·LIVE 세션 대상), 변경분만 UPSERT, dismiss API(10.6), 재질문 감지 ①②③, 방송 종료 시 `endBroadcast` 직전 마지막 `GET ?limit=50` 마감(`RealtimeSessionLifecycle.stopAndFlush`). **AI측 라우트·임베딩 클러스터링은 미구현**이라 그 전까지 폴링은 404를 받아 조용히 건너뛰고 10.6의 `repeatedQuestions`는 빈 배열이다. 파라미터는 `laive.repeated-questions.*` 설정(폴링 15s / limit 50 / 유예 60s / 임계 +10명)이다.
+
+Spring 저장 규칙(정본 §3의 요지, V11 스키마로 반영됨):
+
+- `REPEATED_QUESTIONS`는 이력 테이블이 아니라 세션의 현재 Top 질문 상태다. 단 **전량 교체(DELETE+INSERT)는 금지** — 답변 완료(dismissed) 표식이 날아간다. 전량 조회 후 `(session_id, question_id)`로 UPSERT하고, 화면에는 `dismissed_at IS NULL`만 노출한다. 쓰기 부담은 UPSERT의 `WHERE ... IS DISTINCT FROM`으로 값이 그대로인 행을 건드리지 않아 해소했다.
+- `questionId`는 AI가 만드는 **BIGINT 16자리**다(집계 시작 epoch초 × 1,000,000 + 시퀀스). INT 컬럼에 넣으면 넘친다.
+- 답변 완료는 Spring만 기억한다. AI는 dismissed를 모른 채 계속 세므로, 재질문 감지(답변 후 `askers` +10명 재노출, 답변 직후 60초 baseline 유예, 집계 리셋 방어)는 §3의 3컬럼 알고리즘(`dismissed_at`·`askers_at_dismiss`·`baseline_askers`)을 따른다. 재노출 시 `dismissed_at`을 NULL로 되돌리고 `reexposed_at`을 남긴다 — 10.6의 `reasked`가 이 값이다.
+- 방송 종료 시 `DELETE /broadcasts/{id}` **전에** `GET /questions?limit=50`을 마지막으로 한 번 호출해 최종 수치로 마감한다. 세션 리포트는 이 저장값을 쓰며 **'종료 시점 상위 50개 기준'**이다(top-50 밖 질문은 마지막 목격 값으로 남는다).
 
 ### 13.7 방송 후 분석과 성장 액션
 
@@ -1999,6 +2100,10 @@ ERD가 스트리머 중심으로 수정되었으므로 `ADVERTISER` 역할과 �
     - `senderChannelId`는 `sha256:{hex}`로 해시해 `viewerHash`로만 보낸다. 소금(`COLLECTOR_VIEWER_HASH_SALT`)을 운영 전에 정하고 이후 바꾸지 않는다 — 바꾸면 같은 시청자가 다른 해시가 되어 `VIEWER_PROFILES`에 중복 인격이 생긴다.
 - [ ]  `profile.userRoleCode`와 `emojis`를 저장할 자리. 수집기가 읽고는 있으나 13.3.1 요청과 `CHAT_MESSAGES` 모두 컬럼이 없어 전달하지 못한다. 스트리머 본인 채팅을 여론 집계에서 제외하려면, 이모티콘 밀도를 쓰려면 요청 스키마와 테이블을 함께 늘려야 한다
 - [x]  수집 엔드포인트 2개 구현 (`chat-messages:batch`, `viewer-metrics:batch`). 서비스 토큰 필터 체인(`/internal/**`)과 `X-Request-Id` 멱등 가드를 함께 넣었다. 수집기 자격 발급·상태 보고·공백 보고 Endpoint 3개가 13.3에 추가됐다
+- [x]  **Spring → chat-ai 채팅 분류 파이프라인(13.6 ingest) 구현·E2E 검증 (2026-07-30).** 배치 중계(`CollectionRelayService`)·1초 빈 배치 보충(`RealtimeTicker`)·라벨 저장·Redis window·live-snapshot 중계·종료 DELETE까지 전 구간 확인했다. **주의: `CHATAI_BASE_URL` 미설정 시 경고 한 줄과 함께 no-op으로 기동해 라벨이 전부 NULL로 저장된다** — "파이프라인이 없다"로 오해된 원인이었으므로 로컬 `.env`에도 반드시 설정한다. chat-ai 기동 절차(모델 다운로드 포함)는 `AI/chat-ai/README.md`
+- [x]  **반복 질문 파이프라인 Spring측 구현 (2026-07-30).** `broadcast/questions` 패키지 — 15초 폴링·변경분만 UPSERT(V11 스키마)·dismiss API·재질문 감지 3컬럼 알고리즘·방송 종료 마감 폴링·live-snapshot 노출(10.6 스키마 정본화)까지. 통합 테스트로 ①②③ 전 시나리오(유예·fallback·리셋 방어·재노출·재-dismiss) 검증 완료
+- [ ]  **반복 질문 파이프라인 AI측.** chat-ai의 `GET /broadcasts/{id}/questions` 라우트와 임베딩 배치 클러스터링이 미구현이다. 그 전까지 Spring 폴링은 404를 받아 조용히 건너뛴다
+- [x]  **LLM 여론 요약 Spring 호출부.** ~~chat-ai의 `/summary`는 구현이 끝났고(2026-07-30 확인) Spring의 3분 AUTO 스케줄러·수동 MANUAL API·`LIVE_BRIEFINGS(CHAT_SUMMARY)` 저장 경로가 남았다~~ 완료(2026-07-30) — `broadcast/summary` 패키지, MANUAL API는 10.6의 `POST .../chat-summary`, live-snapshot `briefings[]` 조회 경로 포함 (13.6 참조)
 - [ ]  Spring의 LLM 클라이언트 선택 — Spring AI의 Spring Boot 4 지원 버전 확인, 미지원 시 GMS OpenAI 호환 Endpoint 직접 호출
 - [ ]  트리거 구간 채팅 원문이 프롬프트 한도를 넘길 때의 압축 규칙 (반복 표현 접기, 표본 추출) 확정
 - [ ]  `TRIGGERS.trigger_type` Enum 확정. 현재 채팅 급증 하나이며 시청자 급변 트리거는 판정 로직이 없다

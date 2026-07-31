@@ -17,7 +17,8 @@ const REPORT_STATUS: Record<ReportStatus, { label: string; tone: StatusTone }> =
 }
 
 interface ReportStatusBadgeProps {
-  status: ReportStatus
+  /** 목록 응답은 reports를 LEFT JOIN해서 만들어져 리포트가 아직 없으면 null이다. */
+  status: ReportStatus | null
   className?: string
 }
 
@@ -25,6 +26,7 @@ export default function ReportStatusBadge({
   status,
   className
 }: ReportStatusBadgeProps): React.JSX.Element {
-  const { label, tone } = REPORT_STATUS[status]
+  const { label, tone } =
+    status === null ? { label: '대기 중', tone: 'neutral' as StatusTone } : REPORT_STATUS[status]
   return <StatusBadge tone={tone} label={label} className={className} />
 }

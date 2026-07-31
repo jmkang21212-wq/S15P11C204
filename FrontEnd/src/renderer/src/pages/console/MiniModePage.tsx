@@ -1,11 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useAsyncData } from '@renderer/hooks/useAsyncData'
+import { useLiveSnapshot } from '@renderer/hooks/useLiveSnapshot'
 import { useLiveBriefings } from '@renderer/hooks/useLiveBriefings'
-import { getLiveSnapshot } from '@renderer/api/console'
+import { useCurrentSession } from '@renderer/hooks/useCurrentSession'
 import MiniWidget from './components/MiniWidget'
-
-const DEFAULT_SESSION_ID = 9002
 
 /** HIGH 위험이 도착하면 이 시간 동안만 창을 강조 상태로 둔다 (목업 SC-03 부속). */
 const HIGH_EMPHASIS_MS = 15000
@@ -14,14 +12,20 @@ const HIGH_EMPHASIS_MS = 15000
  * SC-03 부속: 미니 모드 창의 내용.
  * Electron 메인 프로세스가 항상-위 별도 창(340×220)으로 이 라우트를 로드한다.
  *
- * 브리핑은 콘솔 창이 AI 서버에서 받아 main을 통해 중계한 것을 구독한다
- * (미니 창이 직접 오디오를 보내면 마이크가 이중으로 열리고 세션이 충돌한다).
+ * 데이터가 두 갈래로 온다:
+ *  - 브리핑: 콘솔 창이 AI 서버에서 받아 main을 통해 중계한 것을 구독한다
+ *    (미니 창이 직접 오디오를 보내면 마이크가 이중으로 열리고 세션이 충돌한다).
+ *  - 세션·시청자·여론: 이 창은 별도 BrowserWindow라 인증 토큰이 없다(authStore는
+ *    렌더러 메모리 전용) — API를 직접 부르지 않고 main의 IPC 릴레이
+ *    (session:state·snapshot:state)로 콘솔 창(owner)의 폴링 결과를 구독만 한다(follower 모드).
+ *
  * 미리보기: `#/console/mini` (기본) / `#/console/mini?state=high` (HIGH 강조)
  */
-export default function MiniModePage(): React.JSX.Element | null {
+export default function MiniModePage(): React.JSX.Element {
   const [params] = useSearchParams()
-  const loader = useCallback(() => getLiveSnapshot(DEFAULT_SESSION_ID), [])
-  const { data } = useAsyncData(loader)
+  const { session: currentSession } = useCurrentSession('follower')
+  const sessionId = currentSession?.sessionId ?? null
+  const { snapshot: data } = useLiveSnapshot(sessionId, 'follower')
   const liveBriefings = useLiveBriefings()
   /** 강조 시간이 지난 HIGH 브리핑 id — 강조를 끄는 쪽만 상태로 둔다. */
   const [expiredHighId, setExpiredHighId] = useState<number | null>(null)
@@ -37,17 +41,14 @@ export default function MiniModePage(): React.JSX.Element | null {
     return () => window.clearTimeout(timer)
   }, [newestHighId])
 
-  if (!data) return null
-
   const isHigh =
-    params.get('state') === 'high' ||
-    (newestHighId !== undefined && newestHighId !== expiredHighId)
+    params.get('state') === 'high' || (newestHighId !== undefined && newestHighId !== expiredHighId)
 
   return (
     <div className="h-screen w-screen">
       <MiniWidget
         data={data}
-        briefings={[...liveBriefings, ...data.briefings]}
+        briefings={[...liveBriefings, ...(data?.briefings ?? [])]}
         isHigh={isHigh}
         onGoConsole={() => window.api.focusMainWindow()}
         onClose={() => window.api.closeMiniWindow()}

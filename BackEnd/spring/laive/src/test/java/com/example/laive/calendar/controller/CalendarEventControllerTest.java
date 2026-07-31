@@ -9,6 +9,7 @@ import com.example.laive.calendar.service.CalendarEventCommandService;
 import com.example.laive.calendar.service.CalendarEventQueryService;
 import com.example.laive.common.exception.GlobalExceptionHandler;
 import com.example.laive.common.security.JwtStreamerIdExtractor;
+import com.example.laive.promise.service.PromiseQueryService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -52,6 +53,10 @@ class CalendarEventControllerTest {
     void setUp() {
         commandService = mock(CalendarEventCommandService.class);
         queryService = mock(CalendarEventQueryService.class);
+        // 캘린더 조회는 기한이 잡힌 약속도 함께 싣는다. 이 테스트의 관심사가 아니라 빈 목록을 준다.
+        PromiseQueryService promiseQueryService = mock(PromiseQueryService.class);
+        when(promiseQueryService.getCalendarPromises(anyLong(), any(), any()))
+                .thenReturn(List.of());
         JwtStreamerIdExtractor extractor = mock(JwtStreamerIdExtractor.class);
         Jwt jwt = Jwt.withTokenValue("token")
                 .header("alg", "HS256")
@@ -63,7 +68,8 @@ class CalendarEventControllerTest {
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
 
         mockMvc = MockMvcBuilders
-                .standaloneSetup(new CalendarEventController(commandService, queryService, extractor))
+                .standaloneSetup(new CalendarEventController(
+                        commandService, queryService, promiseQueryService, extractor))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setCustomArgumentResolvers(new AuthenticationPrincipalArgumentResolver())
                 .build();

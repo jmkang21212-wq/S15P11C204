@@ -69,7 +69,10 @@ class LiveConsoleControllerTest {
                         180, 6185L, 0.214, "JOY",
                         Map.of("JOY", 0.27, "NEUTRAL", 0.25)
                 ),
-                List.of(),
+                List.of(new LiveSnapshotResponse.RepeatedQuestion(
+                        1753690000000007L, "오늘 몇 시까지 하세요?", "FAQ", 42, 51, true,
+                        NOW.minusSeconds(600), NOW.minusSeconds(30)
+                )),
                 "1753089600123-0"
         ));
 
@@ -85,7 +88,12 @@ class LiveConsoleControllerTest {
                 .andExpect(jsonPath("$.data.sentiment.dominant").value("JOY"))
                 .andExpect(jsonPath("$.data.sentiment.distribution.JOY").value(0.27))
                 .andExpect(jsonPath("$.data.briefings").isEmpty())
-                .andExpect(jsonPath("$.data.repeatedQuestions").isEmpty())
+                .andExpect(jsonPath("$.data.repeatedQuestions[0].questionId").value(1753690000000007L))
+                .andExpect(jsonPath("$.data.repeatedQuestions[0].text").value("오늘 몇 시까지 하세요?"))
+                .andExpect(jsonPath("$.data.repeatedQuestions[0].type").value("FAQ"))
+                .andExpect(jsonPath("$.data.repeatedQuestions[0].askers").value(42))
+                .andExpect(jsonPath("$.data.repeatedQuestions[0].messages").value(51))
+                .andExpect(jsonPath("$.data.repeatedQuestions[0].reasked").value(true))
                 .andExpect(jsonPath("$.data.lastEventId").value("1753089600123-0"));
     }
 

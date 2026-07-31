@@ -1,72 +1,150 @@
-# 위험 발언 사전 (테스트용 최소 목록)
+# 위험 발언 사전
 #
-# 매칭 전에 정규화가 적용되므로 "씨 발", "씨이이발" 같은 변형은
-# 따로 넣지 않아도 잡힌다. variants에는 정규화로 흡수되지 않는
-# 철자 차이(시발 / 씨팔 / ㅅㅂ)만 적는다.
+# 매칭 전에 정규화가 적용되므로 "씨 발", "씨이이발" 같은 변형은 따로 넣지 않아도
+# 잡힌다. variants에는 정규화로 흡수되지 않는 철자 차이만 적는다.
 #
 # severity: high | medium | low
 # category: profanity(비속어) | insult(모욕) | threat(위협) | aggressive(공격적)
+#
+# 설계 원칙
+#   1. 사전에는 문맥 없이도 욕설인 표현만 둔다. 애매한 것은 빼서 LLM이 문맥으로
+#      판단하게 한다. server.py는 사전에 걸리면 LLM을 건너뛰므로, 사전에 넣는 순간
+#      그 판정이 최종이 된다.
+#   2. 새 term을 늘리기보다 기존 term의 variants를 채운다. severity/category가
+#      유지되고 오탐이 늘지 않는다.
+#   3. 다른 단어에 묻힐 수 있는 짧은 표기는 넣지 않는다.
+#      (스발←가스발전, 병시←질병시, 띠발←허리띠 발견)
 
 terms:
   - term: 씨발
     severity: high
     category: profanity
-    variants: [시발, 씨팔, 씨바, 쉬발, 씨불, ㅅㅂ, ㅆㅂ]
+    variants: [
+      시발, 씨팔, 씨바, 쉬발, 씨불, ㅅㅂ, ㅆㅂ, c발, c팔, 띠바, 띠방, 띠밸, 띠벌, 띠불, 띠붕, 띠이바, 띠이방, 띠이밸, 띠이벌, 띠이불, 띠이붕,
+      띠이팔, 띠이펄, 띠이풀, 띠팔, 띠펄, 띠풀, 쉬바, 쉬방, 쉬밸, 쉬벌, 쉬부, 쉬불, 쉬붕, 쉬빡, 쉬빨, 쉬이바, 쉬이발, 쉬이방, 쉬이밸, 쉬이벌,
+      쉬이부, 쉬이불, 쉬이붕, 쉬이빡, 쉬이팔, 쉬이펄, 쉬이풀, 쉬팔, 쉬펄, 쉬풀, 싀발, 싀방, 싀팔, 시댕, 시뎅, 시벌, 시벨, 시벵, 시빨, 시이바,
+      시이벌, 시이불, 시이붕, 시이빡, 시이팔, 시이펄, 시이풀, 시팔, 시펄, 쒸바, 쒸박, 쒸발, 쒸방, 쒸밸, 쒸뱅, 쒸벌, 쒸벨, 쒸부, 쒸불, 쒸붕, 쒸빡,
+      쒸이바, 쒸이발, 쒸이방, 쒸이밸, 쒸이벌, 쒸이부, 쒸이불, 쒸이붕, 쒸이빡, 쒸이팔, 쒸이펄, 쒸이풀, 쒸팔, 쒸펄, 쒸풀, 쓉창, 쓰박, 쓰발, 쓰방,
+      쓰밸, 쓰벌, 쓰부, 쓰불, 쓰붕, 쓰빡, 쓰으방, 쓰이바, 쓰이발, 쓰이방, 쓰이밸, 쓰이벌, 쓰이부, 쓰이불, 쓰이붕, 쓰이빡, 쓰이팔, 쓰이펄, 쓰이풀,
+      쓰팔, 쓰펄, 쓰풀, 씌댕, 씌뎅, 씌바, 씌발, 씌방, 씌밸, 씌뱅, 씌벌, 씌벨, 씌빨, 씌파, 씌팔, 씝탱, 씝할, 씨댕, 씨뎅, 씨박, 씨밝, 씨방,
+      씨밸, 씨뱅, 씨벌, 씨벨, 씨벵, 씨부, 씨붕, 씨빡, 씨빨, 씨이바, 씨이발, 씨이방, 씨이밸, 씨이벌, 씨이부, 씨이불, 씨이붕, 씨이빡, 씨이팔, 씨이펄,
+      씨이풀, 씨파, 씨펄, 씨풀
+    ]
 
   - term: 개새끼
     severity: high
     category: insult
-    variants: [개색끼, 개쉐끼, 개세끼, 개시키]
+    variants: [
+      개색끼, 개쉐끼, 개세끼, 개시키, 개새꺄, 개색히, 개샛끼, 개쉑, 개쉑히, 개쌔끼
+    ]
+
+  # 개새끼와 같은 급인데 대표어가 없어 미탐되던 계열
+  - term: 씹새끼
+    severity: high
+    category: insult
+    variants: [십새끼, 씹쌔끼, 씹색끼, 십쌔끼, 씹세끼, 십새, 씹새, 씹쉑]
 
   - term: 병신
     severity: high
     category: insult
-    variants: [병시니, 븅신, ㅄ]
+    variants: [
+      병시니, 븅신, ㅄ, 뱅쉰, 뱅싄, 뱅신, 벵신, 병쉰, 병싄, 병씬, 뵹싄, 뵹신, 뷩쉰, 뷩시, 뷩신, 븅쉰, 븅싄, 븽신, 빙쉰, 빙시, 빙신
+    ]
 
   - term: 좆
     severity: high
     category: profanity
-    variants: [좃]
+    variants: [좃, 좇, 죶]
 
   - term: 지랄
     severity: medium
     category: profanity
-    variants: [지럴, ㅈㄹ]
+    variants: [
+      지럴, ㅈㄹ, g랄, 쥐랄, 쥐럴, 쥐롤, 즤랄, 지롤
+    ]
 
   - term: 미친놈
     severity: medium
     category: insult
-    variants: [미친년, 미친새끼]
+    variants: [
+      미친년, 미친새끼, 뮈친년, 미췐년, 미췬넌, 미췬넘, 미췬년, 미췬놈, 미췬뇬, 미친넌, 미친넘, 미친뇬
+    ]
 
+  # variants에 인용형("닥치라고")을 넣으면 안 된다. 인용 억제 규칙은 매칭 뒤에 오는
+  # 어미를 보는데, 인용 어미가 매칭 안에 들어가 있으면 검사할 것이 남지 않는다.
+  # "닥치라고 했잖아"처럼 남의 말을 옮기는 발화가 그대로 경고가 된다.
+  # 직접 형태만 두고 나머지는 LLM이 문맥으로 본다.
   - term: 닥쳐
-    severity: medium
+    severity: low
     category: aggressive
-    variants: [닥치라고, 주둥이닥쳐]
+    variants: [주둥이닥쳐, 아가리닥쳐]
 
   - term: 등신
     severity: medium
     category: insult
-    variants: []
+    variants: [
+      듕신, 등쉰
+    ]
 
   - term: 죽여버린다
     severity: high
     category: threat
-    variants: [죽여버릴거야, 죽고싶냐, 뒤질래]
+    variants: [죽여버릴거야, 죽고싶냐, 뒤질래, 디질래]
 
-  - term: 꺼져
-    severity: low
-    category: aggressive
-    variants: [꺼지라고]
+  # 성적 표현은 방송 플랫폼 제재로 바로 이어져 욕설보다 중요하다.
+  #
+  # 그런데 이 영역이 오탐 지뢰밭이다. 아래는 어미·복합어와 충돌해서 일부러 뺐고,
+  # 전부 LLM 문맥 판정에 맡긴다.
+  #   보지 자지  : 어미 '-지' ("안 보지", "가자지")
+  #   잠지        : "잠지 마"
+  #   자위        : 자위대, 자위권
+  #   성기        : 김성기, 성기사
+  #   후장        : 오후장(증시)
+  #   불알        : 불알친구
+  #   발정        : 발정기(동물)
+  #   꼴리        : "꼴리는 대로" (성적이지 않은 관용구)
+  #   오랄        : 오랄비
+  #
+  # 노골적이지 않은 성드립("그거 되게 크네요")은 애초에 단어로 못 잡는다. LLM 몫이다.
+  - term: 섹스
+    severity: high
+    category: sexual
+    variants: [쎅스, 섹쓰, 색스, 쌕스, 쉑스, 섹쓔]
 
-  - term: 새끼
-    severity: low
-    category: insult
+  - term: 빠구리
+    severity: high
+    category: sexual
+    variants: [빠굴이, 빠굴]
+
+  - term: 사까시
+    severity: high
+    category: sexual
+    variants: [사카시]
+
+  - term: 딸딸이
+    severity: high
+    category: sexual
+    variants: [딸따리]
+
+  - term: 젖꼭지
+    severity: high
+    category: sexual
     variants: []
 
-  - term: 멍청이
-    severity: low
-    category: insult
-    variants: [멍청아]
+  - term: 부랄
+    severity: medium
+    category: sexual
+    variants: []
+
+  - term: 야동
+    severity: medium
+    category: sexual
+    variants: [야짤]
+
+  - term: 섹드립
+    severity: medium
+    category: sexual
+    variants: [섹드립치지]
 
 # 여기에 걸리는 구간 안에서 발견된 단어는 무시한다.
 # Aho-Corasick은 부분 문자열을 전부 잡으므로 "시발점"에서 "시발"이 걸린다.
@@ -75,7 +153,14 @@ allowlist:
   - 시발역
   - 시발자동차
   - 십장생
+  - 등신대
+  - 등신불
+  - 미친듯
+  - 미친척
   - 강아지새끼
   - 고양이새끼
+  - 새끼고양이
+  - 새끼강아지
+  - 새끼돼지
   - 새끼손가락
   - 새끼발가락

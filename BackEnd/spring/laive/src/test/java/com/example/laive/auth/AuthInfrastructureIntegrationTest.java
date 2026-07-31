@@ -18,7 +18,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest(properties = {
         "laive.auth.jwt.secret=test-only-secret-key-with-at-least-32-bytes",
-        "laive.platform.token-encryption-key=dGVzdC1rZXktMzItYnl0ZXMtZm9yLXVuaXQtdGVzdCE="
+        "laive.platform.token-encryption-key=dGVzdC1rZXktMzItYnl0ZXMtZm9yLXVuaXQtdGVzdCE=",
+        // 환경마다 다른 기본 returnUri에 의존하지 않도록 테스트가 쓰는 값을 고정한다.
+        "laive.auth.allowed-return-uris=http://localhost:3000/oauth/callback"
 })
 @Transactional
 class AuthInfrastructureIntegrationTest {

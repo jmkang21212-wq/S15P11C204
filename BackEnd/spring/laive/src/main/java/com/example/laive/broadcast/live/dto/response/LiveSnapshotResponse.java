@@ -10,8 +10,8 @@ import java.util.Map;
  * <p>프론트가 2~3초 주기로 폴링해 콘솔 화면 전체를 이 응답으로 그린다
  * (2026-07-29 결정 — WebSocket 대신 폴링).
  *
- * <p>briefings와 repeatedQuestions는 STT·반복 질문 파이프라인이 아직 없어
- * 항상 빈 배열이다. 필드를 미리 두는 이유: 프론트가 스키마를 한 번만 맞추면 된다.
+ * <p>briefings는 live_briefings의 최근 20건(최신순)이다 — AI 분석이 저장하는
+ * RISK·PROMISE와 여론 요약 CHAT_SUMMARY가 실린다.
  */
 public record LiveSnapshotResponse(
         Session session,
@@ -60,6 +60,28 @@ public record LiveSnapshotResponse(
     ) {
     }
 
-    public record RepeatedQuestion(long questionId, String question, int occurrenceCount) {
+    /**
+     * 반복 질문 한 건이다(계약: AI/CHAT_AI_API.md §3). dismissed(답변 완료)는 이미
+     * 걸러져 있고 askers 내림차순 최대 50건이다. "전체 / FAQ만" 필터와 상위 N 컷은
+     * 프론트가 한다 — FAQ는 소수라 5개를 채우려면 넉넉히 받아 걸러야 한다.
+     *
+     * @param questionId AI 발급 식별자. 16자리 long — JS Number 정밀도(2^53)를 넘지는
+     *                   않지만 해석하지 말고 불투명 id로 다룰 것
+     * @param text       질문 묶음의 대표 표현
+     * @param type       FAQ | CONTEXT | null(판정 전)
+     * @param askers     몇 명이 물었나(유니크). 화면에 표시할 숫자이자 정렬 기준
+     * @param messages   총 메시지 수. askers와 크게 벌어지면 한 명의 도배
+     * @param reasked    답변 완료 후 다시 늘어 재노출됐다 — 답이 시청자에게 닿지 않은 신호
+     */
+    public record RepeatedQuestion(
+            long questionId,
+            String text,
+            String type,
+            int askers,
+            int messages,
+            boolean reasked,
+            Instant firstAskedAt,
+            Instant lastAskedAt
+    ) {
     }
 }

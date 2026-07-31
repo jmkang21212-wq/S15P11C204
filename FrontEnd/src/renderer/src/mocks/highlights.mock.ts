@@ -24,13 +24,13 @@ function highlightsOf(sessionId: number): ReportHighlight[] {
  */
 function pendingClip(
   highlightId: number,
-  reportSegmentId: number,
+  triggerId: number,
   startMin: number,
   lengthSec: number
 ): ReportHighlight {
   return {
     highlightId,
-    reportSegmentId,
+    triggerId,
     startMs: startMin * MINUTE_MS,
     endMs: startMin * MINUTE_MS + lengthSec * 1000,
     clipUrl: null,

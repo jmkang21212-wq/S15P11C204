@@ -21,10 +21,7 @@ import type { ReportSegment, SegmentType, ViewerTimelinePoint } from '@renderer/
 const MINUTE_MS = 60_000
 
 const SEGMENT_STYLE: Record<SegmentType, { label: string; color: string }> = {
-  VIEWER_INFLOW: { label: '유입 구간', color: 'var(--success)' },
-  VIEWER_OUTFLOW: { label: '이탈 구간', color: 'var(--destructive)' },
-  CHAT_PEAK: { label: '채팅 피크', color: 'var(--warning)' },
-  HIGHLIGHT: { label: '하이라이트', color: 'var(--chart-5)' }
+  CHAT_SURGE: { label: '채팅 급증 구간', color: 'var(--warning)' }
 }
 
 const CHART_CONFIG = {

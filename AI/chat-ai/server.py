@@ -23,8 +23,9 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from chatai.classifier import LABELS, ChatClassifier
-from chatai.config import (CHATAI_TOKEN, GMS_BASE_URL, GMS_KEY, REDIS_URL,
-                           SUMMARY_MODEL, SUMMARY_REASONING)
+from chatai.config import (CHATAI_TOKEN, EMBED_MODEL, GMS_BASE_URL, GMS_KEY,
+                           REDIS_URL, SUMMARY_MODEL, SUMMARY_REASONING)
+from chatai.questions import QUESTION_LABEL, QuestionTracker
 from chatai.summary import SummaryRejected, SummaryService
 from chatai.window import BroadcastWindow
 
@@ -37,6 +38,7 @@ USE_INT8 = os.getenv('CHATAI_INT8', '0') == '1'
 clf = None
 rdb = None
 summarizer = None
+questions = None
 
 
 def _make_llm_fn():
@@ -57,9 +59,27 @@ def _make_llm_fn():
     return call
 
 
+def _make_embed_fn():
+    """GMS 임베딩 호출 함수. 키가 없으면 None — /questions만 꺼진다.
+
+    3-small을 쓰면 안 된다: 실측에서 같은 질문('몇시까지 하세요'~'언제 끝나요')이
+    0.225로 다른 질문(0.330)보다 낮게 나와 임계값으로 가를 수 없었다.
+    """
+    if not GMS_KEY:
+        return None
+    from openai import OpenAI
+    client = OpenAI(api_key=GMS_KEY, base_url=GMS_BASE_URL, timeout=60)
+
+    def call(texts):
+        r = client.embeddings.create(model=EMBED_MODEL, input=list(texts))
+        return [d.embedding for d in r.data]
+
+    return call
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global clf, rdb, summarizer
+    global clf, rdb, summarizer, questions
     clf = ChatClassifier(MODEL_DIR, quantized=USE_INT8)
     # decode_responses=False 통일 — window.py가 bytes/str 둘 다 처리한다
     rdb = redis_lib.Redis.from_url(REDIS_URL, socket_timeout=2, socket_connect_timeout=2)
@@ -74,7 +94,10 @@ async def lifespan(app: FastAPI):
     if llm_fn is None:
         log.warning('GMS_KEY 없음 — /summary는 503, 나머지는 정상')
     summarizer = SummaryService(rdb, llm_fn)
+    # llm_fn 공유: 질문 목록은 클러스터 대표 문장만 FAQ/CONTEXT로 판정한다
+    questions = QuestionTracker(rdb, _make_embed_fn(), llm_fn).start()
     yield
+    questions.stop()
     rdb.close()
 
 
@@ -163,6 +186,11 @@ def ingest(broadcast_id: str, req: IngestRequest):
         # (uid, 원문, top-1 라벨, 확률8) — 원문·라벨은 /summary가 쓴다
         items = [(c.uid, c.msg, p['label'], [p['probs'][lab] for lab in LABELS])
                  for c, p in zip(req.chats, preds)]
+        # 질문은 반복 질문 집계 대기열로 (임베딩은 백그라운드 — 여기서 하면
+        # GMS 호출 1.9초가 계약 타임아웃 2초를 먹는다)
+        for c, p in zip(req.chats, preds):
+            if p['label'] == QUESTION_LABEL:
+                questions.offer(broadcast_id, c.uid, c.msg, c.ts or None)
     else:
         results, items = [], []
 
@@ -213,12 +241,38 @@ def summary_get(broadcast_id: str):
     return {k: v for k, v in cached.items() if not k.startswith('_')}
 
 
+@app.get('/broadcasts/{broadcast_id}/questions', dependencies=[Depends(require_token)])
+def questions_get(broadcast_id: str, limit: int = 5, exclude: str = ''):
+    """
+    반복 질문 Top N (계약: ../CHAT_AI_API.md 3장).
+
+    exclude: 스트리머가 지운 questionId 목록(쉼표 구분). AI는 무엇이 지워졌는지
+    기억하지 않는다 — Spring이 매 요청에 실어 보내고, AI는 제외한 뒤 상위를
+    뽑으므로 지운 자리를 다음 순위가 채운다.
+
+    폴링은 10~30초 주기를 권장한다. /ingest(1초)와 달리 목록은 천천히 변한다.
+    """
+    limit = max(1, min(limit, 50))
+    try:
+        ids = tuple(int(x) for x in exclude.split(',') if x.strip().isdigit())
+    except ValueError:
+        ids = ()
+    try:
+        if not (questions.exists(broadcast_id)
+                or BroadcastWindow(rdb, broadcast_id).exists()):
+            return JSONResponse({'reason': 'UNKNOWN_BROADCAST'}, status_code=404)
+        return questions.top(broadcast_id, limit, ids)
+    except redis_lib.RedisError as e:
+        raise HTTPException(status_code=503, detail=f'redis unavailable: {type(e).__name__}')
+
+
 @app.delete('/broadcasts/{broadcast_id}', status_code=204,
             dependencies=[Depends(require_token)])
 def delete_broadcast(broadcast_id: str):
-    """방송 종료 정리 (멱등). 안 불러도 TTL이 10분 내 자동 정리한다."""
+    """방송 종료 정리 (멱등). 안 불러도 TTL이 자동 정리한다."""
     try:
-        BroadcastWindow(rdb, broadcast_id).delete()
+        BroadcastWindow(rdb, broadcast_id).delete()   # chat:{bid}:* 전부 (q:도 포함)
+        questions.delete(broadcast_id)                # 프로세스 중심점 캐시
     except redis_lib.RedisError:
         pass                    # 어차피 TTL이 지운다 — 종료 처리를 막지 않는다
     return Response(status_code=204)

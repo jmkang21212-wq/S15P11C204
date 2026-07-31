@@ -54,6 +54,8 @@ public class AuthSecurityConfig {
                                 "/api/v1/auth/oauth/**",
                                 "/api/v1/auth/refresh",
                                 "/api/v1/auth/logout",
+                                // 개발용 로그인. dev-login-enabled=false면 빈이 없어 404다.
+                                "/api/v1/auth/dev/**",
                                 // 플랫폼 콜백은 브라우저 리다이렉트라 인증 헤더가 없다.
                                 // 연동 주체는 state로만 판별한다.
                                 "/api/v1/platform-accounts/*/callback",

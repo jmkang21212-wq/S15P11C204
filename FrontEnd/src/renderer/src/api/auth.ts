@@ -1,24 +1,9 @@
 import { API_BASE_URL, OAUTH_RETURN_URI } from './config'
-import { apiFetch } from './client'
+import { apiFetch, refreshSession } from './client'
 import { authStore } from '@renderer/auth/authStore'
-import type { AuthTokenResponse } from '@renderer/types/auth'
 
-/**
- * Refresh Token 쿠키로 세션을 복구한다 (Access Token + 스트리머 정보 저장).
- * @returns 성공 여부
- */
-export async function refreshSession(): Promise<boolean> {
-  try {
-    const data = await apiFetch<AuthTokenResponse>('/auth/refresh', {
-      method: 'POST',
-      auth: false
-    })
-    authStore.set({ accessToken: data.accessToken, streamer: data.streamer })
-    return true
-  } catch {
-    return false
-  }
-}
+// 세션 복구는 client.ts의 single-flight 구현 하나만 쓴다 (401 자동 갱신과 경로 공유).
+export { refreshSession } from './client'
 
 /** 로그아웃 — 서버 Refresh Token 폐기 후 로컬 상태 초기화. */
 export async function logout(): Promise<void> {
@@ -27,6 +12,20 @@ export async function logout(): Promise<void> {
   } finally {
     authStore.clear()
   }
+}
+
+/**
+ * 개발용 계정 로그인 — 백엔드가 DEV_LOGIN_ENABLED=true일 때만 동작한다.
+ * 네이버 인증 없이 고정 개발 계정의 Refresh Token 쿠키를 받고 refresh로 세션을 시작한다.
+ * @returns 로그인 성공 여부
+ */
+export async function loginWithDevAccount(): Promise<boolean> {
+  try {
+    await apiFetch<void>('/auth/dev/login', { method: 'POST', auth: false })
+  } catch {
+    return false
+  }
+  return refreshSession()
 }
 
 /**

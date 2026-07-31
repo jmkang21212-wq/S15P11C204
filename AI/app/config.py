@@ -17,8 +17,18 @@ LLM_REASONING_EFFORT = "minimal"
 LLM_WORKERS = 2
 LLM_QUEUE_MAX = 16      
 LLM_MAX_RETRIES = 1
-LLM_CONTEXT_SEC = 10.0  
-LLM_MIN_TEXT_LEN = 2   
+LLM_CONTEXT_SEC = 10.0
+LLM_MIN_TEXT_LEN = 2
+
+# 이 등급 이상만 위험 발언으로 알린다.
+#
+# 등급은 '위험한지'가 아니라 '얼마나 심한지'를 뜻한다. 위험이 아니라는 판단은
+# none이 받고, low부터는 실제로 비속어가 있다는 뜻이다(프롬프트에 그렇게 명시했다).
+# 그래서 none만 걸러내면 된다.
+#
+# 이 구분이 없던 시절에는 LLM이 low를 "위험도 낮음(= 위험 아님)"으로 쓰는 바람에
+# 평범한 대화에 경고가 붙었다. category=none 방어와 함께 봐야 한다.
+LLM_ALERT_MIN_RISK = "low"
 
 # --- 오디오 ---
 SAMPLE_RATE = 16000
@@ -58,9 +68,11 @@ PROMISE_DEDUP_SEC = 900        # 같은 약속을 15분 내에 반복하면 한 
 # 비어 있으면 전송을 아예 하지 않는다. 스펙 합의 전까지는 이대로 두면 된다.
 SPRING_BASE_URL = os.getenv("SPRING_BASE_URL", "").rstrip("/")
 SPRING_TOKEN = os.getenv("SPRING_TOKEN", "")   # 서버간 인증용
-SPRING_TRANSCRIPT_PATH = "/api/ai/transcripts"
-SPRING_ALERT_PATH = "/api/ai/alerts"
-SPRING_PROMISE_PATH = "/api/ai/promises"
+# Spring의 내부 API 규약(명세 13.1)을 따른다. {sessionId}는 broadcast_sessions.id다.
+# 프론트가 핸드셰이크에 실어 보낸 번호를 그대로 넣는다.
+SPRING_TRANSCRIPT_PATH = "/internal/v1/sessions/{session_id}/transcripts:batch"
+SPRING_ALERT_PATH = "/internal/v1/sessions/{session_id}/risk-events"
+SPRING_PROMISE_PATH = "/internal/v1/sessions/{session_id}/promises"
 
 # 전사는 양이 많고 지연이 상관없어 묶어 보낸다. 경고는 즉시 개별 전송한다.
 SPRING_BATCH_SIZE = 10    # 이만큼 모이면 보낸다
