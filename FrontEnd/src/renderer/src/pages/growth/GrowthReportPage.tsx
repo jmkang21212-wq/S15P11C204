@@ -23,13 +23,26 @@ import type { PeriodType, SeriesMetric } from '@renderer/types/growth'
 
 /** 최근 N주 / N개월 범위를 만든다. 목 모드에서는 무시되지만 실연동 시 그대로 쓰인다. */
 function periodRange(periodType: PeriodType): { from: string; to: string } {
-  const to = new Date()
-  const from = new Date(to)
+  const now = new Date()
   if (periodType === 'WEEKLY') {
+    const currentWeekStart = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+    )
+    const daysSinceMonday = (currentWeekStart.getUTCDay() + 6) % 7
+    currentWeekStart.setUTCDate(currentWeekStart.getUTCDate() - daysSinceMonday)
+
+    const from = new Date(currentWeekStart)
     from.setUTCDate(from.getUTCDate() - 7 * 12)
-  } else {
-    from.setUTCMonth(from.getUTCMonth() - 6)
+    const to = new Date(currentWeekStart)
+    to.setUTCDate(to.getUTCDate() - 1)
+    return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) }
   }
+
+  const currentMonthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+  const from = new Date(currentMonthStart)
+  from.setUTCMonth(from.getUTCMonth() - 6)
+  const to = new Date(currentMonthStart)
+  to.setUTCDate(to.getUTCDate() - 1)
   return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) }
 }
 
