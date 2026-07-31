@@ -61,7 +61,7 @@ public class GrowthActionGenerationRequestedHandler implements BroadcastOutboxEv
                     event.payload(), GrowthActionGenerationRequestedEvent.class
             );
         } catch (JsonProcessingException exception) {
-            throw new IllegalStateException("Invalid growth action outbox payload.", exception);
+            throw new IllegalStateException("성장 액션 Outbox 페이로드가 올바르지 않습니다.", exception);
         }
     }
 }

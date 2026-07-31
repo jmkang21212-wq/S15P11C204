@@ -57,13 +57,13 @@ public class SpringAiGrowthActionGenerator implements GrowthActionGenerator {
                     systemPrompt, prompt, GrowthActionResult.class
             );
             if (result == null || result.actions().size() > properties.maxActions()) {
-                throw new GrowthActionGenerationException("Invalid growth action result.");
+                throw new GrowthActionGenerationException("성장 액션 생성 결과가 올바르지 않습니다.");
             }
             return result;
         } catch (GrowthActionGenerationException exception) {
             throw exception;
         } catch (Exception exception) {
-            throw new GrowthActionGenerationException("Spring AI growth action generation failed.", exception);
+            throw new GrowthActionGenerationException("Spring AI 성장 액션 생성에 실패했습니다.", exception);
         }
     }
 
