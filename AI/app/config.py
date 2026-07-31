@@ -1,8 +1,15 @@
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# --- 로깅 ---
+# 로그 파일 경로. 빈 문자열이면 콘솔에만 남긴다.
+# 기본은 AI/logs/voice.log (실행 위치와 무관하게 패키지 기준으로 잡는다).
+LOG_FILE = os.getenv("VOICE_LOG_FILE",
+                     str(Path(__file__).resolve().parents[1] / "logs" / "voice.log"))
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 if not GROQ_API_KEY:

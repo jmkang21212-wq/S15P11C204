@@ -11,14 +11,16 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 
 from app.audio.segmenter import VadSegmenter
-from app.config import CHUNK, PROMISE_ENABLED, SAMPLE_RATE
+from app.config import CHUNK, LOG_FILE, PROMISE_ENABLED, SAMPLE_RATE
 from app.detect.dictionary import DictionaryMatcher
 from app.detect.llm_judge import LLMJudge, RollingContext
 from app.detect.promise import PromiseExtractor
+from app.logging_setup import setup_logging
 from app.sink.spring import SpringSink
 from app.stt.groq_stt import GroqSTT
 
-log = logging.getLogger(__name__)
+# uvicorn은 root 로거를 설정하지 않는다 — 이게 없으면 아래 log.info가 전부 사라진다
+log = setup_logging(__name__, LOG_FILE)
 
 _matcher = DictionaryMatcher()
 _stt: Optional[GroqSTT] = None
