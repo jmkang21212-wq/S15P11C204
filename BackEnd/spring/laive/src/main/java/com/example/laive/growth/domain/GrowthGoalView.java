@@ -7,6 +7,7 @@ public record GrowthGoalView(
         GrowthGoal goal,
         BigDecimal currentValue,
         BigDecimal progressRate,
-        List<GrowthAction> actions
+        List<GrowthAction> actions,
+        GrowthActionGenerationView actionGeneration
 ) {
 }

@@ -171,6 +171,15 @@ laive:
       min-sentiment-coverage: 0.8
       max-highlights: 5
 
+  growth:
+    ai:
+      enabled: "${GROWTH_AI_ENABLED:false}"
+      prompt-version: "${GROWTH_AI_PROMPT_VERSION:growth-action-v1}"
+      max-input-chars: 16000
+      max-output-tokens: 1000
+      max-actions: 3
+      timeout: 20s
+
   # Spring이 치지직 채팅 수집기 제어 서비스를 호출할 때 쓰는 설정
   collector:
     # 비어 있으면 수집기를 연결하지 않는다(no-op). 로컬에서 나머지 API만 돌릴 때 쓴다.

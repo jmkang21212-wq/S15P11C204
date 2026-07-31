@@ -19,7 +19,8 @@ public record GrowthGoalResponse(
         GrowthGoalStatus status,
         BigDecimal currentValue,
         BigDecimal progressRate,
-        List<GrowthActionResponse> actions
+        List<GrowthActionResponse> actions,
+        GrowthActionGenerationResponse actionGeneration
 ) {
     public static GrowthGoalResponse from(GrowthGoalView view) {
         var goal = view.goal();
@@ -33,7 +34,8 @@ public record GrowthGoalResponse(
                 goal.status(),
                 view.currentValue(),
                 view.progressRate(),
-                view.actions().stream().map(GrowthActionResponse::from).toList()
+                view.actions().stream().map(GrowthActionResponse::from).toList(),
+                GrowthActionGenerationResponse.from(view.actionGeneration())
         );
     }
 }

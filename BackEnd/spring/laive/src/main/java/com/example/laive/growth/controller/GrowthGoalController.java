@@ -7,6 +7,8 @@ import com.example.laive.growth.dto.request.CreateGrowthGoalRequest;
 import com.example.laive.growth.dto.request.UpdateGrowthGoalRequest;
 import com.example.laive.growth.dto.response.GrowthGoalListResponse;
 import com.example.laive.growth.dto.response.GrowthGoalResponse;
+import com.example.laive.growth.dto.response.GrowthActionGenerationRequestResponse;
+import com.example.laive.growth.service.GrowthActionCommandService;
 import com.example.laive.growth.service.GrowthGoalCommandService;
 import com.example.laive.growth.service.GrowthGoalQueryService;
 import jakarta.validation.Valid;
@@ -31,15 +33,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class GrowthGoalController {
     private final GrowthGoalQueryService queryService;
     private final GrowthGoalCommandService commandService;
+    private final GrowthActionCommandService actionCommandService;
     private final JwtStreamerIdExtractor streamerIdExtractor;
 
     public GrowthGoalController(
             GrowthGoalQueryService queryService,
             GrowthGoalCommandService commandService,
+            GrowthActionCommandService actionCommandService,
             JwtStreamerIdExtractor streamerIdExtractor
     ) {
         this.queryService = queryService;
         this.commandService = commandService;
+        this.actionCommandService = actionCommandService;
         this.streamerIdExtractor = streamerIdExtractor;
     }
 
@@ -80,5 +85,17 @@ public class GrowthGoalController {
                 queryService.getGoal(streamerId, growthGoalId)
         );
         return ResponseEntity.ok(ApiResponse.success(response));
+    }
+
+    @PostMapping("/{growthGoalId}/actions/regenerate")
+    public ResponseEntity<ApiResponse<GrowthActionGenerationRequestResponse>> regenerate(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable @Positive long growthGoalId
+    ) {
+        long streamerId = streamerIdExtractor.extract(jwt);
+        var generation = actionCommandService.regenerate(streamerId, growthGoalId);
+        return ResponseEntity.accepted().body(ApiResponse.success(
+                GrowthActionGenerationRequestResponse.from(generation)
+        ));
     }
 }

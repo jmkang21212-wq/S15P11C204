@@ -4,6 +4,7 @@ import com.example.laive.broadcast.session.event.BroadcastOutboxEventType;
 import com.example.laive.broadcast.session.event.BroadcastOutboxRepository;
 import com.example.laive.broadcast.session.event.OutboxEventFactory;
 import com.example.laive.report.repository.SessionReportGenerationRepository;
+import com.example.laive.growth.service.GrowthActionTransactionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
@@ -27,7 +28,8 @@ class ReportGenerationTransactionServiceTest {
     private final ReportGenerationTransactionService service =
             new ReportGenerationTransactionService(
                     repository, outbox, new OutboxEventFactory(new ObjectMapper().findAndRegisterModules()),
-                    Clock.fixed(NOW, ZoneOffset.UTC)
+                    Clock.fixed(NOW, ZoneOffset.UTC),
+                    mock(GrowthActionTransactionService.class)
             );
 
     @Test

@@ -24,12 +24,12 @@ public class ReportAiConfiguration {
         return builder.build();
     }
 
-    @Bean(name = "reportAiExecutor")
-    Executor reportAiExecutor() {
+    @Bean(name = "analysisAiExecutor")
+    Executor analysisAiExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setThreadNamePrefix("report-ai-");
-        executor.setCorePoolSize(2);
-        executor.setMaxPoolSize(4);
+        executor.setThreadNamePrefix("analysis-ai-");
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(8);
         executor.setQueueCapacity(100);
         executor.initialize();
         return executor;

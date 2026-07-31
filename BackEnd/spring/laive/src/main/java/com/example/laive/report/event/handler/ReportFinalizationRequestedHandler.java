@@ -23,7 +23,7 @@ public class ReportFinalizationRequestedHandler implements BroadcastOutboxEventH
     public ReportFinalizationRequestedHandler(
             ObjectMapper objectMapper,
             ReportCompletionService service,
-            @Qualifier("reportAiExecutor") Executor executor
+            @Qualifier("analysisAiExecutor") Executor executor
     ) {
         this.objectMapper = objectMapper;
         this.service = service;

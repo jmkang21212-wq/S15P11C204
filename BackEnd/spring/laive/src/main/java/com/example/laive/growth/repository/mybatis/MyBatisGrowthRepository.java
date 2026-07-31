@@ -11,9 +11,16 @@ import com.example.laive.growth.domain.GrowthSeriesPoint;
 import com.example.laive.growth.repository.GrowthGoalCommandRepository;
 import com.example.laive.growth.repository.GrowthGoalQueryRepository;
 import com.example.laive.growth.repository.GrowthReportQueryRepository;
+import com.example.laive.growth.repository.GrowthActionRepository;
+import com.example.laive.growth.domain.GrowthActionGeneration;
+import com.example.laive.growth.domain.GrowthActionJobStatus;
+import com.example.laive.growth.domain.GrowthActionTriggerType;
+import com.example.laive.growth.ai.GeneratedGrowthAction;
+import com.example.laive.growth.ai.RecentGrowthReport;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,7 +28,8 @@ import java.util.Optional;
 public class MyBatisGrowthRepository implements
         GrowthReportQueryRepository,
         GrowthGoalQueryRepository,
-        GrowthGoalCommandRepository {
+        GrowthGoalCommandRepository,
+        GrowthActionRepository {
 
     private final GrowthMapper mapper;
 
@@ -93,5 +101,99 @@ public class MyBatisGrowthRepository implements
     @Override
     public int update(GrowthGoal goal) {
         return mapper.updateGoal(goal);
+    }
+
+    @Override
+    public Optional<GrowthActionGeneration> findGeneration(long generationId) {
+        return mapper.findGeneration(generationId);
+    }
+
+    @Override
+    public Optional<GrowthGoal> findGoal(long goalId) {
+        return mapper.findGoal(goalId);
+    }
+
+    @Override
+    public Optional<GrowthActionGeneration> findGenerationForUpdate(long generationId) {
+        return mapper.findGenerationForUpdate(generationId);
+    }
+
+    @Override
+    public List<GrowthActionGeneration> findLatestGenerations(List<Long> goalIds) {
+        return goalIds.isEmpty() ? List.of() : mapper.findLatestGenerations(goalIds);
+    }
+
+    @Override
+    public Optional<GrowthActionGeneration> findRunningGeneration(long goalId) {
+        return mapper.findRunningGeneration(goalId);
+    }
+
+    @Override
+    public boolean hasEligibleReport(long goalId) {
+        return mapper.hasEligibleReport(goalId);
+    }
+
+    @Override
+    public List<RecentGrowthReport> findRecentReports(long goalId, int limit) {
+        return mapper.findRecentReports(goalId, limit);
+    }
+
+    @Override
+    public List<GrowthGoal> findActiveGoalsAffectedByReport(long reportId) {
+        return mapper.findActiveGoalsAffectedByReport(reportId);
+    }
+
+    @Override
+    public long insertGeneration(
+            long goalId, Long sourceReportId, long revision,
+            GrowthActionTriggerType triggerType, GrowthActionJobStatus status,
+            String promptVersion, String idempotencyKey, Instant requestedAt
+    ) {
+        Long id = mapper.insertGeneration(
+                goalId, sourceReportId, revision, triggerType, status,
+                promptVersion, idempotencyKey, requestedAt
+        );
+        if (id == null) {
+            throw new IllegalStateException("Growth action generation was not inserted.");
+        }
+        return id;
+    }
+
+    @Override
+    public void supersedeOlder(long goalId, long revision) {
+        mapper.supersedeOlder(goalId, revision);
+    }
+
+    @Override
+    public void supersedeCompeting(long goalId, long generationId) {
+        mapper.supersedeCompeting(goalId, generationId);
+    }
+
+    @Override
+    public int markProcessing(long generationId, Instant startedAt) {
+        return mapper.markGenerationProcessing(generationId, startedAt);
+    }
+
+    @Override
+    public int markPending(long generationId, String errorCode) {
+        return mapper.markGenerationPending(generationId, errorCode);
+    }
+
+    @Override
+    public int markFailed(long generationId, Instant completedAt, String errorCode) {
+        return mapper.markGenerationFailed(generationId, completedAt, errorCode);
+    }
+
+    @Override
+    public int markCompleted(long generationId, String fingerprint, Instant completedAt) {
+        return mapper.markGenerationCompleted(generationId, fingerprint, completedAt);
+    }
+
+    @Override
+    public void replaceActions(
+            long goalId, long generationId, List<GeneratedGrowthAction> actions
+    ) {
+        mapper.deleteActions(goalId);
+        mapper.insertActions(goalId, generationId, actions);
     }
 }
