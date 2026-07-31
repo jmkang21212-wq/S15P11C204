@@ -24,7 +24,8 @@ from pydantic import BaseModel, Field
 
 from chatai.classifier import LABELS, ChatClassifier
 from chatai.config import (CHATAI_TOKEN, EMBED_MODEL, GMS_BASE_URL, GMS_KEY,
-                           LOG_FILE, REDIS_URL, SLOW_REQUEST_MS, SUMMARY_MODEL,
+                           LLM_MAX_RETRIES, LLM_TIMEOUT_SEC, LOG_FILE,
+                           REDIS_URL, SLOW_REQUEST_MS, SUMMARY_MODEL,
                            SUMMARY_REASONING)
 from chatai.logging_setup import setup_logging
 from chatai.questions import QUESTION_LABEL, QuestionTracker

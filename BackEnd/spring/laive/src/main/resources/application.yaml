@@ -32,8 +32,10 @@ spring:
       base-url: "${REPORT_AI_BASE_URL:https://api.openai.com}"
       chat:
         options:
+          # temperature는 보내지 않는다: gpt-5 계열(추론 모델)은 기본값 1만 허용해
+          # 0.2를 실으면 OpenAI가 unsupported_value 400으로 거부한다.
+          # 생성 성향을 조절해야 하면 reasoning-effort / verbosity를 쓴다.
           model: "${REPORT_AI_MODEL:gpt-4o-mini}"
-          temperature: 0.2
 
 mybatis:
   mapper-locations: classpath:/mapper/**/*.xml
