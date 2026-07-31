@@ -1,0 +1,99 @@
+# AI 서버 3종 (8000 음성 / 8001 채팅감정 / 8002 채팅수집)
+#
+#   docker compose up -d       # 로컬 개발 (compose.override.yaml이 자동 적용됨)
+#   docker compose logs -f     # 로그 보기
+#   docker compose down        # 중지
+#
+# 배포에서는 개발용 오버라이드를 제외하고 이 파일만 쓴다:
+#   docker compose -f compose.yaml up -d
+#
+# ⚠ 백엔드 compose(BackEnd/spring/laive)를 먼저 띄워야 한다.
+#    Redis·PostgreSQL과 laive_default 네트워크가 거기서 만들어진다.
+
+x-ai-common: &ai-common
+  build:
+    context: .
+    args:
+      # 개발은 false(가벼운 이미지, 첫 실행 시 모델 다운로드).
+      # 배포용 이미지는 --build-arg BAKE_MODEL=true 로 따로 굽는다.
+      BAKE_MODEL: "false"
+  image: laive-ai:latest      # 3서비스가 같은 이미지를 공유한다 (빌드 1회)
+  env_file: .env
+  restart: unless-stopped     # 크래시·OOM·재부팅 시 자동 복구
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }   # 컨테이너 로그 무한 증식 방지
+
+services:
+  # ── 음성 위험 발언 감지 ──────────────────────────────────────
+  voice:
+    <<: *ai-common
+    container_name: laive-voice
+    command: ["uvicorn", "app.server:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports: ["8000:8000"]
+    environment:
+      SPRING_BASE_URL: "http://host.docker.internal:8080"
+      VOICE_LOG_FILE: "/app/logs/voice.log"
+    volumes:
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request;urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 40s      # 모델·사전 로딩 시간을 준다 (그전 실패는 무시)
+
+  # ── 채팅 감정 분류 ───────────────────────────────────────────
+  chat-ai:
+    <<: *ai-common
+    container_name: laive-chat-ai
+    command: ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8001",
+              "--app-dir", "chat-ai"]
+    ports: ["8001:8001"]
+    environment:
+      CHATAI_NEEDS_MODEL: "1"        # entrypoint가 모델을 확인·다운로드하게 한다
+      CHATAI_MODEL_DIR: "/app/chat-ai/models/kcelectra-chat-8emo-onnx"
+      CHATAI_LOG_FILE: "/app/logs/chatai.log"
+      # 컨테이너 안에서 localhost는 자기 자신이다. 백엔드 Redis는 서비스 이름으로 부른다
+      CHATAI_REDIS_URL: "redis://redis:6379/1"
+      # 4 vCPU를 Spring·DB와 나눠 쓴다. 자세한 근거는 chatai/config.py 참고
+      CHATAI_ORT_THREADS: "2"
+    volumes:
+      - chatai-models:/app/chat-ai/models    # 모델은 컨테이너 밖에 남긴다
+      - ./logs:/app/logs
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"        # 앱 설정(ORT_THREADS)이 빠져도 커널이 막아준다
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request;urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 300s     # 최초 실행은 모델 641MB 다운로드가 있어 길게 잡는다
+
+  # ── 치지직 채팅 수집기 ───────────────────────────────────────
+  collector:
+    <<: *ai-common
+    container_name: laive-collector
+    command: ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8002",
+              "--app-dir", "chat-collector"]
+    ports: ["8002:8002"]
+    environment:
+      SPRING_BASE_URL: "http://host.docker.internal:8080"
+    volumes:
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request;urllib.request.urlopen('http://localhost:8002/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+
+volumes:
+  chatai-models:      # 641MB. 컨테이너를 지웠다 만들어도 재다운로드하지 않는다
+
+networks:
+  default:
+    name: laive_default
+    external: true    # 백엔드 compose가 만든 네트워크에 합류 (먼저 띄워야 함)

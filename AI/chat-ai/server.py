@@ -24,8 +24,9 @@ from pydantic import BaseModel, Field
 
 from chatai.classifier import LABELS, ChatClassifier
 from chatai.config import (CHATAI_TOKEN, EMBED_MODEL, GMS_BASE_URL, GMS_KEY,
-                           LOG_FILE, REDIS_URL, SLOW_REQUEST_MS, SUMMARY_MODEL,
-                           SUMMARY_REASONING)
+                           LLM_MAX_RETRIES, LLM_TIMEOUT_SEC, LOG_FILE,
+                           ORT_THREADS, REDIS_URL, SLOW_REQUEST_MS,
+                           SUMMARY_MODEL, SUMMARY_REASONING)
 from chatai.logging_setup import setup_logging
 from chatai.questions import QUESTION_LABEL, QuestionTracker
 from chatai.summary import SummaryRejected, SummaryService
@@ -89,7 +90,7 @@ def _make_embed_fn():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global clf, rdb, summarizer, questions
-    clf = ChatClassifier(MODEL_DIR, quantized=USE_INT8)
+    clf = ChatClassifier(MODEL_DIR, quantized=USE_INT8, threads=ORT_THREADS)
     # decode_responses=False 통일 — window.py가 bytes/str 둘 다 처리한다
     rdb = redis_lib.Redis.from_url(REDIS_URL, socket_timeout=2, socket_connect_timeout=2)
     try:
@@ -105,8 +106,8 @@ async def lifespan(app: FastAPI):
     summarizer = SummaryService(rdb, llm_fn)
     # llm_fn 공유: 질문 목록은 클러스터 대표 문장만 FAQ/CONTEXT로 판정한다
     questions = QuestionTracker(rdb, _make_embed_fn(), llm_fn).start()
-    log.info('기동 완료 model=%s int8=%s log=%s',
-             MODEL_DIR, USE_INT8, LOG_FILE or '(콘솔만)')
+    log.info('기동 완료 model=%s int8=%s ort_threads=%s log=%s',
+             MODEL_DIR, USE_INT8, ORT_THREADS or '무제한', LOG_FILE or '(콘솔만)')
     yield
     log.info('종료 중...')
     questions.stop()
