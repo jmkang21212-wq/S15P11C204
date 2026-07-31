@@ -47,14 +47,30 @@ wss://<host>/ws/audio          운영
 연결 직후 **첫 메시지는 반드시 JSON 텍스트**여야 한다. 10초 안에 안 보내면 서버가 끊는다.
 
 ```json
-{ "session_id": "user42-3f9a2b", "token": "..." }
+{ "session_id": "user42-3f9a2b", "ticket": "Xk9f...(Spring이 발급)" }
 ```
 
 | 필드 | 필수 | 설명 |
 |---|---|---|
 | `session_id` | O | 이 스트림의 식별자 |
-| `token` | △ | 인증 토큰 |
+| `ticket` | **O** | Spring이 발급한 일회용 접속 티켓. 아래 참조 |
 | `transcripts` | X | `true`면 모든 발화의 전사도 받는다. **개발용.** 기본 `false` |
+
+### ticket 받는 법
+
+WebSocket에는 `Authorization` 헤더를 실을 수 없어 JWT를 직접 못 쓴다. **연결 직전에**
+인증된 HTTP로 티켓을 받아 핸드셰이크에 싣는다.
+
+```
+POST /api/v1/broadcast-sessions/{sessionId}/voice-ticket    (Bearer JWT)
+→ { "ticket": "Xk9f...", "expiresInSec": 60 }
+```
+
+**재연결할 때마다 새로 받아야 한다** — 한 번 쓰면 서버에서 소비되고 60초 뒤 만료된다.
+
+> **`broadcastSessionId`는 더 이상 보내지 않는다.** 서버가 그 번호를 티켓에서 얻기
+> 때문이다. 예전에는 클라이언트가 보낸 값을 그대로 믿어서, 아무 번호나 넣으면
+> 남의 방송에 전사·위험 이벤트를 기록할 수 있었다.
 
 ### session_id 만드는 규칙 (중요)
 
@@ -70,7 +86,10 @@ const sessionId = `user${userId}`;
 const sessionId = `user${userId}-${crypto.randomUUID().slice(0, 8)}`;
 ```
 
-> `token`은 현재 검증하지 않는다. Spring JWT 검증으로 교체 예정이므로 미리 넣어두면 나중에 프론트를 안 고쳐도 된다.
+> 티켓이 없거나 만료·재사용됐으면 `1008 unauthorized`로 끊긴다. 개발 도구
+> (`static/client.html`)로 티켓 없이 붙어야 하면 서버에 `VOICE_AUTH_DEV_BYPASS=1`을
+> 주면 되지만, 켜져 있으면 `/health`의 `authBypass`가 `true`로 보인다 — 배포 환경에서
+> 그렇게 보이면 즉시 꺼야 한다.
 
 성공하면 서버가 응답한다.
 

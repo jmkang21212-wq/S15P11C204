@@ -11,6 +11,14 @@ load_dotenv()
 LOG_FILE = os.getenv("VOICE_LOG_FILE",
                      str(Path(__file__).resolve().parents[1] / "logs" / "voice.log"))
 
+# --- WebSocket 접속 인증 ---
+# Spring이 발급한 일회용 티켓을 조회할 Redis.
+# ⚠ Spring이 쓰는 DB(기본 0)여야 한다. 채팅 감정 서버가 쓰는 DB 1이 아니다.
+VOICE_REDIS_URL = os.getenv("VOICE_REDIS_URL", "redis://127.0.0.1:6379/0")
+# 1이면 티켓 없이도 접속을 허용한다. static/client.html 같은 개발 도구용이며
+# 기동 시·접속 시마다 경고를 남긴다. 배포 환경에서는 절대 켜지 말 것.
+VOICE_AUTH_DEV_BYPASS = os.getenv("VOICE_AUTH_DEV_BYPASS", "0") == "1"
+
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 if not GROQ_API_KEY:
     raise RuntimeError(".env에 GROQ_API_KEY가 없습니다. .env.example을 복사해서 채우세요.")
