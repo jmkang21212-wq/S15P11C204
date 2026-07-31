@@ -50,6 +50,29 @@ export interface GrowthAction {
   content: string
 }
 
+export type GrowthActionGenerationStatus =
+  | 'NOT_REQUESTED'
+  | 'WAITING_FOR_DATA'
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'COMPLETED'
+  | 'FAILED'
+
+export interface GrowthActionGeneration {
+  status: GrowthActionGenerationStatus
+  stale: boolean
+  generatedAt: string | null
+  sourceReportId: number | null
+  promptVersion: string | null
+  errorCode: string | null
+}
+
+export interface GrowthActionGenerationRequest {
+  generationId: number
+  status: GrowthActionGenerationStatus
+  requestedAt: string
+}
+
 export interface GrowthGoal {
   growthGoalId: number
   metricType: MetricType
@@ -64,4 +87,5 @@ export interface GrowthGoal {
   progressRate: number
   /** GROWTH_ACTIONS에서 연결된 AI 다음 액션. 없을 수 있다. */
   actions: GrowthAction[]
+  actionGeneration: GrowthActionGeneration
 }

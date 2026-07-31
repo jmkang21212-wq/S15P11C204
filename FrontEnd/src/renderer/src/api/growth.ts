@@ -1,6 +1,11 @@
 import { apiFetch } from './client'
 import { buildMockGrowthReport, MOCK_GROWTH_GOALS } from '@renderer/mocks/growth.mock'
-import type { GrowthGoal, GrowthReport, PeriodType } from '@renderer/types/growth'
+import type {
+  GrowthActionGenerationRequest,
+  GrowthGoal,
+  GrowthReport,
+  PeriodType
+} from '@renderer/types/growth'
 
 /**
  * SC-09 성장 리포트 데이터 소스 — `GrowthReportController`·`GrowthGoalController`.
@@ -51,4 +56,13 @@ export async function fetchGrowthGoals(): Promise<GrowthGoal[]> {
 
   const data = await apiFetch<{ items: GrowthGoal[] }>('/growth-goals')
   return data.items
+}
+
+export function regenerateGrowthActions(
+  growthGoalId: number
+): Promise<GrowthActionGenerationRequest> {
+  return apiFetch<GrowthActionGenerationRequest>(
+    `/growth-goals/${growthGoalId}/actions/regenerate`,
+    { method: 'POST' }
+  )
 }
