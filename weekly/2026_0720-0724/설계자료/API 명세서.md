@@ -706,8 +706,8 @@ Access Token과 Refresh Token은 `PLATFORM_ACCOUNTS`에 암호화하여 저장�
       }
     ],
     "weeklyMetrics": {
-      "periodStart": "2026-07-14",
-      "periodEnd": "2026-07-20",
+      "periodStart": "2026-07-13",
+      "periodEnd": "2026-07-19",
       "avgViewers": 2138,
       "avgViewersChangeRate": 0.12,
       "totalChat": 48200,
@@ -734,6 +734,16 @@ Access Token과 Refresh Token은 `PLATFORM_ACCOUNTS`에 암호화하여 저장�
 리포트 생성 상태는 최근 세션 카드의 `reportStatus`로만 제공하며 별도 상단 알림을 만들지 않는다.
 
 `pendingPromises`는 `PROMISES.status`가 `PENDING` 또는 `ON_HOLD`인 미이행 약속 중 기한이 가까운 최대 3건만 반환한다. 전체 건수는 `pendingPromiseCount`이며, 목업의 “더 보기”는 `GET /promises`로 이동한다. 따라서 대시보드 API에는 약속 요약이 이미 포함되어 있지만 전체 목록과 감지 약속 확정 기능은 포함하지 않는다.
+
+집계 및 Empty 정책:
+
+- 주간 지표는 UTC 기준 가장 최근에 종료된 월요일~일요일 한 주를 반환하고, 그 직전 주와 비교한다.
+- 주간 집계에는 `ENDED` 세션과 `COMPLETED`, `PARTIAL` 리포트만 포함하며 세션 시작 시각이 속한 주에 귀속한다.
+- 평균 시청자는 세션 방송 시간을 가중치로 계산한다.
+- 직전 주 값이 0이면 프론트 계약에 맞춰 증감률을 `0.0000`으로 반환한다.
+- 최근 완료 주에 집계 데이터가 없으면 `weeklyMetrics = null`이다.
+- 다음 방송 또는 최근 리포트가 없으면 해당 객체는 `null`, 미이행 약속과 하이라이트가 없으면 빈 배열을 반환한다.
+- 최근 하이라이트는 최대 5건이며 최신 리포트 순으로 반환한다. 아직 생성되지 않은 클립·썸네일 URL은 빈 문자열이다.
 
 ---
 

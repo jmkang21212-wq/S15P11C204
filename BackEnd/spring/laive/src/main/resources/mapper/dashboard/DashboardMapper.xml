@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.laive.dashboard.repository.mybatis.DashboardMapper">
+    <select id="findUpcomingBroadcast"
+            resultType="com.example.laive.dashboard.domain.UpcomingBroadcast">
+        SELECT id AS calendar_event_id, title, start_at, end_at, status
+          FROM calendar_events
+         WHERE streamer_id = #{streamerId}
+           AND event_type = 'BROADCAST'
+           AND status = 'SCHEDULED'
+           AND start_at &gt;= #{now}
+         ORDER BY start_at ASC, id ASC
+         LIMIT 1
+    </select>
+
+    <select id="findRecentSession"
+            resultType="com.example.laive.dashboard.domain.RecentSession">
+        SELECT s.id AS session_id, s.title, s.ended_at, r.status AS report_status,
+               COALESCE(r.avg_viewers, 0) AS avg_viewers,
+               COALESCE(r.peak_viewers, 0) AS peak_viewers,
+               COALESCE(r.summary, '') AS summary
+          FROM broadcast_sessions s
+          JOIN reports r ON r.session_id = s.id
+         WHERE s.streamer_id = #{streamerId}
+           AND s.status = 'ENDED'
+         ORDER BY s.ended_at DESC, s.id DESC
+         LIMIT 1
+    </select>
+
+    <select id="countPendingPromises" resultType="long">
+        SELECT count(*)
+          FROM promises
+         WHERE streamer_id = #{streamerId}
+           AND status IN ('PENDING', 'ON_HOLD')
+    </select>
+
+    <select id="findPendingPromises"
+            resultType="com.example.laive.dashboard.domain.PendingPromise">
+        SELECT p.id AS promise_id, p.session_id, p.content, p.status, p.due_date,
+               s.started_at + t.start_ms * interval '1 millisecond' AS detected_at
+          FROM promises p
+          JOIN transcripts t ON t.id = p.transcript_id
+          JOIN broadcast_sessions s ON s.id = p.session_id
+         WHERE p.streamer_id = #{streamerId}
+           AND p.status IN ('PENDING', 'ON_HOLD')
+         ORDER BY p.due_date ASC NULLS LAST, detected_at DESC, p.id ASC
+         LIMIT #{limit}
+    </select>
+
+    <select id="findWeeklyMetrics"
+            resultType="com.example.laive.dashboard.domain.WeeklyMetricAggregate">
+        WITH eligible AS (
+            SELECT s.started_at,
+                   GREATEST(extract(epoch FROM (s.ended_at - s.started_at)), 0) AS duration_seconds,
+                   r.avg_viewers,
+                   COALESCE(r.total_chat, 0) AS total_chat
+              FROM broadcast_sessions s
+              JOIN reports r ON r.session_id = s.id
+             WHERE s.streamer_id = #{streamerId}
+               AND s.status = 'ENDED'
+               AND r.status IN ('COMPLETED', 'PARTIAL')
+               AND s.started_at &gt;= #{previousStart}
+               AND s.started_at &lt; #{currentEnd}
+        ),
+        aggregate AS (
+            SELECT count(*) FILTER (
+                       WHERE started_at &gt;= #{currentStart} AND started_at &lt; #{currentEnd}
+                   ) &gt; 0 AS has_current_data,
+                   COALESCE(round(
+                       sum(avg_viewers * duration_seconds) FILTER (
+                           WHERE started_at &gt;= #{currentStart} AND started_at &lt; #{currentEnd}
+                             AND avg_viewers IS NOT NULL
+                       )
+                       / NULLIF(sum(duration_seconds) FILTER (
+                           WHERE started_at &gt;= #{currentStart} AND started_at &lt; #{currentEnd}
+                             AND avg_viewers IS NOT NULL
+                       ), 0)
+                   ), 0)::int AS current_avg_viewers,
+                   COALESCE(sum(total_chat) FILTER (
+                       WHERE started_at &gt;= #{currentStart} AND started_at &lt; #{currentEnd}
+                   ), 0)::bigint AS current_total_chat,
+                   COALESCE(round(
+                       sum(avg_viewers * duration_seconds) FILTER (
+                           WHERE started_at &gt;= #{previousStart} AND started_at &lt; #{currentStart}
+                             AND avg_viewers IS NOT NULL
+                       )
+                       / NULLIF(sum(duration_seconds) FILTER (
+                           WHERE started_at &gt;= #{previousStart} AND started_at &lt; #{currentStart}
+                             AND avg_viewers IS NOT NULL
+                       ), 0)
+                   ), 0)::int AS previous_avg_viewers,
+                   COALESCE(sum(total_chat) FILTER (
+                       WHERE started_at &gt;= #{previousStart} AND started_at &lt; #{currentStart}
+                   ), 0)::bigint AS previous_total_chat
+              FROM eligible
+        )
+        SELECT has_current_data, current_avg_viewers, current_total_chat,
+               previous_avg_viewers, previous_total_chat
+          FROM aggregate
+    </select>
+
+    <select id="findRecentHighlights"
+            resultType="com.example.laive.dashboard.domain.RecentHighlight">
+        SELECT h.id AS highlight_id,
+               h.end_ms - h.start_ms AS duration_ms,
+               COALESCE(h.clip_url, '') AS clip_url,
+               COALESCE(h.thumbnail_url, '') AS thumbnail_url
+          FROM highlights h
+          JOIN reports r ON r.id = h.report_id
+          JOIN broadcast_sessions s ON s.id = r.session_id
+         WHERE s.streamer_id = #{streamerId}
+           AND r.status IN ('COMPLETED', 'PARTIAL')
+         ORDER BY COALESCE(r.generated_at, r.created_at) DESC, h.id DESC
+         LIMIT #{limit}
+    </select>
+</mapper>
