@@ -42,9 +42,11 @@ public interface AnalysisMapper {
             @Param("dueDate") LocalDate dueDate
     );
 
+    /** @param promiseId PROMISE 브리핑이 가리키는 promises.id. 그 외 유형은 null */
     Long insertBriefing(
             @Param("sessionId") long sessionId,
             @Param("briefingType") String briefingType,
-            @Param("message") String message
+            @Param("message") String message,
+            @Param("promiseId") Long promiseId
     );
 }

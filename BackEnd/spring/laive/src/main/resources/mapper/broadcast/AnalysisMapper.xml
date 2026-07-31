@@ -55,8 +55,8 @@
     </select>
 
     <select id="insertBriefing" resultType="long" affectData="true" flushCache="true">
-        INSERT INTO live_briefings (session_id, briefing_type, message)
-        VALUES (#{sessionId}, #{briefingType}, #{message})
+        INSERT INTO live_briefings (session_id, briefing_type, message, promise_id)
+        VALUES (#{sessionId}, #{briefingType}, #{message}, #{promiseId})
         RETURNING id
     </select>
 

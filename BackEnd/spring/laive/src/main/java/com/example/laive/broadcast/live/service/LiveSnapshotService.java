@@ -98,6 +98,7 @@ public class LiveSnapshotService {
                         row.briefingId(),
                         row.briefingType(),
                         row.message(),
+                        row.promiseId(),
                         row.createdAt()
                 ))
                 .toList();

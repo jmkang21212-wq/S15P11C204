@@ -9,6 +9,7 @@ public record LiveBriefingRow(
         long briefingId,
         String briefingType,
         String message,
+        Long promiseId,
         Instant createdAt
 ) {
 }
