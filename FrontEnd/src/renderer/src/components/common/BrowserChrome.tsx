@@ -1,5 +1,6 @@
 import { ArrowLeft, Lock } from 'lucide-react'
 import { Button } from '@renderer/components/ui/button'
+import appIcon from '@renderer/assets/app-icon.png'
 
 /**
  * 공개 뷰를 감싸는 가짜 브라우저 크롬.
@@ -31,6 +32,8 @@ export default function BrowserChrome({
             <span className="size-2.5 rounded-full bg-warning/60" />
             <span className="size-2.5 rounded-full bg-success/60" />
           </div>
+
+          <img src={appIcon} alt="" className="size-4 shrink-0 rounded-sm" aria-hidden />
 
           <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-full bg-background px-3 py-1.5">
             <Lock className="size-[12px] shrink-0 text-success" strokeWidth={2} aria-hidden />
