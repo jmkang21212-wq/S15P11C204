@@ -61,21 +61,47 @@
               ) gs
         ),
         eligible AS (
-            SELECT s.started_at,
-                   s.ended_at,
-                   r.avg_viewers,
-                   r.total_chat
-              FROM broadcast_sessions s
-              JOIN reports r ON r.session_id = s.id
-             WHERE s.streamer_id = #{streamerId}
-               AND s.status = 'ENDED'
-               AND r.status IN ('COMPLETED', 'PARTIAL')
-               AND s.ended_at &gt; (
-                   cast(#{from} as date)::timestamp AT TIME ZONE 'UTC'
-               )
-               AND s.started_at &lt; (
-                   (cast(#{to} as date) + 1)::timestamp AT TIME ZONE 'UTC'
-               )
+            <choose>
+                <when test="platformCode == null or platformCode == 'ALL'">
+                    SELECT s.started_at,
+                           s.ended_at,
+                           r.avg_viewers,
+                           r.total_chat
+                      FROM broadcast_sessions s
+                      JOIN reports r ON r.session_id = s.id
+                     WHERE s.streamer_id = #{streamerId}
+                       AND s.status = 'ENDED'
+                       AND r.status IN ('COMPLETED', 'PARTIAL')
+                       AND s.ended_at &gt; (
+                           cast(#{from} as date)::timestamp AT TIME ZONE 'UTC'
+                       )
+                       AND s.started_at &lt; (
+                           (cast(#{to} as date) + 1)::timestamp AT TIME ZONE 'UTC'
+                       )
+                </when>
+                <otherwise>
+                    SELECT ps.started_at,
+                           ps.ended_at,
+                           rpm.avg_viewers,
+                           rpm.total_chat
+                      FROM broadcast_sessions s
+                      JOIN reports r ON r.session_id = s.id
+                      JOIN report_platform_metrics rpm ON rpm.report_id = r.id
+                      JOIN broadcast_platform_sessions ps ON ps.id = rpm.platform_session_id
+                      JOIN platform_accounts pa ON pa.id = ps.platform_account_id
+                     WHERE s.streamer_id = #{streamerId}
+                       AND s.status = 'ENDED'
+                       AND ps.status = 'ENDED'
+                       AND r.status IN ('COMPLETED', 'PARTIAL')
+                       AND pa.platform = #{platformCode}
+                       AND ps.ended_at &gt; (
+                           cast(#{from} as date)::timestamp AT TIME ZONE 'UTC'
+                       )
+                       AND ps.started_at &lt; (
+                           (cast(#{to} as date) + 1)::timestamp AT TIME ZONE 'UTC'
+                       )
+                </otherwise>
+            </choose>
         ),
         bucket_session_overlaps AS (
             SELECT b.period_start,
@@ -396,7 +422,23 @@
                coalesce(r.total_chat, 0)::bigint AS total_chat,
                round(extract(epoch FROM (s.ended_at - s.started_at)) / 60.0)::bigint
                    AS broadcast_minutes,
-               coalesce(r.summary, '') AS summary
+               coalesce(r.summary, '') AS summary,
+               coalesce((
+                   SELECT string_agg(
+                              concat(pa.platform,
+                                     ':avg=', coalesce(rpm.avg_viewers::text, 'unknown'),
+                                     ',peak=', coalesce(rpm.peak_viewers::text, 'unknown'),
+                                     ',chat=', rpm.total_chat,
+                                     ',minutes=', round(rpm.broadcast_seconds / 60.0),
+                                     ',coverage=', coalesce(rpm.viewer_coverage::text, 'unsupported'),
+                                     ',quality=', rpm.data_quality),
+                              E'\n' ORDER BY pa.platform, rpm.platform_session_id
+                          )
+                     FROM report_platform_metrics rpm
+                     JOIN broadcast_platform_sessions ps ON ps.id = rpm.platform_session_id
+                     JOIN platform_accounts pa ON pa.id = ps.platform_account_id
+                    WHERE rpm.report_id = r.id
+               ), '') AS platform_breakdown
           FROM growth_goals g
           JOIN broadcast_sessions s
             ON s.streamer_id = g.streamer_id

@@ -5,6 +5,8 @@ import com.example.laive.broadcast.session.domain.BroadcastSessionListItem;
 import com.example.laive.broadcast.session.domain.BroadcastStatus;
 import com.example.laive.broadcast.session.exception.BroadcastSessionException;
 import com.example.laive.broadcast.session.repository.BroadcastSessionRepository;
+import com.example.laive.broadcast.session.repository.mybatis.BroadcastPlatformSessionMapper;
+import com.example.laive.broadcast.session.domain.BroadcastPlatformSession;
 import com.example.laive.common.api.PageResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,9 +22,14 @@ import java.util.Optional;
 public class BroadcastSessionQueryService {
 
     private final BroadcastSessionRepository repository;
+    private final BroadcastPlatformSessionMapper platformSessionMapper;
 
-    public BroadcastSessionQueryService(BroadcastSessionRepository repository) {
+    public BroadcastSessionQueryService(
+            BroadcastSessionRepository repository,
+            BroadcastPlatformSessionMapper platformSessionMapper
+    ) {
         this.repository = repository;
+        this.platformSessionMapper = platformSessionMapper;
     }
 
     public Optional<BroadcastSessionDetail> getCurrent(long streamerId) {
@@ -32,6 +39,10 @@ public class BroadcastSessionQueryService {
     public BroadcastSessionDetail getSession(long streamerId, long sessionId) {
         return repository.findDetail(streamerId, sessionId)
                 .orElseThrow(BroadcastSessionException::notFound);
+    }
+
+    public List<BroadcastPlatformSession> getPlatformSessions(long sessionId) {
+        return platformSessionMapper.findByBroadcastSessionId(sessionId);
     }
 
     public PageResponse<BroadcastSessionListItem> getSessions(
@@ -51,4 +62,3 @@ public class BroadcastSessionQueryService {
         return PageResponse.of(items, page, size, totalElements);
     }
 }
-

@@ -60,6 +60,13 @@ def start_collector(session_id: int):
     return {'sessionId': session_id, 'started': started}
 
 
+@app.post('/collectors/platform-sessions/{platform_session_id}', status_code=202,
+          dependencies=[Depends(require_token)])
+def start_platform_collector(platform_session_id: int):
+    started = manager.start_platform(platform_session_id)
+    return {'platformSessionId': platform_session_id, 'started': started}
+
+
 @app.delete('/collectors/{session_id}', dependencies=[Depends(require_token)])
 def stop_collector(
     session_id: int,
@@ -68,6 +75,16 @@ def stop_collector(
     """세션 수집을 종료하고 남은 채팅을 Flush한다."""
     stopped = manager.stop(session_id, gracePeriodMs / 1000.0)
     return {'sessionId': session_id, 'stopped': stopped}
+
+
+@app.delete('/collectors/platform-sessions/{platform_session_id}',
+            dependencies=[Depends(require_token)])
+def stop_platform_collector(
+    platform_session_id: int,
+    gracePeriodMs: int = Query(default=30_000, ge=0, le=300_000),
+):
+    stopped = manager.stop(platform_session_id, gracePeriodMs / 1000.0)
+    return {'platformSessionId': platform_session_id, 'stopped': stopped}
 
 
 @app.get('/collectors', dependencies=[Depends(require_token)])

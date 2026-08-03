@@ -12,6 +12,8 @@ import com.example.laive.calendar.repository.CalendarEventRepository;
 import com.example.laive.calendar.service.CalendarEventCommandService;
 import com.example.laive.calendar.service.CalendarEventQueryService;
 import com.example.laive.common.api.PatchValue;
+import com.example.laive.broadcast.session.domain.StartBroadcastSessionCommand;
+import com.example.laive.broadcast.session.service.BroadcastSessionTransactionService;
 import com.example.laive.platform.domain.PlatformAccountUpsert;
 import com.example.laive.platform.persistence.PlatformAccountMapper;
 import org.junit.jupiter.api.Test;
@@ -60,6 +62,9 @@ class CalendarEventIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    @Autowired
+    private BroadcastSessionTransactionService broadcastSessionTransactionService;
+
     private static UpdateCalendarEventCommand patch(
             PatchValue<Long> platformAccountId,
             PatchValue<CalendarEventType> eventType,
@@ -72,6 +77,42 @@ class CalendarEventIntegrationTest {
         return new UpdateCalendarEventCommand(
                 platformAccountId, eventType, title, memo, startAt, endAt, status
         );
+    }
+
+    @Test
+    void persistsMultiplePlatformAccountsAndAllowsScheduledMultiPlatformSession() {
+        long streamerId = createStreamer();
+        long firstAccountId = createPlatformAccount(streamerId);
+        long secondAccountId = createPlatformAccount(streamerId);
+
+        CalendarEvent created = commandService.create(
+                streamerId,
+                new CreateCalendarEventCommand(
+                        firstAccountId,
+                        List.of(firstAccountId, secondAccountId),
+                        CalendarEventType.BROADCAST,
+                        "multi-platform schedule",
+                        null,
+                        START,
+                        END
+                )
+        );
+
+        assertThat(queryService.getPlatformAccountIds(created))
+                .containsExactlyInAnyOrder(firstAccountId, secondAccountId);
+
+        var started = broadcastSessionTransactionService.start(
+                streamerId,
+                new StartBroadcastSessionCommand(
+                        List.of(firstAccountId, secondAccountId),
+                        created.calendarEventId(),
+                        "multi-platform broadcast",
+                        "FPS",
+                        "ko"
+                )
+        );
+
+        assertThat(started.platformSessions()).hasSize(2);
     }
 
     /** 컬럼 순서가 어긋나면 record가 조용히 잘못 채워지므로 전 필드를 확인한다. */

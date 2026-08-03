@@ -65,8 +65,12 @@ public class CalendarEventController {
         long streamerId = streamerIdExtractor.extract(jwt);
         var events = queryService.getEvents(streamerId, from, to);
         var promises = promiseQueryService.getCalendarPromises(streamerId, from, to);
+        var platformAccountIds = queryService.getPlatformAccountIds(events);
         return ResponseEntity.ok(
-                ApiResponse.success(CalendarEventListResponse.from(events, promises)));
+                ApiResponse.success(CalendarEventListResponse.from(
+                        events,
+                        promises,
+                        platformAccountIds == null ? java.util.Map.of() : platformAccountIds)));
     }
 
     /** SCHEDULED 상태의 새 일정을 만든다. */
@@ -76,9 +80,12 @@ public class CalendarEventController {
             @Valid @RequestBody CreateCalendarEventRequest request
     ) {
         var event = commandService.create(streamerIdExtractor.extract(jwt), request.toCommand());
+        var platformAccountIds = queryService.getPlatformAccountIds(event);
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(ApiResponse.success(CalendarEventResponse.from(event)));
+                .body(ApiResponse.success(CalendarEventResponse.from(
+                        event,
+                        platformAccountIds == null ? java.util.List.of() : platformAccountIds)));
     }
 
     /** ID와 로그인 streamerId를 함께 조건으로 사용해 타인의 일정 존재를 숨긴다. */
@@ -88,7 +95,10 @@ public class CalendarEventController {
             @PathVariable @Positive long calendarEventId
     ) {
         var event = queryService.getEvent(streamerIdExtractor.extract(jwt), calendarEventId);
-        return ResponseEntity.ok(ApiResponse.success(CalendarEventResponse.from(event)));
+        var platformAccountIds = queryService.getPlatformAccountIds(event);
+        return ResponseEntity.ok(ApiResponse.success(CalendarEventResponse.from(
+                event,
+                platformAccountIds == null ? java.util.List.of() : platformAccountIds)));
     }
 
     /** 일정 필드를 부분 수정한다. 취소는 status = CANCELLED로 처리한다. */
@@ -96,9 +106,12 @@ public class CalendarEventController {
     public ResponseEntity<ApiResponse<CalendarEventResponse>> update(
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable @Positive long calendarEventId,
-            @RequestBody UpdateCalendarEventRequest request
+            @Valid @RequestBody UpdateCalendarEventRequest request
     ) {
         var event = commandService.update(streamerIdExtractor.extract(jwt), calendarEventId, request.toCommand());
-        return ResponseEntity.ok(ApiResponse.success(CalendarEventResponse.from(event)));
+        var platformAccountIds = queryService.getPlatformAccountIds(event);
+        return ResponseEntity.ok(ApiResponse.success(CalendarEventResponse.from(
+                event,
+                platformAccountIds == null ? java.util.List.of() : platformAccountIds)));
     }
 }

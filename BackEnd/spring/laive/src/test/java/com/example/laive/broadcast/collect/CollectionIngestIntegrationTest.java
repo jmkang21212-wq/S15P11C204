@@ -4,6 +4,7 @@ import com.example.laive.auth.domain.StreamerInsert;
 import com.example.laive.auth.persistence.AuthMapper;
 import com.example.laive.broadcast.collect.domain.BatchIngestResult;
 import com.example.laive.broadcast.collect.domain.ChatMessageItem;
+import com.example.laive.broadcast.collect.domain.ChatMessageType;
 import com.example.laive.broadcast.collect.domain.CollectionGap;
 import com.example.laive.broadcast.collect.domain.CollectionGapReason;
 import com.example.laive.broadcast.collect.domain.ViewerMetricItem;
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -54,6 +56,47 @@ class CollectionIngestIntegrationTest {
     private JdbcTemplate jdbcTemplate;
 
     // --- 채팅 ---
+
+    @Test
+    void deduplicatesProviderMessageAndStoresNormalizedEventFields() {
+        long sessionId = createSession();
+        long platformSessionId = jdbcTemplate.queryForObject(
+                "SELECT id FROM broadcast_platform_sessions WHERE broadcast_session_id = ?",
+                Long.class,
+                sessionId
+        );
+        Instant sentAt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+        ChatMessageItem donation = new ChatMessageItem(
+                "sha256:" + UUID.randomUUID(),
+                "후원 메시지",
+                sentAt,
+                null,
+                "youtube-message-1",
+                ChatMessageType.DONATION,
+                new BigDecimal("2.5000"),
+                "KRW",
+                "superChatEvent"
+        );
+
+        BatchIngestResult first = ingestService.appendPlatformChatMessages(
+                platformSessionId, List.of(donation));
+        BatchIngestResult retried = ingestService.appendPlatformChatMessages(
+                platformSessionId, List.of(donation));
+
+        assertThat(first.acceptedCount()).isEqualTo(1);
+        assertThat(retried.acceptedCount()).isZero();
+        assertThat(retried.duplicateCount()).isEqualTo(1);
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT message_type FROM chat_messages WHERE platform_message_id = ?",
+                String.class,
+                "youtube-message-1"
+        )).isEqualTo("DONATION");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT amount FROM chat_messages WHERE platform_message_id = ?",
+                BigDecimal.class,
+                "youtube-message-1"
+        )).isEqualByComparingTo("2.5");
+    }
 
     @Test
     void createsViewerProfileFromHashAndStoresChat() {

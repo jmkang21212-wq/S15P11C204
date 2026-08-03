@@ -30,4 +30,13 @@ public class PlatformConfig {
         requestFactory.setReadTimeout(READ_TIMEOUT);
         return restClientBuilder.clone().requestFactory(requestFactory).build();
     }
+
+    /** YouTube OAuth와 Data API가 공유하는 전용 HTTP Client다. */
+    @Bean
+    RestClient youtubeRestClient(RestClient.Builder restClientBuilder) {
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(CONNECT_TIMEOUT);
+        requestFactory.setReadTimeout(READ_TIMEOUT);
+        return restClientBuilder.clone().requestFactory(requestFactory).build();
+    }
 }

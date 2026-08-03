@@ -89,6 +89,14 @@ laive:
       token-uri: "https://openapi.chzzk.naver.com/auth/v1/token"
       revoke-uri: "https://openapi.chzzk.naver.com/auth/v1/token/revoke"
       user-me-uri: "https://openapi.chzzk.naver.com/open/v1/users/me"
+    youtube:
+      client-id: "${YOUTUBE_CLIENT_ID:}"
+      client-secret: "${YOUTUBE_CLIENT_SECRET:}"
+      redirect-uri: "${YOUTUBE_REDIRECT_URI:http://localhost:8080/api/v1/platform-accounts/youtube/callback}"
+      authorization-uri: "https://accounts.google.com/o/oauth2/v2/auth"
+      token-uri: "https://oauth2.googleapis.com/token"
+      revoke-uri: "https://oauth2.googleapis.com/revoke"
+      api-base-url: "https://www.googleapis.com"
     # NFR-S-03: 플랫폼 토큰은 이 키로 암호화해서 저장한다. Base64로 인코딩한 32바이트.
     token-encryption-key: "${PLATFORM_TOKEN_KEY:}"
     link-state-ttl: 5m

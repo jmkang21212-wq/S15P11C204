@@ -214,10 +214,38 @@
     <select id="calculateStatistics"
             resultType="com.example.laive.broadcast.session.domain.SessionStatistics">
         WITH viewer AS (
-            SELECT round(avg(viewer_count))::int AS average_viewers,
-                   max(viewer_count)             AS peak_viewers
-              FROM viewer_metrics
-             WHERE session_id = #{sessionId}
+            WITH raw_statistics AS (
+                SELECT round(avg(viewer_count))::int AS average_viewers,
+                       max(viewer_count)::int        AS peak_viewers
+                  FROM viewer_metrics
+                 WHERE session_id = #{sessionId}
+            ), platform_count AS (
+                SELECT count(DISTINCT coalesce(platform_session_id, -1)) AS value
+                  FROM viewer_metrics
+                 WHERE session_id = #{sessionId}
+            ), latest_by_platform_minute AS (
+                SELECT platform_session_id,
+                       date_trunc('minute', measured_at) AS minute,
+                       (array_agg(viewer_count ORDER BY measured_at DESC))[1] AS viewer_count
+                  FROM viewer_metrics
+                 WHERE session_id = #{sessionId}
+                 GROUP BY platform_session_id, date_trunc('minute', measured_at)
+            ), combined AS (
+                SELECT minute, sum(viewer_count) AS viewer_count
+                  FROM latest_by_platform_minute
+                 GROUP BY minute
+            ), combined_statistics AS (
+                SELECT round(avg(viewer_count))::int AS average_viewers,
+                       max(viewer_count)::int        AS peak_viewers
+                  FROM combined
+            )
+            SELECT CASE WHEN p.value &lt;= 1 THEN r.average_viewers ELSE c.average_viewers END
+                       AS average_viewers,
+                   CASE WHEN p.value &lt;= 1 THEN r.peak_viewers ELSE c.peak_viewers END
+                       AS peak_viewers
+              FROM raw_statistics r
+             CROSS JOIN platform_count p
+             CROSS JOIN combined_statistics c
         ),
         chat AS (
             SELECT count(*)                                               AS total_chat,
@@ -266,6 +294,103 @@
          WHERE id = #{reportId}
            AND status = 'PROCESSING'
     </update>
+
+    <insert id="replaceReportPlatformMetrics">
+        INSERT INTO report_platform_metrics (
+            report_id, platform_session_id, avg_viewers, peak_viewers,
+            total_chat, analyzed_chat,
+            joy_count, excitement_count, support_count, surprise_count,
+            sadness_count, anger_count, confusion_count, neutral_count,
+            broadcast_seconds, viewer_coverage, data_quality
+        )
+        WITH viewer AS (
+            SELECT platform_session_id,
+                   round(avg(viewer_count))::int AS avg_viewers,
+                   max(viewer_count)::int AS peak_viewers,
+                   count(DISTINCT date_trunc('minute', measured_at)) AS observed_minutes
+              FROM viewer_metrics
+             WHERE session_id = #{sessionId}
+             GROUP BY platform_session_id
+        ), chat AS (
+            SELECT platform_session_id,
+                   count(*) AS total_chat,
+                   count(sentiment_label) AS analyzed_chat,
+                   count(*) FILTER (WHERE sentiment_label = 'JOY') AS joy_count,
+                   count(*) FILTER (WHERE sentiment_label = 'EXCITEMENT') AS excitement_count,
+                   count(*) FILTER (WHERE sentiment_label = 'SUPPORT') AS support_count,
+                   count(*) FILTER (WHERE sentiment_label = 'SURPRISE') AS surprise_count,
+                   count(*) FILTER (WHERE sentiment_label = 'SADNESS') AS sadness_count,
+                   count(*) FILTER (WHERE sentiment_label = 'ANGER') AS anger_count,
+                   count(*) FILTER (WHERE sentiment_label = 'CONFUSION') AS confusion_count,
+                   count(*) FILTER (WHERE sentiment_label = 'NEUTRAL') AS neutral_count
+              FROM chat_messages
+             WHERE session_id = #{sessionId}
+             GROUP BY platform_session_id
+        ), source AS (
+            SELECT ps.id AS platform_session_id,
+                   greatest(0, extract(epoch FROM (
+                       coalesce(ps.ended_at, bs.ended_at, now())
+                       - coalesce(ps.started_at, bs.started_at)
+                   )))::bigint AS broadcast_seconds,
+                   coalesce(cap.support_status, 'SUPPORTED') AS viewer_support,
+                   ps.status
+              FROM broadcast_platform_sessions ps
+              JOIN broadcast_sessions bs ON bs.id = ps.broadcast_session_id
+              LEFT JOIN platform_session_capability_runs cap
+                ON cap.platform_session_id = ps.id
+               AND cap.capability_code = 'VIEWER_METRICS'
+             WHERE ps.broadcast_session_id = #{sessionId}
+        ), calculated AS (
+            SELECT s.*,
+                   v.avg_viewers,
+                   v.peak_viewers,
+                   coalesce(v.observed_minutes, 0) AS observed_minutes,
+                   greatest(1, ceil(s.broadcast_seconds / 60.0)) AS expected_minutes,
+                   coalesce(c.total_chat, 0) AS total_chat,
+                   coalesce(c.analyzed_chat, 0) AS analyzed_chat,
+                   coalesce(c.joy_count, 0) AS joy_count,
+                   coalesce(c.excitement_count, 0) AS excitement_count,
+                   coalesce(c.support_count, 0) AS support_count,
+                   coalesce(c.surprise_count, 0) AS surprise_count,
+                   coalesce(c.sadness_count, 0) AS sadness_count,
+                   coalesce(c.anger_count, 0) AS anger_count,
+                   coalesce(c.confusion_count, 0) AS confusion_count,
+                   coalesce(c.neutral_count, 0) AS neutral_count
+              FROM source s
+              LEFT JOIN viewer v ON v.platform_session_id = s.platform_session_id
+              LEFT JOIN chat c ON c.platform_session_id = s.platform_session_id
+        )
+        SELECT #{reportId}, platform_session_id, avg_viewers, peak_viewers,
+               total_chat, analyzed_chat,
+               joy_count, excitement_count, support_count, surprise_count,
+               sadness_count, anger_count, confusion_count, neutral_count,
+               broadcast_seconds,
+               CASE WHEN viewer_support = 'UNSUPPORTED' THEN NULL
+                    ELSE least(1, observed_minutes / expected_minutes)::numeric(5,4)
+                END,
+               CASE WHEN status = 'FAILED' THEN 'PARTIAL'
+                    WHEN viewer_support = 'SUPPORTED'
+                         AND observed_minutes / expected_minutes &lt; 0.8 THEN 'PARTIAL'
+                    ELSE 'COMPLETE'
+                END
+          FROM calculated
+        ON CONFLICT (report_id, platform_session_id) DO UPDATE
+           SET avg_viewers = EXCLUDED.avg_viewers,
+               peak_viewers = EXCLUDED.peak_viewers,
+               total_chat = EXCLUDED.total_chat,
+               analyzed_chat = EXCLUDED.analyzed_chat,
+               joy_count = EXCLUDED.joy_count,
+               excitement_count = EXCLUDED.excitement_count,
+               support_count = EXCLUDED.support_count,
+               surprise_count = EXCLUDED.surprise_count,
+               sadness_count = EXCLUDED.sadness_count,
+               anger_count = EXCLUDED.anger_count,
+               confusion_count = EXCLUDED.confusion_count,
+               neutral_count = EXCLUDED.neutral_count,
+               broadcast_seconds = EXCLUDED.broadcast_seconds,
+               viewer_coverage = EXCLUDED.viewer_coverage,
+               data_quality = EXCLUDED.data_quality
+    </insert>
 
     <update id="markReportPartial">
         UPDATE reports

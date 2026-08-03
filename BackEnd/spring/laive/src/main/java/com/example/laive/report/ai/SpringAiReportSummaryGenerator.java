@@ -41,6 +41,14 @@ public class SpringAiReportSummaryGenerator implements ReportSummaryGenerator {
                             trigger.narrative() == null ? "분석 실패" : trigger.narrative()
                     ))
                     .reduce("", (left, right) -> left + "\n" + right);
+            String platformText = input.platformMetrics().stream()
+                    .map(metric -> "%s(%s): avg=%s peak=%s chat=%d minutes=%d coverage=%s quality=%s"
+                            .formatted(
+                                    metric.platformCode(), metric.channelName(),
+                                    metric.averageViewers(), metric.peakViewers(), metric.totalChat(),
+                                    Math.round(metric.broadcastSeconds() / 60.0),
+                                    metric.viewerCoverage(), metric.dataQuality()))
+                    .reduce("", (left, right) -> left + "\n" + right);
             String userPrompt = userTemplate.formatted(
                     input.report().title(), input.report().category(), input.report().durationMinutes(),
                     report.avgViewers() == null ? 0 : report.avgViewers(),
@@ -49,7 +57,7 @@ public class SpringAiReportSummaryGenerator implements ReportSummaryGenerator {
                     SentimentDistribution.from(report.sentimentCounts()).distribution(),
                     triggerText, compressor.risks(input.risks()),
                     compressor.transcripts(input.transcripts()),
-                    input.report().hasCollectionGap()
+                    input.report().hasCollectionGap(), platformText
             );
             ReportAiResult result = chatClient.prompt()
                     .system(systemPrompt)

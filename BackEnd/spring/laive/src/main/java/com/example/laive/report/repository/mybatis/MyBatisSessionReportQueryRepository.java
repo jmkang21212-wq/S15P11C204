@@ -5,6 +5,7 @@ import com.example.laive.report.domain.ReportTrigger;
 import com.example.laive.report.domain.SessionHighlight;
 import com.example.laive.report.domain.SessionReport;
 import com.example.laive.report.domain.ViewerTimelinePoint;
+import com.example.laive.report.domain.ReportPlatformMetrics;
 import com.example.laive.report.repository.SessionReportQueryRepository;
 import org.springframework.stereotype.Repository;
 
@@ -47,5 +48,10 @@ public class MyBatisSessionReportQueryRepository implements SessionReportQueryRe
     @Override
     public List<SessionHighlight> findHighlights(long reportId) {
         return mapper.findHighlights(reportId);
+    }
+
+    @Override
+    public List<ReportPlatformMetrics> findPlatformMetrics(long reportId) {
+        return mapper.findPlatformMetrics(reportId);
     }
 }

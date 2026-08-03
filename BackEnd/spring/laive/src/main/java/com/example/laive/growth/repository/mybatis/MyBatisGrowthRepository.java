@@ -43,7 +43,18 @@ public class MyBatisGrowthRepository implements
             GrowthPeriodType periodType,
             GrowthPeriod period
     ) {
-        return mapper.findSeries(streamerId, periodType, period.start(), period.end());
+        return mapper.findSeries(streamerId, periodType, period.start(), period.end(), "ALL");
+    }
+
+    @Override
+    public List<GrowthSeriesPoint> findSeries(
+            long streamerId,
+            GrowthPeriodType periodType,
+            GrowthPeriod period,
+            String platformCode
+    ) {
+        return mapper.findSeries(
+                streamerId, periodType, period.start(), period.end(), platformCode);
     }
 
     @Override

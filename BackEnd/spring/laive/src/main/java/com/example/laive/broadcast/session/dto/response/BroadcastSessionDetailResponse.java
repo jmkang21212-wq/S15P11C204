@@ -4,6 +4,7 @@ import com.example.laive.broadcast.session.domain.BroadcastSessionDetail;
 import com.example.laive.broadcast.session.domain.BroadcastStatus;
 
 import java.time.Instant;
+import java.util.List;
 
 public record BroadcastSessionDetailResponse(
         long sessionId,
@@ -16,9 +17,17 @@ public record BroadcastSessionDetailResponse(
         String vodUrl,
         BroadcastStatus status,
         Instant startedAt,
-        Instant endedAt
+        Instant endedAt,
+        List<BroadcastPlatformSessionResponse> platformSessions
 ) {
     public static BroadcastSessionDetailResponse from(BroadcastSessionDetail detail) {
+        return from(detail, List.of());
+    }
+
+    public static BroadcastSessionDetailResponse from(
+            BroadcastSessionDetail detail,
+            List<com.example.laive.broadcast.session.domain.BroadcastPlatformSession> platformSessions
+    ) {
         return new BroadcastSessionDetailResponse(
                 detail.sessionId(),
                 detail.platformAccountId(),
@@ -30,8 +39,12 @@ public record BroadcastSessionDetailResponse(
                 detail.vodUrl(),
                 detail.status(),
                 detail.startedAt(),
-                detail.endedAt()
+                detail.endedAt(),
+                platformSessions == null
+                        ? List.of()
+                        : platformSessions.stream()
+                                .map(BroadcastPlatformSessionResponse::from)
+                                .toList()
         );
     }
 }
-

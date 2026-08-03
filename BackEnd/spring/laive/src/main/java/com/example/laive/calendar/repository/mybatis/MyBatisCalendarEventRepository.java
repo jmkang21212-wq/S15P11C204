@@ -3,11 +3,13 @@ package com.example.laive.calendar.repository.mybatis;
 import com.example.laive.calendar.domain.CalendarEvent;
 import com.example.laive.calendar.repository.CalendarEventRepository;
 import com.example.laive.calendar.repository.PlatformAccountReference;
+import com.example.laive.calendar.repository.CalendarEventPlatformAccountLink;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Collection;
 
 /**
  * MyBatis Mapper 타입이 Service 계층으로 노출되지 않게 하는 Repository Adapter다.
@@ -47,6 +49,24 @@ public class MyBatisCalendarEventRepository implements CalendarEventRepository {
     @Override
     public boolean existsLinkedSession(long calendarEventId) {
         return mapper.existsLinkedSession(calendarEventId);
+    }
+
+    @Override
+    public List<CalendarEventPlatformAccountLink> findLinkedPlatformAccounts(
+            Collection<Long> calendarEventIds
+    ) {
+        if (calendarEventIds.isEmpty()) {
+            return List.of();
+        }
+        return mapper.findLinkedPlatformAccounts(calendarEventIds);
+    }
+
+    @Override
+    public void replaceLinkedPlatformAccounts(long calendarEventId, List<Long> platformAccountIds) {
+        mapper.deleteLinkedPlatformAccounts(calendarEventId);
+        if (!platformAccountIds.isEmpty()) {
+            mapper.insertLinkedPlatformAccounts(calendarEventId, platformAccountIds);
+        }
     }
 
     @Override

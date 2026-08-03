@@ -4,8 +4,11 @@ import com.example.laive.calendar.domain.CalendarEventStatus;
 import com.example.laive.calendar.domain.CalendarEventType;
 import com.example.laive.calendar.domain.UpdateCalendarEventCommand;
 import com.example.laive.common.api.PatchValue;
+import jakarta.validation.constraints.AssertTrue;
 
 import java.time.Instant;
+import java.util.LinkedHashSet;
+import java.util.List;
 
 /**
  * 일정 부분 수정 API 입력이다 (API 8.3).
@@ -15,6 +18,7 @@ import java.time.Instant;
  */
 public record UpdateCalendarEventRequest(
         PatchValue<Long> platformAccountId,
+        PatchValue<List<Long>> platformAccountIds,
         PatchValue<CalendarEventType> eventType,
         PatchValue<String> title,
         PatchValue<String> memo,
@@ -22,9 +26,43 @@ public record UpdateCalendarEventRequest(
         PatchValue<Instant> endAt,
         PatchValue<CalendarEventStatus> status
 ) {
+    public UpdateCalendarEventRequest(
+            PatchValue<Long> platformAccountId,
+            PatchValue<CalendarEventType> eventType,
+            PatchValue<String> title,
+            PatchValue<String> memo,
+            PatchValue<Instant> startAt,
+            PatchValue<Instant> endAt,
+            PatchValue<CalendarEventStatus> status
+    ) {
+        this(platformAccountId, null, eventType, title, memo, startAt, endAt, status);
+    }
+
+    @AssertTrue(message = "platformAccountId and platformAccountIds cannot be patched together")
+    public boolean isPlatformSelectionExclusive() {
+        return platformAccountId == null || platformAccountIds == null;
+    }
+
+    @AssertTrue(message = "platformAccountIds must contain distinct positive IDs")
+    public boolean isPlatformSelectionValid() {
+        if (platformAccountIds == null || platformAccountIds.value() == null) {
+            return true;
+        }
+        List<Long> values = platformAccountIds.value();
+        return values.size() <= 10
+                && values.stream().allMatch(id -> id != null && id > 0)
+                && new LinkedHashSet<>(values).size() == values.size();
+    }
+
     public UpdateCalendarEventCommand toCommand() {
+        PatchValue<Long> primaryPatch = platformAccountIds == null
+                ? platformAccountId
+                : PatchValue.of(platformAccountIds.value() == null || platformAccountIds.value().isEmpty()
+                    ? null
+                    : platformAccountIds.value().getFirst());
         return new UpdateCalendarEventCommand(
-                platformAccountId,
+                primaryPatch,
+                platformAccountIds,
                 eventType,
                 title,
                 memo,

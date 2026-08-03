@@ -68,6 +68,22 @@ class SessionReportMapperIntegrationTest {
                 """,
                 Long.class, sessionId
         );
+        long platformSessionId = jdbcTemplate.queryForObject(
+                "SELECT id FROM broadcast_platform_sessions WHERE broadcast_session_id = ?",
+                Long.class,
+                sessionId
+        );
+        jdbcTemplate.update(
+                """
+                INSERT INTO report_platform_metrics (
+                    report_id, platform_session_id, avg_viewers, peak_viewers,
+                    total_chat, analyzed_chat, broadcast_seconds,
+                    viewer_coverage, data_quality
+                ) VALUES (?, ?, 100, 200, 10, 0, 7200, 1, 'COMPLETE')
+                """,
+                reportId,
+                platformSessionId
+        );
         jdbcTemplate.update(
                 "INSERT INTO viewer_metrics (session_id, measured_at, viewer_count) VALUES (?, ?, 100)",
                 sessionId, Timestamp.from(startedAt.plusSeconds(60))
@@ -110,6 +126,14 @@ class SessionReportMapperIntegrationTest {
                 .singleElement()
                 .extracting(highlight -> highlight.triggerId())
                 .isEqualTo(triggerId);
+        assertThat(queryRepository.findPlatformMetrics(reportId))
+                .singleElement()
+                .satisfies(metrics -> {
+                    assertThat(metrics.platformCode()).isEqualTo("CHZZK");
+                    assertThat(metrics.averageViewers()).isEqualTo(100);
+                    assertThat(metrics.broadcastSeconds()).isEqualTo(7200);
+                    assertThat(metrics.dataQuality()).isEqualTo("COMPLETE");
+                });
 
         var context = generationRepository.findGenerationContext(reportId, sessionId).orElseThrow();
         assertThat(context.category()).isEqualTo("GAME");

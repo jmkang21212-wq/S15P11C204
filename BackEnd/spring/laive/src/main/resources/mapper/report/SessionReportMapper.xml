@@ -24,9 +24,17 @@
 
     <select id="findViewerTimeline"
             resultType="com.example.laive.report.domain.ViewerTimelinePoint">
-        SELECT measured_at, viewer_count
-          FROM viewer_metrics
-         WHERE session_id = #{sessionId}
+        WITH latest_by_platform_minute AS (
+            SELECT platform_session_id,
+                   date_trunc('minute', measured_at) AS measured_at,
+                   (array_agg(viewer_count ORDER BY measured_at DESC))[1] AS viewer_count
+              FROM viewer_metrics
+             WHERE session_id = #{sessionId}
+             GROUP BY platform_session_id, date_trunc('minute', measured_at)
+        )
+        SELECT measured_at, sum(viewer_count)::int AS viewer_count
+          FROM latest_by_platform_minute
+         GROUP BY measured_at
          ORDER BY measured_at ASC
     </select>
 
@@ -57,5 +65,24 @@
           FROM highlights
          WHERE report_id = #{reportId}
          ORDER BY start_ms ASC, id ASC
+    </select>
+
+    <select id="findPlatformMetrics"
+            resultType="com.example.laive.report.domain.ReportPlatformMetrics">
+        SELECT rpm.platform_session_id,
+               pa.platform AS platform_code,
+               pa.channel_name,
+               rpm.avg_viewers AS average_viewers,
+               rpm.peak_viewers,
+               rpm.total_chat,
+               rpm.analyzed_chat,
+               rpm.broadcast_seconds,
+               rpm.viewer_coverage,
+               rpm.data_quality
+          FROM report_platform_metrics rpm
+          JOIN broadcast_platform_sessions ps ON ps.id = rpm.platform_session_id
+          JOIN platform_accounts pa ON pa.id = ps.platform_account_id
+         WHERE rpm.report_id = #{reportId}
+         ORDER BY pa.platform, rpm.platform_session_id
     </select>
 </mapper>

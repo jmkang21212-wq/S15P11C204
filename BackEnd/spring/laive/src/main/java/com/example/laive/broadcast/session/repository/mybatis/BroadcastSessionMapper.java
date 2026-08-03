@@ -86,6 +86,11 @@ public interface BroadcastSessionMapper {
             @Param("statistics") SessionStatistics statistics
     );
 
+    int replaceReportPlatformMetrics(
+            @Param("reportId") long reportId,
+            @Param("sessionId") long sessionId
+    );
+
     int markReportPartial(
             @Param("reportId") long reportId,
             @Param("generatedAt") Instant generatedAt
@@ -93,4 +98,3 @@ public interface BroadcastSessionMapper {
 
     int markReportFailed(@Param("reportId") long reportId);
 }
-

@@ -2,12 +2,14 @@ package com.example.laive.calendar.repository.mybatis;
 
 import com.example.laive.calendar.domain.CalendarEvent;
 import com.example.laive.calendar.repository.PlatformAccountReference;
+import com.example.laive.calendar.repository.CalendarEventPlatformAccountLink;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Collection;
 
 /**
  * PostgreSQL 전용 SQL은 resources/mapper/calendar/CalendarEventMapper.xml에 둔다.
@@ -37,6 +39,17 @@ public interface CalendarEventMapper {
     );
 
     boolean existsLinkedSession(@Param("calendarEventId") long calendarEventId);
+
+    List<CalendarEventPlatformAccountLink> findLinkedPlatformAccounts(
+            @Param("calendarEventIds") Collection<Long> calendarEventIds
+    );
+
+    int deleteLinkedPlatformAccounts(@Param("calendarEventId") long calendarEventId);
+
+    int insertLinkedPlatformAccounts(
+            @Param("calendarEventId") long calendarEventId,
+            @Param("platformAccountIds") List<Long> platformAccountIds
+    );
 
     Optional<Long> findActivePromiseEventId(@Param("promiseId") long promiseId);
 

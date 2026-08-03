@@ -35,11 +35,15 @@ public class GrowthReportController {
             @AuthenticationPrincipal Jwt jwt,
             @RequestParam GrowthPeriodType periodType,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "ALL") String platformCode
     ) {
-        var report = service.getReport(
-                streamerIdExtractor.extract(jwt), periodType, from, to
-        );
-        return ResponseEntity.ok(ApiResponse.success(GrowthReportResponse.from(report)));
+        String normalizedPlatformCode = platformCode.toUpperCase(java.util.Locale.ROOT);
+        long streamerId = streamerIdExtractor.extract(jwt);
+        var report = "ALL".equals(normalizedPlatformCode)
+                ? service.getReport(streamerId, periodType, from, to)
+                : service.getReport(streamerId, periodType, from, to, normalizedPlatformCode);
+        return ResponseEntity.ok(ApiResponse.success(
+                GrowthReportResponse.from(report, normalizedPlatformCode)));
     }
 }

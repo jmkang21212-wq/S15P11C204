@@ -7,6 +7,8 @@ import com.example.laive.growth.domain.GrowthReport;
 import com.example.laive.growth.domain.GrowthSeriesPoint;
 import com.example.laive.growth.domain.GrowthSummary;
 import com.example.laive.growth.repository.GrowthReportQueryRepository;
+import com.example.laive.platform.core.PlatformAdapterRegistry;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,9 +19,19 @@ import java.util.List;
 @Service
 public class GrowthReportQueryService {
     private final GrowthReportQueryRepository repository;
+    private final PlatformAdapterRegistry platformAdapterRegistry;
 
     public GrowthReportQueryService(GrowthReportQueryRepository repository) {
+        this(repository, null);
+    }
+
+    @Autowired
+    public GrowthReportQueryService(
+            GrowthReportQueryRepository repository,
+            PlatformAdapterRegistry platformAdapterRegistry
+    ) {
         this.repository = repository;
+        this.platformAdapterRegistry = platformAdapterRegistry;
     }
 
     @Transactional(readOnly = true)
@@ -29,8 +41,23 @@ public class GrowthReportQueryService {
             LocalDate from,
             LocalDate to
     ) {
+        return getReport(streamerId, periodType, from, to, "ALL");
+    }
+
+    @Transactional(readOnly = true)
+    public GrowthReport getReport(
+            long streamerId,
+            GrowthPeriodType periodType,
+            LocalDate from,
+            LocalDate to,
+            String requestedPlatformCode
+    ) {
+        String platformCode = normalizePlatformCode(requestedPlatformCode);
         GrowthPeriod period = GrowthPeriod.aligned(periodType, from, to);
-        List<GrowthSeriesPoint> series = repository.findSeries(streamerId, periodType, period)
+        List<GrowthSeriesPoint> source = "ALL".equals(platformCode)
+                ? repository.findSeries(streamerId, periodType, period)
+                : repository.findSeries(streamerId, periodType, period, platformCode);
+        List<GrowthSeriesPoint> series = source
                 .stream()
                 .map(row -> row.averageViewers() == null
                         ? new GrowthSeriesPoint(
@@ -62,6 +89,16 @@ public class GrowthReportQueryService {
                 )
         );
         return new GrowthReport(periodType, from, to, summary, normalized);
+    }
+
+    private String normalizePlatformCode(String requested) {
+        if (requested == null || requested.isBlank() || "ALL".equalsIgnoreCase(requested)) {
+            return "ALL";
+        }
+        if (platformAdapterRegistry == null) {
+            return requested.trim().toUpperCase(java.util.Locale.ROOT);
+        }
+        return platformAdapterRegistry.require(requested).platformCode().value();
     }
 
     private List<GrowthSeriesPoint> normalize(

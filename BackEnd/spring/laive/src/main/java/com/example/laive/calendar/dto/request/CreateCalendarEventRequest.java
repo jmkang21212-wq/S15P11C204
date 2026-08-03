@@ -6,8 +6,11 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.AssertTrue;
 
 import java.time.Instant;
+import java.util.LinkedHashSet;
+import java.util.List;
 
 /**
  * 일정 생성 API 입력이다. 상태는 항상 SCHEDULED로 시작하므로 받지 않는다.
@@ -15,6 +18,9 @@ import java.time.Instant;
 public record CreateCalendarEventRequest(
         @Positive(message = "양수여야 합니다.")
         Long platformAccountId,
+
+        @Size(min = 1, max = 10)
+        List<@Positive Long> platformAccountIds,
 
         @NotNull(message = "필수 값입니다.")
         CalendarEventType eventType,
@@ -32,9 +38,24 @@ public record CreateCalendarEventRequest(
         @NotNull(message = "필수 값입니다.")
         Instant endAt
 ) {
+    @AssertTrue(message = "platformAccountId and platformAccountIds cannot be used together")
+    public boolean isPlatformSelectionExclusive() {
+        return platformAccountId == null || platformAccountIds == null || platformAccountIds.isEmpty();
+    }
+
+    @AssertTrue(message = "platformAccountIds must not contain duplicates")
+    public boolean isPlatformSelectionDistinct() {
+        return platformAccountIds == null
+                || new LinkedHashSet<>(platformAccountIds).size() == platformAccountIds.size();
+    }
+
     public CreateCalendarEventCommand toCommand() {
+        List<Long> selected = platformAccountId != null
+                ? List.of(platformAccountId)
+                : platformAccountIds == null ? List.of() : List.copyOf(platformAccountIds);
         return new CreateCalendarEventCommand(
-                platformAccountId,
+                selected.isEmpty() ? null : selected.getFirst(),
+                selected,
                 eventType,
                 title,
                 memo,

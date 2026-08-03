@@ -381,6 +381,22 @@
                            FROM (SELECT risk_category, risk_level, count(*) cnt
                                    FROM risk_events WHERE session_id = s.id
                                   GROUP BY risk_category, risk_level) x), '') AS risk_summary,
+               coalesce((
+                   SELECT string_agg(
+                              concat(pa.platform,
+                                     ':avg=', coalesce(rpm.avg_viewers::text, 'unknown'),
+                                     ',peak=', coalesce(rpm.peak_viewers::text, 'unknown'),
+                                     ',chat=', rpm.total_chat,
+                                     ',minutes=', round(rpm.broadcast_seconds / 60.0),
+                                     ',coverage=', coalesce(rpm.viewer_coverage::text, 'unsupported'),
+                                     ',quality=', rpm.data_quality),
+                              E'\n' ORDER BY pa.platform, rpm.platform_session_id
+                          )
+                     FROM report_platform_metrics rpm
+                     JOIN broadcast_platform_sessions ps ON ps.id = rpm.platform_session_id
+                     JOIN platform_accounts pa ON pa.id = ps.platform_account_id
+                    WHERE rpm.report_id = r.id
+               ), '') AS platform_breakdown,
                EXISTS (SELECT 1 FROM collection_gaps g WHERE g.session_id = s.id)
                    AS collection_gap
           FROM reports r

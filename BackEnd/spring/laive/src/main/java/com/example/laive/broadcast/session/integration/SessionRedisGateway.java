@@ -29,12 +29,11 @@ public class SessionRedisGateway {
     }
 
     public void initialize(long sessionId, long streamerId, Instant startedAt) {
-        redisTemplate.opsForHash().putAll(stateKey(sessionId), Map.of(
-                "sessionId", Long.toString(sessionId),
-                "streamerId", Long.toString(streamerId),
-                "status", BroadcastStatus.PREPARING.name(),
-                "startedAt", startedAt.toString()
-        ));
+        String key = stateKey(sessionId);
+        redisTemplate.opsForHash().putIfAbsent(key, "sessionId", Long.toString(sessionId));
+        redisTemplate.opsForHash().putIfAbsent(key, "streamerId", Long.toString(streamerId));
+        redisTemplate.opsForHash().putIfAbsent(key, "status", BroadcastStatus.PREPARING.name());
+        redisTemplate.opsForHash().putIfAbsent(key, "startedAt", startedAt.toString());
     }
 
     public void publishStatus(long sessionId, BroadcastStatus status, Instant occurredAt) {

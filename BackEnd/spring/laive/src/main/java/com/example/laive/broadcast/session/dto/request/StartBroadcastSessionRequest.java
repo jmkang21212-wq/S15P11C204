@@ -1,45 +1,42 @@
 package com.example.laive.broadcast.session.dto.request;
 
 import com.example.laive.broadcast.session.domain.StartBroadcastSessionCommand;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.NotBlank;
 
-/**
- * 방송 분석 시작 API 입력이다. 사용자나 클라이언트 시각은 받지 않는다.
- */
+import java.util.LinkedHashSet;
+import java.util.List;
+
+/** 단일 필드 하위 호환과 다중 플랫폼 요청을 함께 지원한다. */
 public record StartBroadcastSessionRequest(
-        @NotNull(message = "필수 값입니다.")
-        @Positive(message = "양수여야 합니다.")
-        Long platformAccountId,
-
-        @Positive(message = "양수여야 합니다.")
-        Long calendarEventId,
-
-        @NotBlank(message = "비어 있을 수 없습니다.")
-        @Size(max = 200, message = "200자 이하여야 합니다.")
-        String title,
-
-        @Size(max = 50, message = "50자 이하여야 합니다.")
-        String category,
-
-        @Size(max = 10, message = "10자 이하여야 합니다.")
-        @Pattern(
-                regexp = "^[a-z]{2}(-[A-Z]{2})?$",
-                message = "ko, en, ko-KR 형식이어야 합니다."
-        )
-        String language
+        @Positive Long platformAccountId,
+        @Size(min = 1, max = 10) List<@Positive Long> platformAccountIds,
+        @Positive Long calendarEventId,
+        @NotBlank @Size(max = 200) String title,
+        @Size(max = 50) String category,
+        @Size(max = 10)
+        @Pattern(regexp = "^[a-z]{2}(-[A-Z]{2})?$") String language
 ) {
+    @AssertTrue(message = "platformAccountId 또는 platformAccountIds 중 하나만 입력해야 합니다.")
+    public boolean isPlatformSelectionValid() {
+        boolean legacy = platformAccountId != null;
+        boolean multi = platformAccountIds != null && !platformAccountIds.isEmpty();
+        return legacy ^ multi;
+    }
+
+    @AssertTrue(message = "platformAccountIds must not contain duplicates")
+    public boolean isPlatformSelectionDistinct() {
+        return platformAccountIds == null
+                || new LinkedHashSet<>(platformAccountIds).size() == platformAccountIds.size();
+    }
+
     public StartBroadcastSessionCommand toCommand() {
-        return new StartBroadcastSessionCommand(
-                platformAccountId,
-                calendarEventId,
-                title,
-                category,
-                language
-        );
+        List<Long> selected = platformAccountId != null
+                ? List.of(platformAccountId)
+                : List.copyOf(new LinkedHashSet<>(platformAccountIds));
+        return new StartBroadcastSessionCommand(selected, calendarEventId, title, category, language);
     }
 }
-

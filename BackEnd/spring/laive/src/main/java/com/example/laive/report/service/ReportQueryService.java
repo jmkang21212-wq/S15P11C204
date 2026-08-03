@@ -30,7 +30,8 @@ public class ReportQueryService {
         var triggers = repository.findTriggers(sessionId);
         double progress = progress(report, triggers);
         if (report.status() == ReportStatus.PROCESSING) {
-            return new SessionReportDetail(report, List.of(), triggers, List.of(), List.of(), progress);
+            return new SessionReportDetail(
+                    report, List.of(), triggers, List.of(), List.of(), List.of(), progress);
         }
         return new SessionReportDetail(
                 report,
@@ -38,6 +39,7 @@ public class ReportQueryService {
                 triggers,
                 repository.findInsights(report.reportId()),
                 repository.findHighlights(report.reportId()),
+                repository.findPlatformMetrics(report.reportId()),
                 progress
         );
     }

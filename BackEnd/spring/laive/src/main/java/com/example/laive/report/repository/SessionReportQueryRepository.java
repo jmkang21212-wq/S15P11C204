@@ -5,6 +5,7 @@ import com.example.laive.report.domain.ReportTrigger;
 import com.example.laive.report.domain.SessionHighlight;
 import com.example.laive.report.domain.SessionReport;
 import com.example.laive.report.domain.ViewerTimelinePoint;
+import com.example.laive.report.domain.ReportPlatformMetrics;
 
 import java.util.List;
 import java.util.Optional;
@@ -16,4 +17,5 @@ public interface SessionReportQueryRepository {
     List<ReportTrigger> findTriggers(long sessionId);
     List<ReportInsight> findInsights(long reportId);
     List<SessionHighlight> findHighlights(long reportId);
+    List<ReportPlatformMetrics> findPlatformMetrics(long reportId);
 }
