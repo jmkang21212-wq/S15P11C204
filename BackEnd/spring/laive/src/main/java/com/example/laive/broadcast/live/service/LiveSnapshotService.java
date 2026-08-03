@@ -1,6 +1,8 @@
 package com.example.laive.broadcast.live.service;
 
 import com.example.laive.broadcast.collect.integration.CollectorStatusStore;
+import com.example.laive.broadcast.fandom.domain.TopViewer;
+import com.example.laive.broadcast.fandom.repository.mybatis.ViewerScoreMapper;
 import com.example.laive.broadcast.live.dto.response.LiveSnapshotResponse;
 import com.example.laive.broadcast.live.repository.mybatis.LiveSnapshotMapper;
 import com.example.laive.broadcast.questions.config.RepeatedQuestionProperties;
@@ -44,12 +46,16 @@ public class LiveSnapshotService {
      */
     private static final Duration AI_FRESHNESS = Duration.ofSeconds(10);
 
+    /** 열성 시청자 노출 수(FR-F-03). 콘솔 카드가 다섯 줄 고정이다. */
+    private static final int TOP_VIEWER_LIMIT = 5;
+
     private final BroadcastSessionQueryService sessionQueryService;
     private final CollectorStatusStore collectorStatusStore;
     private final SentimentSnapshotStore sentimentSnapshotStore;
     private final LiveSnapshotMapper liveSnapshotMapper;
     private final RepeatedQuestionMapper repeatedQuestionMapper;
     private final RepeatedQuestionProperties repeatedQuestionProperties;
+    private final ViewerScoreMapper viewerScoreMapper;
     private final StringRedisTemplate redisTemplate;
     private final Clock clock;
 
@@ -60,6 +66,7 @@ public class LiveSnapshotService {
             LiveSnapshotMapper liveSnapshotMapper,
             RepeatedQuestionMapper repeatedQuestionMapper,
             RepeatedQuestionProperties repeatedQuestionProperties,
+            ViewerScoreMapper viewerScoreMapper,
             StringRedisTemplate redisTemplate,
             Clock clock
     ) {
@@ -69,6 +76,7 @@ public class LiveSnapshotService {
         this.liveSnapshotMapper = liveSnapshotMapper;
         this.repeatedQuestionMapper = repeatedQuestionMapper;
         this.repeatedQuestionProperties = repeatedQuestionProperties;
+        this.viewerScoreMapper = viewerScoreMapper;
         this.redisTemplate = redisTemplate;
         this.clock = clock;
     }
@@ -83,6 +91,7 @@ public class LiveSnapshotService {
                 briefings(sessionId),
                 sentiment(sessionId),
                 repeatedQuestions(sessionId),
+                topViewers(sessionId),
                 lastEventId(sessionId)
         );
     }
@@ -122,6 +131,35 @@ public class LiveSnapshotService {
                         view.lastAskedAt()
                 ))
                 .toList();
+    }
+
+    /**
+     * 열성 시청자 상위 {@value TOP_VIEWER_LIMIT}명이다 (FR-F-03). 도배 방지 산식은
+     * ViewerScoreMapper.xml이 단일 원천이고, 스트리머 본인·매니저는 SQL에서 이미
+     * 걸러져 있다. 닉네임이 아직 없는 시청자는 해시 파생 별칭으로 폴백한다 —
+     * 해시 원문은 프론트로 보내지 않는다.
+     */
+    private List<LiveSnapshotResponse.TopViewer> topViewers(long sessionId) {
+        return viewerScoreMapper.findTopViewers(sessionId, TOP_VIEWER_LIMIT).stream()
+                .map(viewer -> new LiveSnapshotResponse.TopViewer(
+                        viewer.viewerId(),
+                        viewer.nickname(),
+                        viewerAlias(viewer.viewerHash()),
+                        viewer.chatScore(),
+                        viewer.watchScore(),
+                        viewer.totalScore()
+                ))
+                .toList();
+    }
+
+    /**
+     * 해시에서 파생한 익명 별칭이다 — 명세 11.5의 viewerAlias 형식(viewer-a91c)을
+     * 따른다. "sha256:" 프리픽스 뒤 4자를 쓴다.
+     */
+    private static String viewerAlias(String viewerHash) {
+        int colon = viewerHash.indexOf(':');
+        String digest = colon >= 0 ? viewerHash.substring(colon + 1) : viewerHash;
+        return "viewer-" + digest.substring(0, Math.min(4, digest.length()));
     }
 
     private LiveSnapshotResponse.Session session(BroadcastSessionDetail detail, Instant now) {
