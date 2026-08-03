@@ -14,6 +14,7 @@ from chatcollector.session import (
     GAP_AUTH_FAILED,
     RECONNECTING,
     RUNNING,
+    STOPPED,
     CollectorSession,
 )
 
@@ -158,6 +159,38 @@ def test_열린_공백이_없으면_닫아도_보고하지_않는다(session):
 
     assert session._spring.gaps == []
     assert session._state == RUNNING
+
+
+# --- 상태 보고 ---
+
+
+def test_시작_직후_보고는_STOPPED가_아니다(session):
+    # 하트비트의 첫 보고는 스레드를 띄운 직후 나가고 RUNNING은 구독을 마친
+    # 뒤에야 올라간다. 그 사이에 STOPPED가 나가면 Spring이 endPlatform으로
+    # 방송 세션을 닫아버린다(실측: 시작 0.64초 뒤 ENDED).
+    session._report_status_safely()
+
+    assert [status for _, status, _ in session._spring.statuses] == [RECONNECTING]
+
+
+def test_구독하면_하트비트를_기다리지_않고_RUNNING을_보고한다(session):
+    # 이 보고가 없으면 정상 방송이 최대 HEARTBEAT_SEC 동안 "재연결 중"으로 보인다.
+    session._close_gap()
+
+    assert [status for _, status, _ in session._spring.statuses] == [RUNNING]
+
+
+def test_STOPPED는_stop만_보고한다(session):
+    # Spring은 STOPPED 보고를 세션 종료 지시로 받는다. 다른 경로에서 새어 나가면
+    # 방송 중인 세션이 닫힌다.
+    session._close_gap()
+    session._open_gap(GAP_AUTH_FAILED)
+    session._close_gap()
+    assert STOPPED not in [status for _, status, _ in session._spring.statuses]
+
+    session.stop()
+
+    assert [status for _, status, _ in session._spring.statuses][-1] == STOPPED
 
 
 # --- 상태 스냅샷 ---
