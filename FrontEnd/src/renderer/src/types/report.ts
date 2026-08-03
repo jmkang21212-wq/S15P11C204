@@ -3,7 +3,7 @@
  *
  * 출처: `weekly/2026_0720-0724/설계자료/API 명세서.md` §11.1
  *       `GET /broadcast-sessions/{sessionId}/report`
- * 제약: `BackEnd/spring/laive/src/main/resources/db/migration/V1__init_core_schema.sql`의 CHECK 절과 일치시킨다.
+ * 제약: `BackEnd/spring/laive/src/main/resources/db/migration/V1__baseline_schema.sql`의 CHECK 절과 일치시킨다.
  *
  * 명세서에 명시된 대로 하이라이트의 점수·탐지 사유는 ERD에 저장 컬럼이 없어 응답에 포함되지 않는다.
  * UI에도 만들지 않는다.
