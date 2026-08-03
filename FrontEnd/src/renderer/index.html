@@ -3,10 +3,34 @@
   <head>
     <meta charset="UTF-8" />
     <title>LAIVE</title>
-    <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
+    <!--
+      https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP
+
+      connect-src에 없는 주소로는 fetch·WebSocket이 아예 나가지 못한다. 차단되면
+      개발자도구 콘솔에만 찍히고 화면은 조용히 비어 있어서, "서버는 도는데 앱에서만
+      안 보인다"로 오래 헤매기 쉽다. API 주소를 바꿀 때는 여기도 같이 봐야 한다.
+
+      CSP는 http와 https, ws와 wss를 서로 다른 출처로 본다. 배포는 전부 TLS라
+      https://·wss:// 로 적는다.
+
+      로컬 개발용 localhost는 남겨 둔다. 이 태그는 정적이라 개발 빌드와 배포 빌드가
+      같은 파일을 쓰기 때문에, 지우면 팀원들 로컬 개발이 전부 깨진다.
+
+      ⚠ 여기 적힌 주소는 빌드 시점에 .exe 안으로 굳는다. 배포 도메인이 바뀌면
+        앱을 다시 빌드해서 재배포해야 한다(FrontEnd/.env.production도 함께).
+    -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' blob:; connect-src 'self' http://localhost:8080 ws://localhost:8000 http://localhost:8000"
+      content="
+        default-src 'self';
+        script-src 'self';
+        style-src 'self' 'unsafe-inline';
+        img-src 'self' data: https:;
+        media-src 'self' blob: https://i15c204.p.ssafy.io;
+        connect-src 'self'
+          http://localhost:8080 ws://localhost:8000 http://localhost:8000
+          https://i15c204.p.ssafy.io wss://i15c204.p.ssafy.io
+      "
     />
   </head>
 
