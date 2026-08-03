@@ -88,8 +88,13 @@ export default function CalendarMonth({
         ))}
       </div>
 
-      {/* 날짜 그리드 */}
-      <div className="grid flex-1 grid-cols-7 grid-rows-6 overflow-hidden">
+      {/*
+        날짜 그리드 — 6주 고정이라 셀 높이가 창 높이에 나뉜다. 하루에 일정이 여러 건이면
+        셀 높이를 넘기므로, 셀마다 목록을 독립적으로 스크롤해 가려지는 항목이 없게 한다.
+        행 높이를 내용에 맞춰 늘리는 방식은 쓰지 않았다 — 한 날짜 때문에 그 주 전체가
+        두꺼워져 월 그리드의 균일함이 깨진다.
+      */}
+      <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6">
         {cells.map((d, i) => {
           const inMonth = d.getMonth() === month
           const dayEvents = events.filter((e) => overlapsDay(e, d))
@@ -102,21 +107,28 @@ export default function CalendarMonth({
               onDragLeave={() => setDragOverKey((key) => (key === dayKey ? null : key))}
               onDrop={(event) => handleDrop(event, dayKey)}
               className={cn(
-                'min-h-0 overflow-hidden border-r border-b p-1.5',
+                'flex min-h-0 flex-col overflow-hidden border-r border-b p-1.5',
                 !inMonth && 'bg-muted/30',
                 dragOverKey === dayKey && 'bg-primary/10 ring-2 ring-primary ring-inset'
               )}
             >
+              {/* 날짜 숫자는 스크롤과 함께 밀리지 않게 셀 상단에 고정한다 */}
               <span
                 className={cn(
-                  'text-xs',
+                  'shrink-0 text-xs',
                   inMonth ? 'text-foreground' : 'text-muted-foreground/50',
                   d.getDay() === 0 && inMonth && 'text-destructive'
                 )}
               >
                 {d.getDate()}
               </span>
-              <div className="mt-1 flex flex-col gap-1">
+              {/*
+                넘치는 만큼만 스크롤한다. 스크롤바는 감춘다 — 셀 폭이 좁아 스크롤바가
+                차지하는 자리만큼 칩 내용이 밀려 읽기 어려워지기 때문이다. 휠·트랙패드·
+                드래그 스크롤은 그대로 동작하고, 넘칠 때 마지막 칩이 반쯤 잘려 보이는 것이
+                "더 있다"는 신호가 된다.
+              */}
+              <div className="mt-1 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {/*
                   일정 칩 — 다른 날짜로 끌면 시각·기간은 그대로 두고 날짜만 옮겨진다.
                   이미 끝난 일정(COMPLETED)은 옮기지 않는다. 방송이 실제로 있었던 날을
@@ -138,7 +150,7 @@ export default function CalendarMonth({
                       onClick={() => onSelectEvent(e)}
                       title={movable ? `${e.title} — 다른 날짜로 끌어 일정 변경` : e.title}
                       className={cn(
-                        'flex w-full flex-col rounded px-1.5 py-1 text-left text-caption leading-tight',
+                        'flex w-full shrink-0 flex-col rounded px-1.5 py-1 text-left text-caption leading-tight',
                         e.eventType === 'DAY_OFF'
                           ? 'bg-muted text-muted-foreground'
                           : 'bg-accent text-accent-foreground',
@@ -170,7 +182,7 @@ export default function CalendarMonth({
                       }
                       title={`${p.content} — 다른 날짜로 끌어 기한 변경`}
                       className={cn(
-                        'rounded border border-dashed border-warning/40 bg-warning/5 px-1.5 py-1 text-left text-caption leading-tight text-warning',
+                        'shrink-0 rounded border border-dashed border-warning/40 bg-warning/5 px-1.5 py-1 text-left text-caption leading-tight text-warning',
                         moving ? 'opacity-50' : 'cursor-grab active:cursor-grabbing'
                       )}
                     >

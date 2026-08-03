@@ -1,4 +1,4 @@
-import { BookmarkCheck, GripVertical } from 'lucide-react'
+import { BookmarkCheck, GripVertical, Trash2 } from 'lucide-react'
 import { Card, CardContent } from '@renderer/components/ui/card'
 import { Skeleton } from '@renderer/components/ui/skeleton'
 import { EmptyState, ErrorState } from '@renderer/components/common/StateView'
@@ -27,6 +27,8 @@ interface UnscheduledPromisesProps {
   /** 드롭 처리 중인 약속. 낙관적 표시 없이 해당 항목만 잠근다. */
   movingPromiseId: number | null
   onRetry: () => void
+  /** 약속 삭제(`PATCH status=DISMISSED`). 목록·캘린더·대시보드에서 함께 빠진다. */
+  onDismiss: (promiseId: number) => void
 }
 
 export default function UnscheduledPromises({
@@ -36,7 +38,8 @@ export default function UnscheduledPromises({
   hiddenCount,
   dropTargetAvailable,
   movingPromiseId,
-  onRetry
+  onRetry,
+  onDismiss
 }: UnscheduledPromisesProps): React.JSX.Element {
   return (
     <div className="flex flex-col gap-2 p-5">
@@ -101,12 +104,22 @@ export default function UnscheduledPromises({
                     strokeWidth={1.8}
                     aria-hidden
                   />
-                  <div className="flex min-w-0 flex-col gap-0.5">
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <span className="text-body leading-snug break-words">{promise.content}</span>
                     <span className="font-mono text-caption text-muted-foreground">
-                      {moving ? '일정으로 전환 중…' : formatDateTime(promise.detectedAt)}
+                      {moving ? '처리 중…' : formatDateTime(promise.detectedAt)}
                     </span>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => onDismiss(promise.promiseId)}
+                    disabled={moving}
+                    aria-label={`${promise.content} 약속 삭제`}
+                    title="약속 삭제"
+                    className="shrink-0 text-muted-foreground hover:text-destructive disabled:opacity-50"
+                  >
+                    <Trash2 className="size-[14px]" strokeWidth={1.8} aria-hidden />
+                  </button>
                 </div>
               </li>
             )

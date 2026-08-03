@@ -11,7 +11,7 @@ import {
 } from '@renderer/api/schedule'
 import { Skeleton } from '@renderer/components/ui/skeleton'
 import { ErrorState } from '@renderer/components/common/StateView'
-import { listPromises, updatePromise } from '@renderer/api/promise'
+import { listPromises, schedulePromise, updatePromise } from '@renderer/api/promise'
 import CalendarHeader, { type ScheduleViewMode } from './components/CalendarHeader'
 import CalendarMonth from './components/CalendarMonth'
 import AgendaListView from './components/AgendaListView'
@@ -37,11 +37,11 @@ const DEFAULT_START_HOUR = 21
 const DEFAULT_END_HOUR = 23
 
 /**
- * 약속을 옮겨 담은 신규 일정 초안. 떨어뜨린 날짜에 기본 시간대를 얹고 제목은 약속 내용을 쓴다.
+ * 약속을 옮겨 담은 신규 일정 **초안**. 떨어뜨린 날짜에 기본 시간대를 얹고 제목은 약속 내용을 쓴다.
+ * 실제 생성은 `POST /promises/{id}/schedule`이 하고, 유형·플랫폼 계정은 서버가 정한다.
  *
- * `BROADCAST`로 만드는 이유는 선택지가 그것뿐이기 때문이다 — `event_type` CHECK가
- * `BROADCAST | DAY_OFF`만 허용하고 약속은 휴방이 아니다. 그래서 `platform_account_id`가
- * NOT NULL 강제되며(같은 CHECK), 연동 계정이 없으면 전환 자체가 불가능하다.
+ * 제목을 미리 잘라 두는 이유는 서버가 200자 초과를 조용히 자르지 않고 400으로 거부하기
+ * 때문이다. 잘린 원문은 메모에 남기고, 사용자는 저장 전에 폼에서 둘 다 보고 고칠 수 있다.
  */
 function promiseEvent(
   dateKey: string,
@@ -54,11 +54,11 @@ function promiseEvent(
     platformAccountId,
     eventType: 'BROADCAST',
     title: content.slice(0, EVENT_TITLE_MAX),
-    // 잘려나간 내용을 잃지 않도록 원문을 메모에 남긴다.
     memo: content.length > EVENT_TITLE_MAX ? content : null,
     startAt: new Date(year, month - 1, day, DEFAULT_START_HOUR, 0, 0).toISOString(),
     endAt: new Date(year, month - 1, day, DEFAULT_END_HOUR, 0, 0).toISOString(),
-    status: 'SCHEDULED'
+    status: 'SCHEDULED',
+    promiseId: null
   }
 }
 
@@ -75,7 +75,8 @@ function blankEvent(year: number, month: number, platformAccountId: number | nul
     memo: null,
     startAt: start.toISOString(),
     endAt: end.toISOString(),
-    status: 'SCHEDULED'
+    status: 'SCHEDULED',
+    promiseId: null
   }
 }
 
@@ -105,10 +106,14 @@ function diffEventPatch(original: CalendarEvent, updated: CalendarEvent): Update
  * `due_date IS NOT NULL`로 걸러내기 때문이다.
  *
  * 드래그는 끌어온 것이 무엇인지에 따라 다른 일을 한다.
- *  - 기한 미정 약속 → 날짜 칸: 시간을 받아 **일정으로 전환**하고 약속은 목록에서 치운다.
+ *  - 기한 미정 약속 → 날짜 칸: 시간을 받아 **일정으로 전환**한다(`POST /promises/{id}/schedule`).
  *    약속은 "기한"이고 일정은 "시간 블록"이라 시각이 정해지는 순간 일정이 맞는 그릇이다.
+ *    전환된 약속은 서버가 `SCHEDULED`로 옮겨 두 목록에서 함께 빠진다.
  *  - 캘린더 약속 칩 → 다른 날짜: 기한만 옮긴다(잘못 떨어뜨렸을 때의 복구 경로).
  *  - 일정 칩 → 다른 날짜: 시각·기간은 그대로 두고 날짜만 옮긴다.
+ *
+ * 전환된 일정을 취소하면 서버가 같은 트랜잭션에서 약속을 `PENDING`으로 되돌리므로,
+ * 취소 후에는 약속 목록도 함께 갱신해야 "기한 미정"에 다시 나타난 것이 보인다.
  */
 export default function SchedulePage(): React.JSX.Element {
   const [viewYear, setViewYear] = useState(() => new Date().getFullYear())
@@ -186,7 +191,19 @@ export default function SchedulePage(): React.JSX.Element {
     setMutationError(null)
     try {
       let saved: CalendarEvent
-      if (event.calendarEventId < 0) {
+      if (event.calendarEventId < 0 && convertingPromiseId !== null) {
+        // 약속 전환 — 일정 생성과 약속 상태 변경이 서버 한 트랜잭션이다.
+        // 제목이 비면 키를 아예 빼서 서버가 약속 content를 쓰게 한다(빈 문자열은 400).
+        const title = event.title.trim()
+        saved = await schedulePromise(convertingPromiseId, {
+          startAt: event.startAt,
+          endAt: event.endAt,
+          ...(title === '' ? {} : { title }),
+          ...(event.memo === null ? {} : { memo: event.memo })
+        })
+        setConvertingPromiseId(null)
+        refetchPromises()
+      } else if (event.calendarEventId < 0) {
         saved = await createCalendarEvent({
           platformAccountId: event.platformAccountId,
           eventType: event.eventType,
@@ -208,11 +225,6 @@ export default function SchedulePage(): React.JSX.Element {
       setMode('view')
       setDraftContent(buildAnnouncementDraft(saved))
       refetch()
-      // 약속에서 전환된 일정이면 원래 약속을 치운다. 일정 저장이 성공한 뒤에만 한다.
-      if (convertingPromiseId !== null) {
-        await tidyConvertedPromise(convertingPromiseId)
-        setConvertingPromiseId(null)
-      }
     } catch (e) {
       setMutationError(e instanceof ApiError ? e.message : '일정을 저장하지 못했어요.')
     } finally {
@@ -239,6 +251,10 @@ export default function SchedulePage(): React.JSX.Element {
     setMutationError(null)
   }
 
+  /**
+   * 일정 취소. 약속에서 전환된 일정이면 BE가 같은 트랜잭션에서 그 약속을 PENDING으로
+   * 되돌리므로, 약속 목록도 함께 갱신해야 "기한 미정"에 다시 나타난 것이 보인다.
+   */
   const handleDelete = async (event: CalendarEvent): Promise<void> => {
     setSaving(true)
     setMutationError(null)
@@ -247,6 +263,7 @@ export default function SchedulePage(): React.JSX.Element {
       setSelectedEvent(null)
       setDraftContent(null)
       refetch()
+      if (event.promiseId !== null) refetchPromises()
     } catch (e) {
       setMutationError(e instanceof ApiError ? e.message : '일정을 취소하지 못했어요.')
     } finally {
@@ -325,6 +342,23 @@ export default function SchedulePage(): React.JSX.Element {
     }
   }
 
+  /**
+   * 확정한 약속을 지운다. 하드 삭제가 아니라 `DISMISSED` 전이라 브리핑의 참조
+   * (`live_briefings.promise_id`)가 끊기지 않고, 목록·캘린더·대시보드 세 곳에서 함께 빠진다.
+   */
+  const handleDismissPromise = async (promiseId: number): Promise<void> => {
+    setMovingPromiseId(promiseId)
+    setDragError(null)
+    try {
+      await updatePromise(promiseId, { status: 'DISMISSED' })
+      refetchPromises()
+    } catch (e) {
+      setDragError(e instanceof ApiError ? e.message : '약속을 삭제하지 못했어요.')
+    } finally {
+      setMovingPromiseId(null)
+    }
+  }
+
   const handleDropItem = (payload: ScheduleDragPayload, dateKey: string): void => {
     if (movingPromiseId !== null || movingEventId !== null) return
     if (payload.kind === 'event') {
@@ -336,27 +370,6 @@ export default function SchedulePage(): React.JSX.Element {
       return
     }
     void movePromiseDueDate(payload.id, dateKey)
-  }
-
-  /**
-   * 전환된 약속을 목록에서 치운다. 일정이 그 역할을 이어받았으므로 미정 목록에 남으면
-   * 같은 약속을 또 끌어다 놓게 된다.
-   *
-   * `DISMISSED`가 맞는 상태지만 BE가 확정(PENDING) 이후의 DISMISSED 전이를 막아 둔 상태다
-   * (`PromiseStatus.isPatchTarget`에 없고 `dismiss()`는 `requireDetected()`). 그래서
-   * 차선으로 `ON_HOLD`를 쓴다 — 우리 미정 목록은 PENDING만 조회하므로 목록에서는 빠지고,
-   * 대시보드 미이행 집계에는 남아 "아직 안 지킨 약속"이라는 사실은 보존된다.
-   * BE가 열리면 이 값만 'DISMISSED'로 바꾸면 된다.
-   */
-  const tidyConvertedPromise = async (promiseId: number): Promise<void> => {
-    try {
-      await updatePromise(promiseId, { status: 'ON_HOLD' })
-    } catch {
-      // 일정은 이미 만들어졌다. 정리 실패로 저장을 되돌리지 않고 사실만 알린다.
-      setDragError('일정은 만들었지만 약속을 목록에서 치우지 못했어요.')
-    } finally {
-      refetchPromises()
-    }
   }
 
   // BE 조회 쿼리(findRange)에 status 필터가 없어 취소된 일정도 함께 내려온다 — 화면에서 거른다.
@@ -430,6 +443,7 @@ export default function SchedulePage(): React.JSX.Element {
           dropTargetAvailable={viewMode === 'month'}
           movingPromiseId={movingPromiseId}
           onRetry={refetchPromises}
+          onDismiss={(promiseId) => void handleDismissPromise(promiseId)}
         />
 
         {selectedEvent && (

@@ -50,14 +50,22 @@ export default function EventDetail({
         </button>
       </div>
 
-      <span
-        className={cn(
-          'w-fit rounded-lg px-2.5 py-1 text-xs font-semibold',
-          isBroadcast ? 'bg-accent text-accent-foreground' : 'bg-muted text-muted-foreground'
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span
+          className={cn(
+            'w-fit rounded-lg px-2.5 py-1 text-xs font-semibold',
+            isBroadcast ? 'bg-accent text-accent-foreground' : 'bg-muted text-muted-foreground'
+          )}
+        >
+          {isBroadcast ? '방송' : '휴방'}
+        </span>
+        {/* 취소하면 원래 약속이 "기한 미정"으로 돌아온다 — 그 사실을 미리 알 수 있어야 한다. */}
+        {event.promiseId !== null && (
+          <span className="w-fit rounded-lg border border-dashed border-warning/40 bg-warning/5 px-2.5 py-1 text-xs font-semibold text-warning">
+            🔖 약속에서 생성됨
+          </span>
         )}
-      >
-        {isBroadcast ? '방송' : '휴방'}
-      </span>
+      </div>
 
       <p className="text-base font-bold break-words">{event.title}</p>
 
