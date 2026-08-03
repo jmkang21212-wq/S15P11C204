@@ -3,8 +3,18 @@
 발화 하나를 받아 사전에 걸리는지 즉시 검사한다. 문자열 길이와 무관하게
 한 번의 스캔으로 모든 단어를 동시에 찾으므로 지연은 사실상 0이다.
 LLM을 기다릴 필요가 없는 명백한 비속어는 여기서 끝난다.
+
+스트리머마다 사전이 다르다 (AI/RISK_POLICY_SPEC.md §1):
+
+    스트리머 사전 = terms.yaml − 허용어 + 금칙어
+
+허용어를 "매칭 후 걸러내기"가 아니라 "automaton에서 빼기"로 처리하는 것이 핵심이다.
+빼두면 히트가 아예 나지 않아 server.py의 `if hits: ... elif _judge:` 분기가 그 발화를
+자연스럽게 LLM으로 넘긴다. 분기 순서를 건드릴 필요가 없다.
 """
 
+import functools
+import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -13,8 +23,15 @@ import ahocorasick
 import yaml
 
 from app.detect.normalize import normalize
+from app.detect.personal import EMPTY, PersonalTerms
+
+log = logging.getLogger(__name__)
 
 DEFAULT_PATH = Path(__file__).with_name("terms.yaml")
+
+# 개인 사전 automaton 캐시 상한. 동시에 방송하는 스트리머 수를 훨씬 넘는 값이면
+# 충분하다 — 재접속·다중 세션이 같은 사전을 공유하게 하는 것이 목적이다.
+_MATCHER_CACHE_SIZE = 256
 
 _SEVERITY_RANK = {"low": 0, "medium": 1, "high": 2}
 
@@ -46,22 +63,48 @@ class Hit:
         return _SEVERITY_RANK.get(self.severity, 0)
 
 
+@functools.lru_cache(maxsize=1)
+def _load_terms(path: str) -> dict:
+    """terms.yaml 파싱 결과. 스트리머마다 matcher를 만들 때 매번 읽지 않게 캐시한다."""
+    return yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+
+
 class DictionaryMatcher:
-    def __init__(self, path: Path | str = DEFAULT_PATH):
-        data = yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+    def __init__(self, path: Path | str = DEFAULT_PATH,
+                 personal: PersonalTerms = EMPTY):
+        data = _load_terms(str(path))
+
+        # 허용어에 걸린 항목은 대표어·variants를 통째로 뺀다. 표기 하나만 빼면
+        # "씨발"을 허용해도 "시발", "ㅅㅂ"이 그대로 걸려서, 스트리머가 같은 말의
+        # 변형을 전부 등록해야 한다.
+        allowed = set(personal.allow)
 
         self._auto = ahocorasick.Automaton()
         count = 0
+        dropped = 0
         for entry in data.get("terms") or []:
             term = entry["term"]
+            spellings = [term, *(entry.get("variants") or [])]
+            normalized = [n for n, _ in (normalize(s) for s in spellings) if n]
+            if allowed.intersection(normalized):
+                dropped += 1
+                continue
+
             meta = (term, entry.get("severity", "medium"),
                     entry.get("category", "profanity"))
-            for spelling in [term, *(entry.get("variants") or [])]:
-                norm, _ = normalize(spelling)
-                if norm:
-                    self._auto.add_word(norm, (norm, meta))
-                    count += 1
+            for norm in normalized:
+                self._auto.add_word(norm, (norm, meta))
+                count += 1
+
+        # 금칙어는 기본 사전에 없던 표기다. 물려받을 category가 없어 profanity로 둔다 —
+        # 스트리머에게 감지기 카테고리 7종을 고르라고 하는 것은 과하다.
+        for norm, severity in personal.block:
+            self._auto.add_word(norm, (norm, (norm, severity, "profanity")))
+            count += 1
+
         self.size = count
+        self.personal_block = len(personal.block)
+        self.personal_allow_dropped = dropped
         if count:
             self._auto.make_automaton()
 
@@ -129,3 +172,25 @@ def _drop_contained(hits: list[Hit]) -> list[Hit]:
             continue
         kept.append(hit)
     return kept
+
+
+@functools.lru_cache(maxsize=_MATCHER_CACHE_SIZE)
+def _cached_matcher(personal: PersonalTerms) -> DictionaryMatcher:
+    return DictionaryMatcher(personal=personal)
+
+
+def matcher_for(personal: PersonalTerms) -> DictionaryMatcher:
+    """스트리머 사전에 맞는 matcher를 돌려준다. 같은 사전이면 같은 객체를 재사용한다.
+
+    PersonalTerms가 불변·해시 가능해서 그 자체가 캐시 키다. 별도 버전 번호를 관리할
+    필요가 없고, 사전이 같은 재접속·다중 세션이 자연히 automaton을 공유한다.
+
+    matcher는 만들어진 뒤 읽기만 하므로 여러 세션이 나눠 써도 안전하다.
+    """
+    if personal.is_empty:
+        return BASE
+    return _cached_matcher(personal)
+
+
+# 기본 사전. 개인 사전이 없는 세션과, 세션이 이미 끊긴 뒤 도착한 전사가 쓴다.
+BASE = DictionaryMatcher()
