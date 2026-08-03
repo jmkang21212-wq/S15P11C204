@@ -1,11 +1,14 @@
 package com.example.laive.platform.api;
 
 import com.example.laive.auth.service.JwtTokenService;
+import com.example.laive.platform.core.PlatformLiveSetting;
 import com.example.laive.platform.domain.PlatformAccount;
 import com.example.laive.platform.exception.PlatformCallbackException;
 import com.example.laive.platform.exception.PlatformException;
 import com.example.laive.platform.service.PlatformAccountService;
 import com.example.laive.platform.service.PlatformAccountService.CompletedLink;
+import com.example.laive.platform.service.PlatformLiveSettingService;
+import org.springframework.http.MediaType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +31,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -49,6 +53,9 @@ class PlatformAccountApiTest {
 
     @MockitoBean
     private PlatformAccountService platformAccountService;
+
+    @MockitoBean
+    private PlatformLiveSettingService liveSettingService;
 
     private MockMvc mockMvc;
 
@@ -163,6 +170,56 @@ class PlatformAccountApiTest {
         mockMvc.perform(delete("/api/v1/platform-accounts/15").header(HttpHeaders.AUTHORIZATION, bearer()))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error.code").value("PLATFORM_REAUTH_REQUIRED"));
+    }
+
+    @Test
+    void requiresAuthenticationForLiveSetting() throws Exception {
+        mockMvc.perform(get("/api/v1/platform-accounts/15/live-setting"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error.code").value("AUTH_INVALID_CREDENTIALS"));
+    }
+
+    @Test
+    void returnsLiveSetting() throws Exception {
+        when(liveSettingService.get(STREAMER_ID, 15L)).thenReturn(new PlatformLiveSetting(
+                "오늘 방송 제목",
+                new PlatformLiveSetting.Category("GAME", "League_of_Legends", "리그 오브 레전드", null),
+                List.of("태그1")
+        ));
+
+        mockMvc.perform(get("/api/v1/platform-accounts/15/live-setting")
+                        .header(HttpHeaders.AUTHORIZATION, bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.defaultLiveTitle").value("오늘 방송 제목"))
+                .andExpect(jsonPath("$.data.category.categoryValue").value("리그 오브 레전드"))
+                .andExpect(jsonPath("$.data.tags[0]").value("태그1"));
+    }
+
+    @Test
+    void updatesLiveSettingTitle() throws Exception {
+        when(liveSettingService.update(STREAMER_ID, 15L, "새 방송 제목"))
+                .thenReturn(new PlatformLiveSetting("새 방송 제목", null, null));
+
+        mockMvc.perform(patch("/api/v1/platform-accounts/15/live-setting")
+                        .header(HttpHeaders.AUTHORIZATION, bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"defaultLiveTitle\":\"새 방송 제목\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.defaultLiveTitle").value("새 방송 제목"));
+    }
+
+    @Test
+    void mapsScopeInsufficientToConflict() throws Exception {
+        // 방송 설정 권한이 추가되기 전에 연동한 계정은 재연동을 유도한다.
+        when(liveSettingService.get(anyLong(), anyLong()))
+                .thenThrow(PlatformException.scopeInsufficient());
+
+        mockMvc.perform(get("/api/v1/platform-accounts/15/live-setting")
+                        .header(HttpHeaders.AUTHORIZATION, bearer()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error.code").value("PLATFORM_SCOPE_INSUFFICIENT"));
     }
 
     private String bearer() {

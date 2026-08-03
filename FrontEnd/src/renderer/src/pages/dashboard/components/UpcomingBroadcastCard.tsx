@@ -8,6 +8,7 @@ import { PATHS } from '@renderer/routes/paths'
 import { cn } from '@renderer/lib/utils'
 import { formatDate, formatDuration, formatTime } from '@renderer/lib/format'
 import type { UpcomingBroadcast } from '@renderer/types/dashboard'
+import ChzzkTitleSection from './ChzzkTitleSection'
 
 interface UpcomingBroadcastCardProps {
   broadcast: UpcomingBroadcast | null
@@ -95,6 +96,9 @@ export default function UpcomingBroadcastCard({
             }
           />
         )}
+
+        {/* 치지직에 실제로 표시되는 방송 제목 — 위의 일정 제목과 별개 값이라 캡션으로 구분한다. */}
+        <ChzzkTitleSection />
 
         {/*
           `mt-auto`로 CTA를 카드 아래쪽에 붙인다. 옆 카드(최근 세션 성과)가 요약 문단

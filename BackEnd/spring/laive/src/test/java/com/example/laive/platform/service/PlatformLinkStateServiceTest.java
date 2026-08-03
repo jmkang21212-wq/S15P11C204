@@ -89,7 +89,7 @@ class PlatformLinkStateServiceTest {
 
     private PlatformProperties platformProperties() {
         return new PlatformProperties(
-                new PlatformProperties.Chzzk("id", "secret", "uri", "auth", "token", "revoke", "me"),
+                new PlatformProperties.Chzzk("id", "secret", "uri", "auth", "token", "revoke", "me", "live-setting"),
                 "dGVzdC1rZXktMzItYnl0ZXMtZm9yLXVuaXQtdGVzdCE=",
                 Duration.ofMinutes(5),
                 Duration.ofMinutes(5)

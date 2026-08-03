@@ -22,4 +22,8 @@ public interface PlatformIntegrationAdapter {
     default Optional<ViewerMetricCapability> viewerMetrics() {
         return Optional.empty();
     }
+
+    default Optional<PlatformLiveSettingCapability> liveSetting() {
+        return Optional.empty();
+    }
 }

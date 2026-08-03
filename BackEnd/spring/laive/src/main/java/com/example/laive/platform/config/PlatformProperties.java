@@ -51,7 +51,8 @@ public record PlatformProperties(
             String authorizationUri,
             String tokenUri,
             String revokeUri,
-            String userMeUri
+            String userMeUri,
+            String liveSettingUri
     ) {
     }
 
