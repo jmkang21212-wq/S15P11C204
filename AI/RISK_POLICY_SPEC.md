@@ -4,6 +4,9 @@
 > 대상: AI 서버(`app/`) + Spring + 프론트 설정 화면
 > 감지 파이프라인 전반은 [BACKEND_API.md](BACKEND_API.md)·[FRONTEND_API.md](FRONTEND_API.md) 참고.
 > 구현 파일 목록은 맨 아래 "관련 코드"에 있다.
+>
+> **프론트 작업자는 [RISK_TERMS_FRONTEND.md](RISK_TERMS_FRONTEND.md)를 보면 된다.**
+> 이 문서는 왜 이렇게 만들었는지를 남긴 설계 기록이라 화면을 짜는 데 필요한 것보다 훨씬 길다.
 
 ---
 
