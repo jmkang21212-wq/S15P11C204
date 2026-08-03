@@ -49,7 +49,15 @@ RUN if [ "$BAKE_MODEL" = "true" ]; then \
 # 로그 디렉터리를 미리 만든다 (볼륨을 안 붙여도 서버가 뜨도록)
 RUN mkdir -p /app/logs /app/chat-ai/logs
 
-RUN chmod +x /app/entrypoint.sh
+# CRLF 제거 후 실행 권한.
+#
+# Windows의 git은 기본값(core.autocrlf=true)으로 체크아웃할 때 LF를 CRLF로 바꾼다.
+# 그대로 빌드하면 리눅스가 셔뱅을 '#!/bin/sh\r'로 읽어 컨테이너가 즉시 죽는다.
+#     exec /app/entrypoint.sh: no such file or directory
+#
+# 저장소 루트의 .gitattributes가 근본 해결이지만, 그 파일이 생기기 전에 clone한
+# 작업 트리는 이미 CRLF다. 빌드 시점에도 한 번 더 막는다.
+RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 ENTRYPOINT ["/app/entrypoint.sh"]
 
 # 기본값은 채팅 감정 분류. compose에서 서비스별로 덮어쓴다
