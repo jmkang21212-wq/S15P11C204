@@ -27,6 +27,16 @@ LOG_FILE = os.getenv('CHATAI_LOG_FILE',
 # Spring 계약의 ingest 타임아웃이 2초라 그 절반을 경고선으로 잡았다.
 SLOW_REQUEST_MS = int(os.getenv('CHATAI_SLOW_REQUEST_MS', '1000'))
 
+# --- 추론 ---
+# ONNX Runtime이 추론 하나에 쓸 스레드 수. 0이면 제한 없음(코어 수만큼).
+#
+# 기본값 2인 이유: 배포 서버가 4 vCPU인데 Spring·PostgreSQL·Redis·다른 AI 서버가
+# 같은 기계에 있다. 제한하지 않으면 /ingest 한 번이 4코어를 전부 잡아 그 순간
+# Spring이 요청을 처리할 코어가 없다.
+# 실측: 2스레드 137건/s(동시 방송 5~7개), 무제한 270건/s(10~14개).
+# 발표 규모가 1~3방송이라 2로 충분하고 나머지 2코어를 백엔드에 남긴다.
+ORT_THREADS = int(os.getenv('CHATAI_ORT_THREADS', '2'))
+
 # Redis 키 TTL(초) — 방송 종료 후 DELETE를 못 받아도 스스로 사라지는 안전망.
 UID_TTL = 600       # 유니크 채터 ZSET · viewers · 원문 LIST: 윈도우(180s)보다 넉넉히
 BUCKET_TTL = 300    # 초단위 감정 버킷: 윈도우 + 여유
