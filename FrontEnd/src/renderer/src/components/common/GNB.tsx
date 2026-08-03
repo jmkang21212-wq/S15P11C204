@@ -12,6 +12,8 @@ import {
   LogOut,
   type LucideIcon
 } from 'lucide-react'
+import logo from '@renderer/assets/logo.png'
+import appIcon from '@renderer/assets/app-icon.png'
 import { cn } from '@renderer/lib/utils'
 import { PATHS } from '@renderer/routes/paths'
 import { useAuth } from '@renderer/auth/authStore'
@@ -108,11 +110,12 @@ export default function GNB({
       )}
     >
       {/* 로고 */}
-      <div className={cn('flex items-center gap-2 p-4', collapsed && 'justify-center')}>
-        <span className="flex size-8 items-center justify-center rounded-md bg-primary font-bold text-primary-foreground">
-          L
-        </span>
-        {!collapsed && <span className="text-lg font-bold">LAIVE</span>}
+      <div className={cn('flex items-center p-4', collapsed && 'justify-center')}>
+        {collapsed ? (
+          <img src={appIcon} alt="LAIVE" className="size-8 rounded-md" />
+        ) : (
+          <img src={logo} alt="LAIVE" className="h-7 w-auto" />
+        )}
       </div>
 
       {/* LIVE 배너 — 방송 중일 때만 노출, 클릭 시 콘솔로 이동 */}

@@ -32,7 +32,10 @@ services:
     command: ["uvicorn", "app.server:app", "--host", "0.0.0.0", "--port", "8000"]
     ports: ["8000:8000"]
     environment:
-      SPRING_BASE_URL: "http://host.docker.internal:8080"
+      # .env에 값이 있으면 그걸 쓰고, 없으면 로컬 기본값.
+      # 배포 서버에서는 .env에 SPRING_BASE_URL=http://spring:8080 만 적으면
+      # 이 파일을 고치지 않아도 된다(고쳤다 되돌리다 실수로 커밋되는 것을 막는다).
+      SPRING_BASE_URL: "${SPRING_BASE_URL:-http://host.docker.internal:8080}"
       VOICE_LOG_FILE: "/app/logs/voice.log"
       # WS 인증 티켓은 Spring이 발급하고 여기서 읽는다 → Spring과 같은 DB 0.
       # (chat-ai의 DB 1과 달리 공유가 목적이라 분리하면 안 된다)
@@ -84,7 +87,7 @@ services:
               "--app-dir", "chat-collector"]
     ports: ["8002:8002"]
     environment:
-      SPRING_BASE_URL: "http://host.docker.internal:8080"
+      SPRING_BASE_URL: "${SPRING_BASE_URL:-http://host.docker.internal:8080}"
     volumes:
       - ./logs:/app/logs
     healthcheck:

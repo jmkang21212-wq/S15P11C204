@@ -1,0 +1,24 @@
+# 줄바꿈 정규화.
+#
+# Windows의 git은 기본값(core.autocrlf=true)으로 체크아웃할 때 LF를 CRLF로 바꾼다.
+# 그 파일이 리눅스 컨테이너로 들어가면 셸이 '\r'을 명령의 일부로 읽어 깨진다.
+#
+#     #!/bin/sh\r  →  '/bin/sh\r' 을 찾다가 실패
+#     exec /app/entrypoint.sh: no such file or directory
+#
+# 컨테이너 안에서 실행되는 파일은 OS와 무관하게 LF로 고정한다.
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+entrypoint.sh text eol=lf
+
+# Windows 전용 스크립트는 반대로 CRLF를 유지한다.
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+*.ps1       text eol=crlf
+
+# 바이너리는 건드리지 않는다.
+*.onnx      binary
+*.png       binary
+*.jpg       binary
+*.ico       binary
+*.pdf       binary
