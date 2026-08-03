@@ -38,9 +38,22 @@ export default function RecentSessionCard({ session }: RecentSessionCardProps): 
               <div className="text-xs text-muted-foreground">평균 시청자</div>
             </div>
           </div>
-          <p className="mt-3 rounded-lg bg-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-            {session.summary}
-          </p>
+          {/*
+            BE가 `COALESCE(r.summary, '')`로 내려주기 때문에 요약이 없으면 빈 문자열이 온다.
+            그대로 그리면 아무것도 없는 회색 박스가 남아 고장처럼 보인다 — 리포트가 아직
+            만들어지는 중인지, AI 요약이 없는 것인지 대신 알려준다.
+          */}
+          {session.summary ? (
+            <p className="mt-3 rounded-lg bg-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+              {session.summary}
+            </p>
+          ) : (
+            <p className="mt-3 text-xs text-muted-foreground">
+              {session.reportStatus === 'PROCESSING'
+                ? '리포트를 만들고 있어요.'
+                : 'AI 요약이 없어요.'}
+            </p>
+          )}
           <Link
             to={`${PATHS.sessionReport}/${session.sessionId}`}
             className="mt-auto pt-3 text-xs font-medium text-muted-foreground hover:text-foreground"
@@ -49,7 +62,10 @@ export default function RecentSessionCard({ session }: RecentSessionCardProps): 
           </Link>
         </div>
       ) : (
-        <EmptyState title="아직 완료된 방송이 없어요" className="rounded-lg bg-muted/40 py-8" />
+        <EmptyState
+          title="아직 완료된 방송이 없어요"
+          className="flex-1 rounded-lg bg-muted/40 py-8"
+        />
       )}
     </Card>
   )
