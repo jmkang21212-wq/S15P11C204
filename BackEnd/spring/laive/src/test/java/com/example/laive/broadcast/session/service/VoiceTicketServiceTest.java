@@ -2,6 +2,12 @@ package com.example.laive.broadcast.session.service;
 
 import com.example.laive.broadcast.session.config.BroadcastSessionProperties;
 import com.example.laive.broadcast.session.exception.BroadcastSessionException;
+import com.example.laive.streamer.risk.domain.RiskTermKind;
+import com.example.laive.streamer.risk.domain.RiskTermSeverity;
+import com.example.laive.streamer.risk.domain.StreamerRiskTerm;
+import com.example.laive.streamer.risk.service.StreamerRiskTermService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -9,6 +15,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
 import java.time.Duration;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -23,9 +30,12 @@ import static org.mockito.Mockito.when;
 
 class VoiceTicketServiceTest {
 
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
     private StringRedisTemplate redisTemplate;
     private ValueOperations<String, String> valueOperations;
     private BroadcastSessionQueryService queryService;
+    private StreamerRiskTermService riskTermService;
     private VoiceTicketService service;
 
     @BeforeEach
@@ -34,16 +44,19 @@ class VoiceTicketServiceTest {
         redisTemplate = mock(StringRedisTemplate.class);
         valueOperations = mock(ValueOperations.class);
         queryService = mock(BroadcastSessionQueryService.class);
+        riskTermService = mock(StreamerRiskTermService.class);
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-        service = new VoiceTicketService(redisTemplate, queryService, properties());
+        when(riskTermService.list(anyLong())).thenReturn(List.of());
+        service = new VoiceTicketService(
+                redisTemplate, queryService, properties(), riskTermService, MAPPER);
     }
 
     /**
-     * AI 서버(Python)가 {@code streamerId|sessionId}로 파싱한다.
-     * 이 형식이 어긋나면 모든 음성 접속이 조용히 거절되므로 값까지 검증한다.
+     * AI 서버(Python)의 {@code app/auth.py}가 이 JSON을 파싱한다.
+     * 필드 이름이 어긋나면 모든 음성 접속이 조용히 거절되므로 키와 값을 함께 검증한다.
      */
     @Test
-    void storesStreamerAndSessionSeparatedByPipe() {
+    void storesStreamerAndSessionAsJson() throws Exception {
         String ticket = service.issue(7L, 4242L);
 
         assertThat(ticket).isNotBlank();
@@ -52,7 +65,60 @@ class VoiceTicketServiceTest {
         verify(valueOperations).set(key.capture(), value.capture(), any(Duration.class));
 
         assertThat(key.getValue()).isEqualTo("voice:ticket:" + ticket);
-        assertThat(value.getValue()).isEqualTo("7|4242");
+
+        JsonNode stored = MAPPER.readTree(value.getValue());
+        assertThat(stored.get("streamerId").asLong()).isEqualTo(7L);
+        assertThat(stored.get("sessionId").asLong()).isEqualTo(4242L);
+        assertThat(stored.get("terms").get("block")).isEmpty();
+        assertThat(stored.get("terms").get("allow")).isEmpty();
+    }
+
+    /**
+     * 개인 사전이 티켓에 실려야 AI 서버가 스트리머별 automaton을 만들 수 있다.
+     * 허용어는 문자열 목록, 금칙어는 등급이 함께 붙은 객체 목록이다.
+     */
+    @Test
+    void embedsPersonalDictionary() throws Exception {
+        when(riskTermService.list(7L)).thenReturn(List.of(
+                new StreamerRiskTerm(1L, RiskTermKind.BLOCK, "개새기", "개새기", RiskTermSeverity.HIGH),
+                new StreamerRiskTerm(2L, RiskTermKind.ALLOW, "씨발", "씨발", null)
+        ));
+
+        service.issue(7L, 4242L);
+
+        JsonNode terms = MAPPER.readTree(captureStoredValue()).get("terms");
+        assertThat(terms.get("block").get(0).get("term").asText()).isEqualTo("개새기");
+        assertThat(terms.get("block").get(0).get("severity").asText()).isEqualTo("HIGH");
+        assertThat(terms.get("allow").get(0).asText()).isEqualTo("씨발");
+    }
+
+    /** 등급을 고르지 않은 금칙어는 MEDIUM으로 나간다. AI 쪽에 NULL을 넘기지 않는다. */
+    @Test
+    void defaultsBlockSeverityToMedium() throws Exception {
+        when(riskTermService.list(7L)).thenReturn(List.of(
+                new StreamerRiskTerm(1L, RiskTermKind.BLOCK, "개새기", "개새기", null)
+        ));
+
+        service.issue(7L, 4242L);
+
+        JsonNode block = MAPPER.readTree(captureStoredValue()).get("terms").get("block");
+        assertThat(block.get(0).get("severity").asText()).isEqualTo("MEDIUM");
+    }
+
+    /**
+     * 사전 조회가 실패해도 방송은 시작될 수 있어야 한다.
+     * 기본 감지는 사전 없이도 정상 동작한다.
+     */
+    @Test
+    void issuesTicketEvenIfDictionaryLookupFails() throws Exception {
+        when(riskTermService.list(7L)).thenThrow(new IllegalStateException("DB down"));
+
+        String ticket = service.issue(7L, 4242L);
+
+        assertThat(ticket).isNotBlank();
+        JsonNode terms = MAPPER.readTree(captureStoredValue()).get("terms");
+        assertThat(terms.get("block")).isEmpty();
+        assertThat(terms.get("allow")).isEmpty();
     }
 
     @Test
@@ -84,6 +150,12 @@ class VoiceTicketServiceTest {
         assertThatThrownBy(() -> service.issue(999L, 4242L))
                 .isInstanceOf(BroadcastSessionException.class);
         verify(valueOperations, never()).set(anyString(), anyString(), any(Duration.class));
+    }
+
+    private String captureStoredValue() {
+        ArgumentCaptor<String> value = ArgumentCaptor.forClass(String.class);
+        verify(valueOperations).set(anyString(), value.capture(), any(Duration.class));
+        return value.getValue();
     }
 
     private BroadcastSessionProperties properties() {

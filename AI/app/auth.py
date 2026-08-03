@@ -13,12 +13,14 @@ broadcastSessionId를 그대로 믿어서, 아무 번호나 넣으면 남의 방
 Redis DB 주의: Spring이 티켓을 쓰므로 **Spring의 DB(기본 0)** 를 읽어야 한다.
 채팅 감정 서버가 쓰는 DB 1이 아니다.
 """
+import json
 import logging
 from typing import NamedTuple, Optional
 
 import redis as redis_lib
 
 from app.config import VOICE_AUTH_DEV_BYPASS, VOICE_REDIS_URL
+from app.detect.personal import EMPTY, PersonalTerms
 
 log = logging.getLogger(__name__)
 
@@ -30,6 +32,8 @@ TICKET_DELIMITER = '|'
 class Ticket(NamedTuple):
     streamer_id: int
     broadcast_session_id: int
+    # 스트리머 개인 사전. 구형식 티켓이면 비어 있다.
+    terms: PersonalTerms = EMPTY
 
 
 class TicketVerifier:
@@ -70,9 +74,41 @@ class TicketVerifier:
 
         try:
             text = raw.decode() if isinstance(raw, bytes) else raw
-            streamer_id, session_id = text.split(TICKET_DELIMITER, 1)
-            return Ticket(int(streamer_id), int(session_id))
-        except (ValueError, AttributeError):
-            # Spring과 형식이 어긋난 경우다. 통과시키면 인증이 무의미하므로 거절한다.
-            log.error('티켓 형식이 Spring과 다르다: %r — 양쪽 구현을 맞출 것', raw)
+        except (UnicodeDecodeError, AttributeError):
+            log.error('티켓 값을 디코딩할 수 없다: %r', raw)
             return None
+
+        ticket = _parse_json(text) if text.lstrip().startswith('{') else _parse_pipe(text)
+        if ticket is None:
+            # Spring과 형식이 어긋난 경우다. 통과시키면 인증이 무의미하므로 거절한다.
+            log.error('티켓 형식이 Spring과 다르다: %r — 양쪽 구현을 맞출 것', text)
+        return ticket
+
+
+def _parse_json(text: str) -> Optional[Ticket]:
+    """현행 형식. {"streamerId": 42, "sessionId": 1087, "terms": {...}}"""
+    try:
+        data = json.loads(text)
+        return Ticket(
+            int(data['streamerId']),
+            int(data['sessionId']),
+            # 사전을 못 읽어도 접속은 막지 않는다. 기본 사전으로 방송할 수 있는 편이
+            # 방송을 아예 시작하지 못하는 것보다 낫다.
+            PersonalTerms.parse(data.get('terms')),
+        )
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+        return None
+
+
+def _parse_pipe(text: str) -> Optional[Ticket]:
+    """구형식. "streamerId|sessionId"
+
+    Spring이 JSON으로 넘어가기 전에 발급한 티켓을 위한 전환기 경로다. 배포 순서에 따라
+    한쪽이 먼저 올라가면 이게 없는 동안 모든 음성 접속이 조용히 거절된다.
+    양쪽 배포가 끝나면 이 함수와 TICKET_DELIMITER를 지운다.
+    """
+    try:
+        streamer_id, session_id = text.split(TICKET_DELIMITER, 1)
+        return Ticket(int(streamer_id), int(session_id))
+    except (ValueError, AttributeError):
+        return None
