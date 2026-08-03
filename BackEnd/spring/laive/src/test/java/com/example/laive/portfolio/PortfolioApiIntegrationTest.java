@@ -536,8 +536,10 @@ class PortfolioApiIntegrationTest {
     private long createHighlight(long reportId, String clipUrl) {
         return jdbcTemplate.queryForObject(
                 """
-                INSERT INTO highlights (report_id, start_ms, end_ms, clip_url, thumbnail_url)
-                VALUES (?, 1000, 11000, ?, NULL)
+                INSERT INTO highlights (
+                    report_id, start_ms, end_ms, clip_url, thumbnail_url, clip_status
+                )
+                VALUES (?, 1000, 11000, ?, NULL, 'UPLOADED')
                 RETURNING id
                 """,
                 Long.class, reportId, clipUrl);
