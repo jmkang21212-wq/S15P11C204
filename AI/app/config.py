@@ -80,8 +80,17 @@ PROMISE_MIN_CONFIDENCE = 0.6   # 이보다 낮으면 버린다
 PROMISE_DEDUP_SEC = 900        # 같은 약속을 15분 내에 반복하면 한 번만 보낸다
 
 # --- Spring 전송 ---
-# 비어 있으면 전송을 아예 하지 않는다. 스펙 합의 전까지는 이대로 두면 된다.
-SPRING_BASE_URL = os.getenv("SPRING_BASE_URL", "").rstrip("/")
+# 기본값은 로컬 Spring. 수집기(chat-collector/config.py)와 같은 규칙이다 —
+# "비우면 로컬"로 통일해서 .env를 안 채워도 개발이 되게 한다.
+# 배포에서는 compose가 SPRING_BASE_URL을 항상 넣어주므로 이 값은 쓰이지 않는다.
+#
+# 예전에는 기본값이 ""(전송 안 함)이었다. Spring 연동 규약이 정해지기 전에
+# 만들어져 붙일 곳이 없었기 때문인데, 그 조건은 이미 해소됐다(S15P11C204-183).
+#
+# getenv의 두 번째 인자가 아니라 'or'를 쓰는 이유:
+# getenv는 "없음"과 "있지만 빈 값"을 구분한다. .env.example에 'SPRING_BASE_URL='
+# 줄이 있으므로 복사해 쓰면 전자가 아니라 후자가 되어 기본값이 영영 안 먹는다.
+SPRING_BASE_URL = (os.getenv("SPRING_BASE_URL") or "http://127.0.0.1:8080").rstrip("/")
 SPRING_TOKEN = os.getenv("SPRING_TOKEN", "")   # 서버간 인증용
 # Spring의 내부 API 규약(명세 13.1)을 따른다. {sessionId}는 broadcast_sessions.id다.
 # 프론트가 핸드셰이크에 실어 보낸 번호를 그대로 넣는다.
