@@ -28,6 +28,22 @@ public class PromiseException extends BusinessException {
         return new PromiseException(PromiseErrorCode.PROMISE_INVALID_STATUS);
     }
 
+    public static PromiseException notSchedulable() {
+        return new PromiseException(PromiseErrorCode.PROMISE_NOT_SCHEDULABLE);
+    }
+
+    public static PromiseException notScheduled() {
+        return new PromiseException(PromiseErrorCode.PROMISE_NOT_SCHEDULED);
+    }
+
+    public static PromiseException alreadyScheduled() {
+        return new PromiseException(PromiseErrorCode.PROMISE_ALREADY_SCHEDULED);
+    }
+
+    public static PromiseException platformAccountRequired() {
+        return new PromiseException(PromiseErrorCode.PROMISE_PLATFORM_ACCOUNT_REQUIRED);
+    }
+
     public static PromiseException invalidContent() {
         return new PromiseException(PromiseErrorCode.PROMISE_INVALID_CONTENT);
     }

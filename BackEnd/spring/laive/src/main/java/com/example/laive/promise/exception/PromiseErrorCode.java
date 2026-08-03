@@ -20,7 +20,24 @@ public enum PromiseErrorCode {
     ),
     PROMISE_INVALID_STATUS(
             HttpStatus.BAD_REQUEST,
-            "변경할 수 있는 상태는 PENDING, COMPLETED, ON_HOLD입니다."
+            "변경할 수 있는 상태는 PENDING, ON_HOLD, COMPLETED, DISMISSED입니다. "
+                    + "SCHEDULED는 일정 전환 API로만 도달합니다."
+    ),
+    PROMISE_NOT_SCHEDULABLE(
+            HttpStatus.CONFLICT,
+            "확정된 약속(PENDING·ON_HOLD)만 일정으로 전환할 수 있습니다."
+    ),
+    PROMISE_NOT_SCHEDULED(
+            HttpStatus.CONFLICT,
+            "일정이 잡힌 약속이 아닙니다."
+    ),
+    PROMISE_ALREADY_SCHEDULED(
+            HttpStatus.CONFLICT,
+            "이미 일정이 연결된 약속입니다. 기존 일정을 취소한 뒤 다시 잡으세요."
+    ),
+    PROMISE_PLATFORM_ACCOUNT_REQUIRED(
+            HttpStatus.CONFLICT,
+            "일정으로 전환하려면 연결된 플랫폼 계정이 필요합니다."
     ),
     PROMISE_INVALID_CONTENT(
             HttpStatus.BAD_REQUEST,

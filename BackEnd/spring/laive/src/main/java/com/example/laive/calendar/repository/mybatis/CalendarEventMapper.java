@@ -38,6 +38,10 @@ public interface CalendarEventMapper {
 
     boolean existsLinkedSession(@Param("calendarEventId") long calendarEventId);
 
+    Optional<Long> findActivePromiseEventId(@Param("promiseId") long promiseId);
+
+    Optional<Long> findPrimaryConnectedPlatformAccountId(@Param("streamerId") long streamerId);
+
     Long insertEvent(@Param("event") CalendarEvent event);
 
     int updateEvent(@Param("event") CalendarEvent event);

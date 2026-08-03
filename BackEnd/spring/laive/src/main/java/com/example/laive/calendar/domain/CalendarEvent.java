@@ -11,6 +11,9 @@ import java.time.Instant;
  * 생성·수정·DB 복원 어느 경로로 만들어져도 같은 규칙을 통과하므로, Controller 검증을 거치지
  * 않는 내부 호출에서도 잘못된 일정이 만들어지지 않는다. DB의 CHECK 제약이 같은 규칙을 한 번 더
  * 보장한다.
+ *
+ * <p>promiseId는 이 일정이 어느 약속에서 전환됐는지를 가리킨다. null이면 사용자가 직접 만든
+ * 일정이다. 출처는 만들 때 정해지고 이후 바뀌지 않으므로 PATCH 대상이 아니다.
  */
 public record CalendarEvent(
         Long calendarEventId,
@@ -21,7 +24,8 @@ public record CalendarEvent(
         String memo,
         Instant startAt,
         Instant endAt,
-        CalendarEventStatus status
+        CalendarEventStatus status,
+        Long promiseId
 ) {
     private static final int TITLE_MAX_LENGTH = 200;
 
@@ -48,7 +52,37 @@ public record CalendarEvent(
                 command.memo(),
                 command.startAt(),
                 command.endAt(),
-                CalendarEventStatus.SCHEDULED
+                CalendarEventStatus.SCHEDULED,
+                null
+        );
+    }
+
+    /**
+     * 약속에서 전환된 방송 일정을 만든다.
+     *
+     * <p>BROADCAST는 플랫폼 계정이 필수라(ck_calendar_events_broadcast_platform) 호출 측이
+     * 연결된 계정을 찾아 넘긴다. 계정이 없으면 여기 오기 전에 409로 끝난다.
+     */
+    public static CalendarEvent fromPromise(
+            long streamerId,
+            long promiseId,
+            long platformAccountId,
+            String title,
+            String memo,
+            Instant startAt,
+            Instant endAt
+    ) {
+        return new CalendarEvent(
+                null,
+                streamerId,
+                platformAccountId,
+                CalendarEventType.BROADCAST,
+                title,
+                memo,
+                startAt,
+                endAt,
+                CalendarEventStatus.SCHEDULED,
+                promiseId
         );
     }
 
@@ -63,8 +97,25 @@ public record CalendarEvent(
                 memo,
                 startAt,
                 endAt,
-                status
+                status,
+                promiseId
         );
+    }
+
+    /** 이 일정이 약속에서 전환된 것인지. 취소 시 약속을 되돌려야 하는지 판단에 쓴다. */
+    public boolean isFromPromise() {
+        return promiseId != null;
+    }
+
+    /**
+     * 이 수정으로 일정이 취소로 넘어가는지.
+     *
+     * <p>이미 CANCELLED인 일정에 같은 요청을 다시 보내는 것은 전이가 아니다. 그 구분이 없으면
+     * 재전송이 약속을 또 되돌리려 시도한다.
+     */
+    public boolean becomesCancelled(CalendarEvent updated) {
+        return status != CalendarEventStatus.CANCELLED
+                && updated.status() == CalendarEventStatus.CANCELLED;
     }
 
     /**
@@ -86,7 +137,8 @@ public record CalendarEvent(
                 PatchValue.resolve(command.memo(), memo),
                 PatchValue.resolve(command.startAt(), startAt),
                 PatchValue.resolve(command.endAt(), endAt),
-                PatchValue.resolve(command.status(), status)
+                PatchValue.resolve(command.status(), status),
+                promiseId
         );
     }
 

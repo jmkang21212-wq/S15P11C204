@@ -41,6 +41,25 @@ public class PromiseCommandService {
         return save(lock(streamerId, promiseId).applyPatch(command));
     }
 
+    /**
+     * 연결된 일정이 취소돼 약속을 다시 기한 미정으로 돌린다.
+     *
+     * <p>일정 취소 트랜잭션 안에서 호출된다. 이게 없으면 취소된 일정의 약속이 SCHEDULED로
+     * 굳어 캘린더에도 목록에도 안 나오는 미아가 된다.
+     *
+     * <p>SCHEDULED가 아니면 아무것도 하지 않는다. 전환 뒤 사용자가 약속을 COMPLETED나
+     * DISMISSED로 옮겼다면 그 결정이 나중의 일정 취소보다 우선한다 — 이미 지킨 약속을
+     * 일정 정리 때문에 미이행으로 되돌리면 안 된다. 예외가 아니라 무동작인 이유는 호출 측
+     * (일정 취소)이 실패할 이유가 없기 때문이다.
+     */
+    public void revertScheduled(long streamerId, long promiseId) {
+        Promise promise = lock(streamerId, promiseId);
+        if (!promise.isScheduled()) {
+            return;
+        }
+        save(promise.revertToPending());
+    }
+
     private Promise lock(long streamerId, long promiseId) {
         return repository.findForUpdate(streamerId, promiseId)
                 .orElseThrow(PromiseException::notFound);

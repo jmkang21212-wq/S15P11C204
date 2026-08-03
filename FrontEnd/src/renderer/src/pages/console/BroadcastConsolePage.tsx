@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
 import { useLiveSnapshot } from '@renderer/hooks/useLiveSnapshot'
+import { useAsyncData } from '@renderer/hooks/useAsyncData'
+import { listPromises } from '@renderer/api/promise'
 import { useAudioStream } from '@renderer/hooks/useAudioStream'
 import { useObs } from '@renderer/hooks/useObs'
 import { useRecordingReporter } from '@renderer/hooks/useRecordingReporter'
@@ -74,6 +76,19 @@ export default function BroadcastConsolePage(): React.JSX.Element {
   // WS(useAudioStream)가 전담하고, 스냅샷에서는 이전 것만 히스토리로 받는다.
   const [briefingCutoff] = useState(() => new Date().toISOString())
 
+  /**
+   * 약속의 현재 상태. 브리핑 응답(`live_briefings`)에는 `promiseId`만 있고 상태가 없어서
+   * 따로 조회한다 — 이게 없으면 확정·무시 표시가 콘솔 언마운트와 함께 사라져, 다른 화면에
+   * 갔다 오면 이미 처리한 약속에 버튼이 되살아난다.
+   *
+   * 폴링하지 않는다. 이 화면에서 사용자가 누를 때만 바뀌므로 그때 다시 읽으면 충분하다.
+   */
+  const promiseLoader = useCallback(() => listPromises(), [])
+  const { data: promisePage, refetch: refetchPromises } = useAsyncData(promiseLoader)
+  const promiseStatuses = new Map(
+    (promisePage?.items ?? []).map((promise) => [promise.promiseId, promise.status])
+  )
+
   const startAudio = audio.start
 
   const handleStarted = (newSessionId: number): void => {
@@ -122,6 +137,8 @@ export default function BroadcastConsolePage(): React.JSX.Element {
         {/* 좌: 브리핑 피드 — 진입 후는 음성 서버 실시간 이벤트, 진입 전 이력과 채팅 요약은 스냅샷 */}
         <BriefingFeed
           briefings={mergeBriefings(audio.briefings, data?.briefings ?? [], briefingCutoff)}
+          promiseStatuses={promiseStatuses}
+          onPromiseResolved={refetchPromises}
         />
 
         {/* 우: 여론 · 반복 질문 · 연결 상태 */}

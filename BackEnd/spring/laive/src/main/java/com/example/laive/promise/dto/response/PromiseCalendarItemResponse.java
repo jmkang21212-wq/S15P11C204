@@ -15,14 +15,16 @@ public record PromiseCalendarItemResponse(
         long promiseId,
         String content,
         LocalDate dueDate,
-        PromiseStatus status
+        PromiseStatus status,
+        Long calendarEventId
 ) {
     public static PromiseCalendarItemResponse from(PromiseCalendarItem item) {
         return new PromiseCalendarItemResponse(
                 item.promiseId(),
                 item.content(),
                 item.dueDate(),
-                item.status()
+                item.status(),
+                item.calendarEventId()
         );
     }
 }
