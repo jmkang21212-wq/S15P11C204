@@ -61,7 +61,7 @@
     <select id="findHighlights"
             resultType="com.example.laive.report.domain.SessionHighlight">
         SELECT id AS highlight_id, report_id, trigger_id, start_ms, end_ms,
-               clip_url, thumbnail_url
+               clip_url, thumbnail_url, clip_status
           FROM highlights
          WHERE report_id = #{reportId}
          ORDER BY start_ms ASC, id ASC
