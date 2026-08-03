@@ -9,6 +9,7 @@ import com.example.laive.calendar.exception.CalendarEventException;
 import com.example.laive.calendar.repository.CalendarEventRepository;
 import com.example.laive.calendar.repository.PlatformAccountReference;
 import com.example.laive.common.api.PatchValue;
+import com.example.laive.promise.service.PromiseCommandService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -38,13 +39,17 @@ class CalendarEventCommandServiceTest {
     private static final Instant START = Instant.parse("2026-07-20T12:00:00Z");
     private static final Instant END = Instant.parse("2026-07-20T15:00:00Z");
 
+    private static final long PROMISE_ID = 7L;
+
     private CalendarEventRepository repository;
+    private PromiseCommandService promiseCommandService;
     private CalendarEventCommandService service;
 
     @BeforeEach
     void setUp() {
         repository = mock(CalendarEventRepository.class);
-        service = new CalendarEventCommandService(repository);
+        promiseCommandService = mock(PromiseCommandService.class);
+        service = new CalendarEventCommandService(repository, promiseCommandService);
     }
 
     private static UpdateCalendarEventCommand patch(
@@ -62,10 +67,14 @@ class CalendarEventCommandServiceTest {
     }
 
     private static CalendarEvent existingBroadcast() {
+        return existingBroadcast(CalendarEventStatus.SCHEDULED, null);
+    }
+
+    private static CalendarEvent existingBroadcast(CalendarEventStatus status, Long promiseId) {
         return new CalendarEvent(
                 EVENT_ID, STREAMER_ID, PLATFORM_ACCOUNT_ID,
                 CalendarEventType.BROADCAST, "원래 제목", "원래 메모",
-                START, END, CalendarEventStatus.SCHEDULED
+                START, END, status, promiseId
         );
     }
 
@@ -203,6 +212,72 @@ class CalendarEventCommandServiceTest {
                 .isEqualTo("CALENDAR_EVENT_LINKED_TO_SESSION");
 
         verify(repository, never()).update(any());
+    }
+
+    // ---------- 취소 → 약속 복귀 ----------
+
+    /** 취소하지 않으면 약속을 건드리지 않는다. 제목만 바꿨는데 약속이 되돌아가면 안 된다. */
+    @Test
+    void 취소가_아닌_수정은_연결된_약속을_건드리지_않는다() {
+        when(repository.findForUpdate(STREAMER_ID, EVENT_ID))
+                .thenReturn(Optional.of(existingBroadcast(CalendarEventStatus.SCHEDULED, PROMISE_ID)));
+        when(repository.existsLinkedSession(EVENT_ID)).thenReturn(false);
+        when(repository.update(any())).thenReturn(1);
+
+        service.update(STREAMER_ID, EVENT_ID, patch(
+                null, null, PatchValue.of("제목만 변경"), null, null, null, null
+        ));
+
+        verify(promiseCommandService, never()).revertScheduled(anyLong(), anyLong());
+    }
+
+    @Test
+    void 약속에서_전환된_일정을_취소하면_약속을_되돌린다() {
+        when(repository.findForUpdate(STREAMER_ID, EVENT_ID))
+                .thenReturn(Optional.of(existingBroadcast(CalendarEventStatus.SCHEDULED, PROMISE_ID)));
+        when(repository.existsLinkedSession(EVENT_ID)).thenReturn(false);
+        when(repository.update(any())).thenReturn(1);
+
+        service.update(STREAMER_ID, EVENT_ID, patch(
+                null, null, null, null, null, null, PatchValue.of(CalendarEventStatus.CANCELLED)
+        ));
+
+        verify(promiseCommandService).revertScheduled(STREAMER_ID, PROMISE_ID);
+    }
+
+    /** 직접 만든 일정은 되돌릴 약속이 없다. */
+    @Test
+    void 약속과_무관한_일정_취소는_약속을_찾지_않는다() {
+        when(repository.findForUpdate(STREAMER_ID, EVENT_ID))
+                .thenReturn(Optional.of(existingBroadcast(CalendarEventStatus.SCHEDULED, null)));
+        when(repository.existsLinkedSession(EVENT_ID)).thenReturn(false);
+        when(repository.update(any())).thenReturn(1);
+
+        service.update(STREAMER_ID, EVENT_ID, patch(
+                null, null, null, null, null, null, PatchValue.of(CalendarEventStatus.CANCELLED)
+        ));
+
+        verify(promiseCommandService, never()).revertScheduled(anyLong(), anyLong());
+    }
+
+    /**
+     * 이미 취소된 일정에 같은 요청이 다시 오는 것은 전이가 아니다.
+     *
+     * <p>이 구분이 없으면 재전송이 약속을 또 되돌리려 한다. 취소 후 사용자가 약속을 다른
+     * 날짜로 재확정했다면 그 SCHEDULED를 PENDING으로 깎아내리게 된다.
+     */
+    @Test
+    void 이미_취소된_일정에_같은_요청이_와도_약속을_다시_되돌리지_않는다() {
+        when(repository.findForUpdate(STREAMER_ID, EVENT_ID))
+                .thenReturn(Optional.of(existingBroadcast(CalendarEventStatus.CANCELLED, PROMISE_ID)));
+        when(repository.existsLinkedSession(EVENT_ID)).thenReturn(false);
+        when(repository.update(any())).thenReturn(1);
+
+        service.update(STREAMER_ID, EVENT_ID, patch(
+                null, null, null, null, null, null, PatchValue.of(CalendarEventStatus.CANCELLED)
+        ));
+
+        verify(promiseCommandService, never()).revertScheduled(anyLong(), anyLong());
     }
 
     /** 잠금 조회와 UPDATE 사이에 행이 사라지면 갱신 건수가 0이 된다. */

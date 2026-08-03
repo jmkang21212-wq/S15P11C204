@@ -90,7 +90,8 @@ class CalendarEventControllerTest {
                 memo,
                 START,
                 END,
-                CalendarEventStatus.SCHEDULED
+                CalendarEventStatus.SCHEDULED,
+                null
         );
     }
 

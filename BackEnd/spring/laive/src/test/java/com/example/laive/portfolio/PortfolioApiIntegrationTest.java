@@ -533,14 +533,18 @@ class PortfolioApiIntegrationTest {
                 Long.class, sessionId, avgViewers, peakViewers, totalChat);
     }
 
+    /**
+     * clip_url이 있으면 clip_status도 UPLOADED여야 한다(V16 ck_highlights_clip_url_status).
+     * URL이 있다는 것은 업로드가 끝났다는 뜻이라 컬럼 DEFAULT인 PENDING과 공존할 수 없다.
+     */
     private long createHighlight(long reportId, String clipUrl) {
         return jdbcTemplate.queryForObject(
                 """
-                INSERT INTO highlights (report_id, start_ms, end_ms, clip_url, thumbnail_url)
-                VALUES (?, 1000, 11000, ?, NULL)
+                INSERT INTO highlights (report_id, start_ms, end_ms, clip_url, thumbnail_url, clip_status)
+                VALUES (?, 1000, 11000, ?, NULL, ?)
                 RETURNING id
                 """,
-                Long.class, reportId, clipUrl);
+                Long.class, reportId, clipUrl, clipUrl == null ? "PENDING" : "UPLOADED");
     }
 
     private Fixture createFixture() {

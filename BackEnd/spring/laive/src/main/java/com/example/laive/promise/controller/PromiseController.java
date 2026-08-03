@@ -1,19 +1,24 @@
 package com.example.laive.promise.controller;
 
+import com.example.laive.calendar.domain.CalendarEvent;
+import com.example.laive.calendar.dto.response.CalendarEventResponse;
 import com.example.laive.common.api.ApiResponse;
 import com.example.laive.common.api.PageResponse;
 import com.example.laive.common.security.JwtStreamerIdExtractor;
 import com.example.laive.promise.domain.Promise;
 import com.example.laive.promise.domain.PromiseStatus;
 import com.example.laive.promise.dto.request.ConfirmPromiseRequest;
+import com.example.laive.promise.dto.request.SchedulePromiseRequest;
 import com.example.laive.promise.dto.request.UpdatePromiseRequest;
 import com.example.laive.promise.dto.response.PromiseResponse;
 import com.example.laive.promise.service.PromiseCommandService;
 import com.example.laive.promise.service.PromiseQueryService;
+import com.example.laive.promise.service.PromiseScheduleService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Positive;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -42,15 +47,18 @@ public class PromiseController {
 
     private final PromiseQueryService queryService;
     private final PromiseCommandService commandService;
+    private final PromiseScheduleService scheduleService;
     private final JwtStreamerIdExtractor streamerIdExtractor;
 
     public PromiseController(
             PromiseQueryService queryService,
             PromiseCommandService commandService,
+            PromiseScheduleService scheduleService,
             JwtStreamerIdExtractor streamerIdExtractor
     ) {
         this.queryService = queryService;
         this.commandService = commandService;
+        this.scheduleService = scheduleService;
         this.streamerIdExtractor = streamerIdExtractor;
     }
 
@@ -101,10 +109,36 @@ public class PromiseController {
     }
 
     /**
+     * 확정된 약속을 캘린더 방송 일정으로 전환한다.
+     *
+     * <p>일정 INSERT와 약속 상태(SCHEDULED) 변경이 한 트랜잭션이다. 프론트에서 일정 생성과
+     * 약속 수정을 따로 호출하면 중간에 실패했을 때 되돌릴 수 없어 이 엔드포인트로 묶었다.
+     *
+     * <p>전환해도 약속의 dueDate는 비워 둔다. 나중에 일정을 취소하면 약속이 PENDING으로
+     * 돌아오는데, 그때 기한이 비어 있어야 "기한 미정" 목록에서 다시 날짜를 정할 수 있다.
+     *
+     * <p>409가 되는 경우는 셋이다. 약속이 PENDING·ON_HOLD가 아님, 이미 활성 일정이 연결됨,
+     * 연결된 플랫폼 계정이 없음(방송 일정은 계정이 필수다).
+     */
+    @PostMapping("/{promiseId}/schedule")
+    public ResponseEntity<ApiResponse<CalendarEventResponse>> schedule(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable @Positive long promiseId,
+            @Valid @RequestBody SchedulePromiseRequest request
+    ) {
+        CalendarEvent event = scheduleService.schedule(
+                streamerIdExtractor.extract(jwt), promiseId, request.toCommand());
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(ApiResponse.success(CalendarEventResponse.from(event)));
+    }
+
+    /**
      * 확정된 약속의 상태·내용·기한을 부분 수정한다 (API 10.8.3 확장).
      *
      * <p>캘린더에서 약속을 끌어 옮기면 프론트가 {@code {"dueDate": "..."}} 하나만 보낸다.
-     * 상태 변경·상세 수정도 같은 엔드포인트를 쓴다.
+     * 상태 변경·상세 수정도 같은 엔드포인트를 쓴다. 확정한 약속을 지우려면
+     * {@code {"status": "DISMISSED"}}를 보낸다 — 전용 dismiss API는 감지 상태만 받는다.
      */
     @PatchMapping("/{promiseId}")
     public ResponseEntity<ApiResponse<PromiseResponse>> update(

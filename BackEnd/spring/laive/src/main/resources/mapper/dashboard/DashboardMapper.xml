@@ -28,11 +28,15 @@
          LIMIT 1
     </select>
 
+    <!--
+      SCHEDULED를 포함하는 이유: 일정만 잡혔을 뿐 아직 지키지 않은 약속이다. 빠지면
+      전환하는 순간 미이행 건수가 줄어들어 "약속을 지킨 것"처럼 보인다.
+    -->
     <select id="countPendingPromises" resultType="long">
         SELECT count(*)
           FROM promises
          WHERE streamer_id = #{streamerId}
-           AND status IN ('PENDING', 'ON_HOLD')
+           AND status IN ('PENDING', 'ON_HOLD', 'SCHEDULED')
     </select>
 
     <select id="findPendingPromises"
@@ -43,7 +47,7 @@
           JOIN transcripts t ON t.id = p.transcript_id
           JOIN broadcast_sessions s ON s.id = p.session_id
          WHERE p.streamer_id = #{streamerId}
-           AND p.status IN ('PENDING', 'ON_HOLD')
+           AND p.status IN ('PENDING', 'ON_HOLD', 'SCHEDULED')
          ORDER BY p.due_date ASC NULLS LAST, detected_at DESC, p.id ASC
          LIMIT #{limit}
     </select>

@@ -11,6 +11,11 @@
       detectedAt은 별도 컬럼이 아니라 BROADCAST_SESSIONS.started_at + TRANSCRIPTS.start_ms로
       계산한다(API 10.8.1). AI 수신부가 발화 원문으로 전사를 Upsert해 transcript_id를 항상
       채우므로 INNER JOIN으로 충분하다.
+
+      calendarEventId도 파생값이다. 전환된 약속이 어느 일정으로 갔는지 프론트가 역참조할 수
+      있어야 해서(응답 필드) 조회 시 붙인다. JOIN이 아니라 스칼라 서브쿼리를 쓰는 이유는
+      FOR UPDATE OF p와 함께 써도 행이 늘지 않고, ux_calendar_events_promise를 그대로
+      타기 때문이다. 취소된 일정은 제외하므로 취소 후에는 다시 null이 된다.
     -->
     <sql id="promiseColumns">
         p.id           AS promise_id,
@@ -20,7 +25,11 @@
         p.content,
         p.status,
         p.due_date,
-        s.started_at + (t.start_ms * INTERVAL '1 millisecond') AS detected_at
+        s.started_at + (t.start_ms * INTERVAL '1 millisecond') AS detected_at,
+        (SELECT c.id
+           FROM calendar_events c
+          WHERE c.promise_id = p.id
+            AND c.status &lt;&gt; 'CANCELLED') AS calendar_event_id
     </sql>
 
     <sql id="promiseFrom">
@@ -81,18 +90,26 @@
       캘린더에 얹을 약속이다. 확정 전(DETECTED)과 종료된 약속은 제외하고,
       기한이 있는 것만 올린다. due_date가 DATE이므로 호출 측이 조회 범위를
       Asia/Seoul 기준 날짜로 변환해서 넘긴다.
+
+      SCHEDULED를 여기 넣지 않는 것이 맞다. 전환된 약속은 일정(calendar_events)이 대신
+      보이므로, 넣으면 같은 약속이 칩과 일정으로 두 번 그려진다. 이 status 조건은
+      PromiseStatus.showsOnCalendar()와 같은 규칙이라 enum을 바꿀 때 함께 봐야 한다.
     -->
     <select id="findCalendarRange" resultType="com.example.laive.promise.domain.PromiseCalendarItem">
-        SELECT id AS promise_id,
-               content,
-               due_date,
-               status
-          FROM promises
-         WHERE streamer_id = #{streamerId}
-           AND status IN ('PENDING', 'ON_HOLD')
-           AND due_date IS NOT NULL
-           AND due_date BETWEEN #{from} AND #{to}
-         ORDER BY due_date, id
+        SELECT p.id AS promise_id,
+               p.content,
+               p.due_date,
+               p.status,
+               (SELECT c.id
+                  FROM calendar_events c
+                 WHERE c.promise_id = p.id
+                   AND c.status &lt;&gt; 'CANCELLED') AS calendar_event_id
+          FROM promises p
+         WHERE p.streamer_id = #{streamerId}
+           AND p.status IN ('PENDING', 'ON_HOLD')
+           AND p.due_date IS NOT NULL
+           AND p.due_date BETWEEN #{from} AND #{to}
+         ORDER BY p.due_date, p.id
     </select>
 
 </mapper>

@@ -50,6 +50,16 @@ public class MyBatisCalendarEventRepository implements CalendarEventRepository {
     }
 
     @Override
+    public Optional<Long> findActivePromiseEventId(long promiseId) {
+        return mapper.findActivePromiseEventId(promiseId);
+    }
+
+    @Override
+    public Optional<Long> findPrimaryConnectedPlatformAccountId(long streamerId) {
+        return mapper.findPrimaryConnectedPlatformAccountId(streamerId);
+    }
+
+    @Override
     public long insert(CalendarEvent event) {
         Long id = mapper.insertEvent(event);
         if (id == null) {

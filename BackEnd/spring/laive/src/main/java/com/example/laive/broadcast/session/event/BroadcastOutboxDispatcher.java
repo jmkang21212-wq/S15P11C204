@@ -69,11 +69,13 @@ public class BroadcastOutboxDispatcher {
             handler.handle(event);
             outboxRepository.markPublished(event.eventId(), clock.instant());
         } catch (Exception exception) {
+            // 예외는 DB에 남기지 않으므로(sanitizedError 참고) 원인은 여기서만 볼 수 있다.
             log.warn(
                     "방송 Outbox 처리 실패: eventId={} type={} attempts={}",
                     event.eventId(),
                     event.eventType(),
-                    event.attempts() + 1
+                    event.attempts() + 1,
+                    exception
             );
             retryOrDead(event, exception);
         }
@@ -88,7 +90,11 @@ public class BroadcastOutboxDispatcher {
                 try {
                     handler.onDead(event);
                 } catch (Exception deadHandlerException) {
-                    log.error("Outbox 최종 실패 보상 처리도 실패했습니다. eventId={}", event.eventId());
+                    log.error(
+                            "Outbox 최종 실패 보상 처리도 실패했습니다. eventId={}",
+                            event.eventId(),
+                            deadHandlerException
+                    );
                 }
             }
             outboxRepository.markDead(event.eventId(), attempts, error);
