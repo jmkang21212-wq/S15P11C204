@@ -76,12 +76,12 @@ clipDurationMs = highlight.end_ms - highlight.start_ms
 ```
 
 **절대 시각은 `triggers.started_at`을 그대로 쓴다.** `highlights.trigger_id`가
-`triggers`를 참조하므로(V8) 조인 한 번이면 된다. `highlights.start_ms`(세션 시작
+`triggers`를 참조하므로 조인 한 번이면 된다. `highlights.start_ms`(세션 시작
 기준 오프셋)에 `broadcast_sessions.started_at`을 더해 재계산하지 말 것 —
-V8이 오프셋과 절대 시각을 둘 다 저장한 이유가 정확히 이것이다.
+`triggers`가 오프셋과 절대 시각을 둘 다 저장한 이유가 정확히 이것이다.
 
 > 조회할 때마다 세션 시작 시각과 조인해 변환하면 오프셋과 절대 시각을 섞는
-> 실수가 조인 지점마다 되살아난다. — `V8__trigger_anchored_report.sql`
+> 실수가 조인 지점마다 되살아난다. — `V1__baseline_schema.sql` (triggers 절)
 
 `trigger_id`는 `ON DELETE SET NULL`이라 NULL일 수 있다. NULL이면
 `session.started_at + highlight.start_ms`로 폴백하되, 이 경로를 타는 하이라이트는
@@ -251,7 +251,7 @@ Spring을 도커로 띄운다면 컨테이너와 호스트가 같은 경로를 �
 
 ## 체크리스트
 
-- [x] `V12__highlight_clip.sql`
+- [x] `recordings` 테이블 + `highlights.clip_*` (`V1__baseline_schema.sql`)
 - [x] `RecordingController` — 보고 3개 + 소유권 검사
 - [x] `ClipJobService` — **오프셋 계산** + `GET /clip-jobs`
 - [x] `ClipStorage` + `LocalDiskClipStorage`

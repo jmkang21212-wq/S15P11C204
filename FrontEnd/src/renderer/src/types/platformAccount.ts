@@ -1,6 +1,6 @@
 /**
  * 플랫폼 연동 계정 타입 — `PlatformAccountController` (`/api/v1/platform-accounts`).
- * 출처: `platform/domain/PlatformAccount.java`, DB CHECK 절(`V1__init_core_schema.sql`).
+ * 출처: `platform/domain/PlatformAccount.java`, DB CHECK 절(`V1__baseline_schema.sql`).
  */
 
 export type PlatformProvider = 'CHZZK' | 'SOOP'

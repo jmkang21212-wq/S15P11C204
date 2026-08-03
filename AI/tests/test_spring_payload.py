@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.detect.dictionary import DictionaryMatcher
 from app.sink.spring import _risk_category
 
-# BackEnd/spring/laive/src/main/resources/db/migration/V1__init_core_schema.sql
+# BackEnd/spring/laive/src/main/resources/db/migration/V1__baseline_schema.sql
 SPRING_CATEGORIES = {
     "PROFANITY", "POLITICS", "DISCRIMINATION", "SEXUAL", "DEFAMATION", "OTHER",
 }
