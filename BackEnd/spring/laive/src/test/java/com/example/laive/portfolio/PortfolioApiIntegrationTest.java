@@ -533,14 +533,15 @@ class PortfolioApiIntegrationTest {
                 Long.class, sessionId, avgViewers, peakViewers, totalChat);
     }
 
+    /** 클립 URL이 있으면 상태도 UPLOADED여야 한다 — ck_highlights_clip_url_status(V16). */
     private long createHighlight(long reportId, String clipUrl) {
         return jdbcTemplate.queryForObject(
                 """
-                INSERT INTO highlights (report_id, start_ms, end_ms, clip_url, thumbnail_url)
-                VALUES (?, 1000, 11000, ?, NULL)
+                INSERT INTO highlights (report_id, start_ms, end_ms, clip_url, thumbnail_url, clip_status)
+                VALUES (?, 1000, 11000, ?, NULL, ?)
                 RETURNING id
                 """,
-                Long.class, reportId, clipUrl);
+                Long.class, reportId, clipUrl, clipUrl == null ? "PENDING" : "UPLOADED");
     }
 
     private Fixture createFixture() {

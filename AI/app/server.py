@@ -11,11 +11,13 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 
 from app.audio.segmenter import VadSegmenter
-from app.auth import TicketVerifier
+from app.auth import Ticket, TicketVerifier
 from app.config import CHUNK, LOG_FILE, PROMISE_ENABLED, SAMPLE_RATE
-from app.detect.dictionary import DictionaryMatcher
+from app.detect.dictionary import BASE as _matcher, matcher_for
 from app.detect.llm_judge import LLMJudge, RollingContext
+from app.detect.personal import EMPTY, PersonalTerms
 from app.detect.promise import PromiseExtractor
+from app.detect.terms_subscriber import TermsSubscriber
 from app.logging_setup import setup_logging
 from app.sink.spring import SpringSink
 from app.stt.groq_stt import GroqSTT
@@ -23,7 +25,7 @@ from app.stt.groq_stt import GroqSTT
 # uvicorn은 root 로거를 설정하지 않는다 — 이게 없으면 아래 log.info가 전부 사라진다
 log = setup_logging(__name__, LOG_FILE)
 
-_matcher = DictionaryMatcher()
+# 기본 사전. 개인 사전이 없는 세션과, 세션이 이미 끊긴 뒤 도착한 전사가 쓴다.
 _stt: Optional[GroqSTT] = None
 _judge: Optional[LLMJudge] = None
 _promise: Optional[PromiseExtractor] = None
@@ -31,23 +33,39 @@ _spring: Optional[SpringSink] = None
 _registry: "SessionRegistry"
 _loop: Optional[asyncio.AbstractEventLoop] = None
 _ticket_verifier: Optional[TicketVerifier] = None
+_terms_subscriber: Optional[TermsSubscriber] = None
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 
 class Session:
     def __init__(self, session_id: str, websocket: WebSocket,
-                 send_transcripts: bool = False):
+                 send_transcripts: bool = False,
+                 streamer_id: int = 0, terms: PersonalTerms = EMPTY):
         self.id = session_id
         self.ws = websocket
         # 전사는 기본으로 안 보낸다. 경고에 text가 이미 들어있어 화면 표시에는
         # 필요 없고, 저장은 서버가 Spring으로 직접 하기 때문이다.
         # 개발/디버깅용으로만 켠다.
         self.send_transcripts = send_transcripts
+        # pub/sub이 방송 중 사전 변경을 이 세션에 밀어 넣을 때 대상을 찾는 키다.
+        self.streamer_id = streamer_id
         self.segmenter = VadSegmenter(session_id=session_id)
         self.context = RollingContext()
         self.outbound: asyncio.Queue = asyncio.Queue()
         self._residual = np.empty(0, dtype=np.float32)
+        self.apply_terms(terms)
+
+    def apply_terms(self, terms: PersonalTerms) -> None:
+        """개인 사전을 적용한다. 접속 시 한 번, 이후 pub/sub 수신마다 호출된다.
+
+        matcher와 allow 목록을 통째로 갈아끼운다. automaton을 제자리에서 고치면
+        판정 스레드가 반쯤 바뀐 사전으로 매칭하게 된다. 참조 대입은 GIL 아래에서
+        원자적이라 락 없이 안전하다.
+        """
+        self.terms = terms
+        self.matcher = matcher_for(terms)
+        self.allow_display = terms.allow_display
 
     def feed_bytes(self, data: bytes) -> list:
         if len(data) % 2:
@@ -88,14 +106,25 @@ class SessionRegistry:
         with self._lock:
             return self._sessions.get(session_id)
 
+    def by_streamer(self, streamer_id: int) -> list[Session]:
+        """한 스트리머의 살아있는 세션들. 사전 변경을 밀어 넣을 때 쓴다.
+
+        보통 하나지만 미니 모드 창처럼 같은 방송에 두 번 붙는 경우가 있어 목록으로 준다.
+        """
+        with self._lock:
+            return [s for s in self._sessions.values() if s.streamer_id == streamer_id]
+
 
 _registry = SessionRegistry()
 
 
-def verify_handshake(handshake: dict) -> Optional[int]:
-    """접속 자격을 확인하고 **신뢰할 수 있는** broadcast_session_id를 돌려준다.
+def verify_handshake(handshake: dict) -> Optional[Ticket]:
+    """접속 자격을 확인하고 **신뢰할 수 있는** 티켓을 돌려준다.
 
     반환값이 None이면 접속을 거절해야 한다.
+
+    세션 번호뿐 아니라 개인 사전도 여기서 나온다. 핸드셰이크로 받으면 조작된 허용어로
+    감지를 무력화할 수 있다 (RISK_POLICY_SPEC.md §3).
 
     핵심: 세션 번호를 핸드셰이크가 아니라 **티켓에서** 얻는다. 예전에는 클라이언트가
     보낸 broadcastSessionId를 그대로 믿어서, 아무 번호나 넣으면 남의 방송에 전사·
@@ -107,11 +136,15 @@ def verify_handshake(handshake: dict) -> Optional[int]:
     ticket_value = str(handshake.get("ticket", "")).strip()
     ticket = _ticket_verifier.consume(ticket_value) if ticket_value else None
     if ticket is not None:
-        return ticket.broadcast_session_id
+        return ticket
 
     if _ticket_verifier.dev_bypass:
         log.warning("티켓 없이 접속 허용(개발 우회) — 배포 환경이면 즉시 끌 것")
-        return _parse_broadcast_session_id(handshake.get("broadcastSessionId"))
+        session_id = _parse_broadcast_session_id(handshake.get("broadcastSessionId"))
+        if session_id is None:
+            return None
+        # 개발 우회에는 개인 사전이 없다. 스트리머를 특정할 방법이 없기 때문이다.
+        return Ticket(streamer_id=0, broadcast_session_id=session_id, terms=EMPTY)
     return None
 
 
@@ -139,7 +172,11 @@ def _dispatch_transcripts() -> None:
                     "forced": tr.forced,
                 })
 
-        hits = _matcher.match(tr.text)
+        # 세션이 이미 끊겼으면 개인 사전을 알 수 없다. 기본 사전으로 떨어뜨린다 —
+        # 여기서 멈추면 마지막 발화들이 Spring에 기록되지 않아 리포트에 구멍이 생긴다.
+        matcher = session.matcher if session is not None else _matcher
+
+        hits = matcher.match(tr.text)
         if hits:
             if _spring is not None:
                 _spring.send_dictionary_alert(tr, hits)
@@ -165,7 +202,11 @@ def _dispatch_transcripts() -> None:
         elif _judge is not None and session is not None:
             # 사전에 걸린 건 결론이 났다. 회색지대만 LLM으로 넘긴다.
             # 세션이 없으면 문맥을 만들 수 없어 판정을 건너뛴다.
-            _judge.submit(tr, context=session.context.snapshot(before_ts=tr.start_ts))
+            #
+            # 허용어를 함께 넘긴다. 사전에서 빼는 것만으로는 부족하다 — 빠진 발화는
+            # 바로 이 경로로 와서 LLM에게 다시 걸린다 (RISK_POLICY_SPEC.md §2).
+            _judge.submit(tr, context=session.context.snapshot(before_ts=tr.start_ts),
+                          allow_terms=session.allow_display)
 
         # 약속 추적은 위험 판정과 독립이다. 욕설이 섞인 발화에도 약속이 있을 수 있고,
         # 반대로 멀쩡한 발화 대부분은 약속이 아니다. 게이트가 안에서 걸러낸다.
@@ -225,11 +266,26 @@ def _dispatch_promises() -> None:
         })
 
 
+def _apply_terms(streamer_id: int, terms: PersonalTerms) -> None:
+    """pub/sub으로 받은 사전을 그 스트리머의 살아있는 세션들에 적용한다.
+
+    구독 스레드에서 호출된다. 판정 스레드와 겹치지만 apply_terms가 참조를 통째로
+    갈아끼우므로 락이 필요 없다.
+    """
+    sessions = _registry.by_streamer(streamer_id)
+    for session in sessions:
+        session.apply_terms(terms)
+    if sessions:
+        log.info("개인 사전 갱신 streamerId=%s 세션 %d개 (금칙어 %d·허용어 %d)",
+                 streamer_id, len(sessions), len(terms.block), len(terms.allow))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _stt, _judge, _promise, _loop, _spring, _ticket_verifier
+    global _stt, _judge, _promise, _loop, _spring, _ticket_verifier, _terms_subscriber
     _loop = asyncio.get_running_loop()
     _ticket_verifier = TicketVerifier()
+    _terms_subscriber = TermsSubscriber(_apply_terms).start()
     _spring = SpringSink().start()
     _stt = GroqSTT().start()
     threading.Thread(target=_dispatch_transcripts, daemon=True,
@@ -255,6 +311,8 @@ async def lifespan(app: FastAPI):
         _judge.stop()
     if _promise is not None:
         _promise.stop()
+    if _terms_subscriber is not None:
+        _terms_subscriber.stop()
     if _spring is not None:
         _spring.stop()  # 배치에 남은 전사까지 마저 보낸다
 
@@ -297,14 +355,16 @@ async def ws_audio(websocket: WebSocket) -> None:
 
     # 티켓 검증 — 실패하면 접속 자체를 막는다. 통과하면 신뢰할 수 있는 세션 번호를 얻는다.
     # session_id는 프론트가 탭 충돌을 피하려고 만든 임의 문자열이라 Spring 저장에 못 쓴다.
-    broadcast_session_id = verify_handshake(handshake)
-    if broadcast_session_id is None:
+    ticket = verify_handshake(handshake)
+    if ticket is None:
         log.warning("접속 거절 session_id=%s — 티켓이 없거나 만료·재사용됐다", session_id)
         await websocket.close(code=1008, reason="unauthorized")
         return
+    broadcast_session_id = ticket.broadcast_session_id
 
     session = Session(session_id, websocket,
-                      send_transcripts=bool(handshake.get("transcripts", False)))
+                      send_transcripts=bool(handshake.get("transcripts", False)),
+                      streamer_id=ticket.streamer_id, terms=ticket.terms)
     _registry.add(session)
 
     if _spring is not None and _spring.enabled:
@@ -314,7 +374,9 @@ async def ws_audio(websocket: WebSocket) -> None:
         "type": "ready", "session_id": session_id,
         "sample_rate": SAMPLE_RATE, "chunk": CHUNK,
     })
-    log.info("세션 접속 %s (broadcastSessionId=%s)", session_id, broadcast_session_id)
+    log.info("세션 접속 %s (broadcastSessionId=%s, 개인사전 금칙어 %d·허용어 %d)",
+             session_id, broadcast_session_id,
+             len(ticket.terms.block), len(ticket.terms.allow))
 
     sender = asyncio.create_task(_send_loop(session))
     try:
