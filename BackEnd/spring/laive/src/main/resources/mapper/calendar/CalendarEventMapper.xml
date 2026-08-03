@@ -17,7 +17,8 @@
         memo,
         start_at,
         end_at,
-        status
+        status,
+        promise_id
     </sql>
 
     <select id="findOwnedPlatformAccount"
@@ -99,6 +100,11 @@
         ON CONFLICT DO NOTHING
     </insert>
 
+    <!--
+      약속에서 전환된 일정을 두 번 만들려 하면 ux_calendar_events_promise가
+      DuplicateKeyException으로 막는다. 서비스가 먼저 확인하지만, 같은 약속에 대한
+      동시 요청은 DB 제약만이 최종적으로 막을 수 있다.
+    -->
     <select id="insertEvent" resultType="long" affectData="true" flushCache="true">
         INSERT INTO calendar_events (
             streamer_id,
@@ -108,7 +114,8 @@
             memo,
             start_at,
             end_at,
-            status
+            status,
+            promise_id
         ) VALUES (
             #{event.streamerId},
             #{event.platformAccountId},
@@ -117,9 +124,37 @@
             #{event.memo},
             #{event.startAt},
             #{event.endAt},
-            #{event.status}
+            #{event.status},
+            #{event.promiseId}
         )
         RETURNING id
+    </select>
+
+    <!--
+      약속에 연결된 활성 일정을 찾는다. 전환 중복 검사와 응답의 calendarEventId 역참조에
+      함께 쓴다. 취소된 일정을 제외하는 조건이 ux_calendar_events_promise와 같아야 한다 —
+      어긋나면 "취소했는데 다시 못 잡는" 상태가 생긴다.
+    -->
+    <select id="findActivePromiseEventId" resultType="java.lang.Long">
+        SELECT id
+          FROM calendar_events
+         WHERE promise_id = #{promiseId}
+           AND status &lt;&gt; 'CANCELLED'
+    </select>
+
+    <!--
+      약속 전환용 방송 일정에 붙일 플랫폼 계정을 고른다. 요청 본문에 계정이 없으므로
+      서버가 정하며, 계정이 여럿일 수 있어 연결 순서로 고정한다(재현 가능한 선택).
+      refresh_token이 만료된 계정은 findOwnedPlatformAccount과 같은 규칙으로 걸러낸다.
+    -->
+    <select id="findPrimaryConnectedPlatformAccountId" resultType="java.lang.Long">
+        SELECT id
+          FROM platform_accounts
+         WHERE streamer_id = #{streamerId}
+           AND connection_status = 'CONNECTED'
+           AND (refresh_token_expires_at IS NULL OR refresh_token_expires_at &gt; now())
+         ORDER BY connected_at, id
+         LIMIT 1
     </select>
 
     <!--

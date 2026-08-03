@@ -14,6 +14,8 @@ export interface CalendarEvent {
   startAt: string
   endAt: string
   status: CalendarEventStatus
+  /** 전환의 출처가 된 약속. null이면 사용자가 직접 만든 일정이다. */
+  promiseId: number | null
 }
 
 export type PublishStatus = 'DRAFT' | 'PUBLISHED'
@@ -42,7 +44,10 @@ export interface CalendarPromiseItem {
   promiseId: number
   content: string
   dueDate: string
+  /** 전환된(SCHEDULED) 약속은 일정으로 대신 보이므로 이 목록에 오지 않는다. */
   status: 'PENDING' | 'ON_HOLD'
+  /** 활성 일정 역참조. 이 목록에서는 항상 null이지만 계약을 맞춰 둔다. */
+  calendarEventId: number | null
 }
 
 /** POST /calendar-events 입력 (API 8.2). status는 서버가 항상 SCHEDULED로 시작한다. */

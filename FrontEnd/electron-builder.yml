@@ -1,5 +1,5 @@
-appId: com.electron.app
-productName: laive-client
+appId: com.example.laive
+productName: LAIVE
 directories:
   buildResources: build
 files:

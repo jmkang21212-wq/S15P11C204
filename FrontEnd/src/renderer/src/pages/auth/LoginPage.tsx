@@ -5,6 +5,7 @@ import { Button } from '@renderer/components/ui/button'
 import { Input } from '@renderer/components/ui/input'
 import { Label } from '@renderer/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@renderer/components/ui/card'
+import logo from '@renderer/assets/logo.png'
 import { NAVER_GREEN } from '@renderer/lib/brand'
 import { loginWithDevAccount, loginWithNaver } from '@renderer/api/auth'
 import { authStore } from '@renderer/auth/authStore'
@@ -57,12 +58,7 @@ export default function LoginPage(): React.JSX.Element {
     <div className="flex h-screen items-center justify-center bg-background">
       <Card className="w-[360px]">
         <CardHeader className="flex flex-col items-center gap-3 text-center">
-          <div className="flex items-center gap-2">
-            <span className="flex size-9 items-center justify-center rounded-md bg-primary font-bold text-primary-foreground">
-              L
-            </span>
-            <span className="text-xl font-bold">LAIVE</span>
-          </div>
+          <img src={logo} alt="LAIVE" className="h-9 w-auto" />
           <CardTitle className="text-xl">다시 오신 걸 환영해요</CardTitle>
         </CardHeader>
 
