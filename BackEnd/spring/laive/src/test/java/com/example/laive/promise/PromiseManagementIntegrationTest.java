@@ -233,14 +233,55 @@ class PromiseManagementIntegrationTest {
                         .isEqualTo(HttpStatus.CONFLICT));
     }
 
+    /**
+     * 확정한 약속을 지우는 유일한 경로다.
+     *
+     * <p>전용 dismiss API는 DETECTED만 받으므로, 이게 없으면 한 번 확정한 약속은 영구히 남는다.
+     * 일정은 CANCELLED로 취소되는데 약속만 지울 수 없는 비대칭이 여기서 해소된다.
+     */
     @Test
-    void PATCH로_DISMISSED나_DETECTED로는_갈_수_없다() {
+    void 확정된_약속을_PATCH로_DISMISSED로_지운다() {
         Fixture f = createFixture();
         long promiseId = detectPromise(f, "공포게임 방송", 60);
         commandService.confirm(f.streamerId(), promiseId, null, null);
 
+        Promise dismissed = commandService.update(f.streamerId(), promiseId,
+                new UpdatePromiseCommand(PatchValue.of(PromiseStatus.DISMISSED), null, null));
+
+        assertThat(dismissed.status()).isEqualTo(PromiseStatus.DISMISSED);
+        assertThat(statusOf(promiseId)).isEqualTo("DISMISSED");
+    }
+
+    /** 한 번 버린 약속은 PATCH로 되살리지 않는다. */
+    @Test
+    void DISMISSED_약속은_PATCH로_되살릴_수_없다() {
+        Fixture f = createFixture();
+        long promiseId = detectPromise(f, "무시할 약속", 60);
+        commandService.dismiss(f.streamerId(), promiseId);
+
         assertThatThrownBy(() -> commandService.update(f.streamerId(), promiseId,
-                new UpdatePromiseCommand(PatchValue.of(PromiseStatus.DISMISSED), null, null)))
+                new UpdatePromiseCommand(PatchValue.of(PromiseStatus.PENDING), null, null)))
+                .isInstanceOf(PromiseException.class)
+                .satisfies(e -> assertThat(((PromiseException) e).getStatus())
+                        .isEqualTo(HttpStatus.CONFLICT));
+    }
+
+    @Test
+    void PATCH로_DETECTED나_SCHEDULED로는_갈_수_없다() {
+        Fixture f = createFixture();
+        long promiseId = detectPromise(f, "공포게임 방송", 60);
+        commandService.confirm(f.streamerId(), promiseId, null, null);
+
+        // DETECTED는 확정 전 상태라 되돌아갈 수 없다.
+        assertThatThrownBy(() -> commandService.update(f.streamerId(), promiseId,
+                new UpdatePromiseCommand(PatchValue.of(PromiseStatus.DETECTED), null, null)))
+                .isInstanceOf(PromiseException.class)
+                .satisfies(e -> assertThat(((PromiseException) e).getStatus())
+                        .isEqualTo(HttpStatus.BAD_REQUEST));
+
+        // SCHEDULED는 일정이 함께 생겨야 하므로 전환 API만 만들 수 있다.
+        assertThatThrownBy(() -> commandService.update(f.streamerId(), promiseId,
+                new UpdatePromiseCommand(PatchValue.of(PromiseStatus.SCHEDULED), null, null)))
                 .isInstanceOf(PromiseException.class)
                 .satisfies(e -> assertThat(((PromiseException) e).getStatus())
                         .isEqualTo(HttpStatus.BAD_REQUEST));

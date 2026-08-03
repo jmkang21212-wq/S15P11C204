@@ -82,7 +82,7 @@ class CalendarEventQueryServiceTest {
         Instant to = FROM.plus(Duration.ofDays(30));
         CalendarEvent event = new CalendarEvent(
                 44L, STREAMER_ID, null, CalendarEventType.DAY_OFF, "휴방", null,
-                FROM, FROM.plusSeconds(3600), CalendarEventStatus.SCHEDULED
+                FROM, FROM.plusSeconds(3600), CalendarEventStatus.SCHEDULED, null
         );
         when(repository.findRange(STREAMER_ID, FROM, to)).thenReturn(List.of(event));
 
