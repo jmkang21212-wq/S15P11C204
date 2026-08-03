@@ -21,7 +21,9 @@ export const MOCK_PORTFOLIO: Portfolio = {
   publishedAt: '2026-07-20T08:00:00Z',
   profile: {
     nickname: '한별TV',
-    profileImageUrl: 'https://cdn.example.com/profile/101.jpg',
+    // 존재하지 않는 도메인을 가리키면 화면을 열 때마다 ERR_NAME_NOT_RESOLVED가 쌓여 실제 오류를
+    // 덮는다. null은 실제 응답에서도 정상 값이고 Avatar·ClipThumbnail의 폴백을 함께 확인할 수 있다.
+    profileImageUrl: null,
     platformAccounts: [
       {
         platformAccountId: 15,
@@ -52,17 +54,7 @@ export const MOCK_PORTFOLIO: Portfolio = {
   },
   // SC-06·SC-07 목의 하이라이트와 같은 id를 써서 값이 어긋나지 않게 한다.
   featuredHighlights: [
-    {
-      highlightId: 71,
-      displayOrder: 1,
-      clipUrl: 'https://cdn.example.com/clips/71.mp4',
-      thumbnailUrl: 'https://cdn.example.com/clips/71.jpg'
-    },
-    {
-      highlightId: 73,
-      displayOrder: 2,
-      clipUrl: 'https://cdn.example.com/clips/73.mp4',
-      thumbnailUrl: 'https://cdn.example.com/clips/73.jpg'
-    }
+    { highlightId: 71, displayOrder: 1, clipUrl: null, thumbnailUrl: null },
+    { highlightId: 73, displayOrder: 2, clipUrl: null, thumbnailUrl: null }
   ]
 }

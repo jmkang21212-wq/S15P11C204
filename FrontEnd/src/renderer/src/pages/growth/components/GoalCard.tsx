@@ -1,31 +1,19 @@
-import { Lightbulb } from 'lucide-react'
+import { CheckCircle2, Lightbulb } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@renderer/components/ui/card'
+import { Button } from '@renderer/components/ui/button'
 import { Progress } from '@renderer/components/ui/progress'
 import StatusBadge, { type StatusTone } from '@renderer/components/common/StatusBadge'
 import { formatCount, formatPercent } from '@renderer/lib/format'
 import { cn } from '@renderer/lib/utils'
-import type { GoalStatus, GrowthGoal, MetricType } from '@renderer/types/growth'
+import { METRIC_LABEL, METRIC_UNIT } from './metricLabels'
+import type { GoalStatus, GrowthGoal } from '@renderer/types/growth'
 
 /**
- * 성장 목표 카드 — 목표 지표, 달성률, AI 다음 액션을 함께 보여준다.
+ * 채택된 성장 목표 카드 — 목표 지표, 달성률, AI 다음 액션을 함께 보여준다.
  *
- * 목표 생성·수정 API는 이번 범위가 아니라 읽기 전용이다
- * (명세서에 `POST /growth-goals`가 없고 `PATCH`는 후속 과제).
+ * 여기 오는 목표는 로드맵 추천을 채택해 만들어진 것이다(`POST /growth-roadmap/suggestions/{id}/accept`).
+ * 목표 자체를 이 카드에서 고치지는 않는다 — 수정·중단은 후속 과제다.
  */
-
-const METRIC_LABEL: Record<MetricType, string> = {
-  AVG_VIEWERS: '평균 시청자',
-  BROADCASTS_PER_WEEK: '주당 방송 횟수',
-  TOTAL_CHAT: '총 채팅',
-  BROADCAST_MINUTES: '방송 시간'
-}
-
-const METRIC_UNIT: Record<MetricType, string> = {
-  AVG_VIEWERS: '명',
-  BROADCASTS_PER_WEEK: '회',
-  TOTAL_CHAT: '개',
-  BROADCAST_MINUTES: '분'
-}
 
 const STATUS_STYLE: Record<GoalStatus, { label: string; tone: StatusTone }> = {
   ACTIVE: { label: '진행 중', tone: 'neutral' },
@@ -35,14 +23,25 @@ const STATUS_STYLE: Record<GoalStatus, { label: string; tone: StatusTone }> = {
 
 interface GoalCardProps {
   goal: GrowthGoal
+  /** 달성 처리 요청 중이면 버튼을 잠근다. */
+  pending: boolean
+  onAchieve: (growthGoalId: number) => void
 }
 
-export default function GoalCard({ goal }: GoalCardProps): React.JSX.Element {
+export default function GoalCard({ goal, pending, onAchieve }: GoalCardProps): React.JSX.Element {
   const status = STATUS_STYLE[goal.status]
   const unit = METRIC_UNIT[goal.metricType]
   // 초과 달성이면 progressRate가 1을 넘는데, 바는 100%에서 멈춘다.
   const barValue = Math.min(100, Math.round(goal.progressRate * 100))
   const achieved = goal.progressRate >= 1
+  /**
+   * 목표치를 넘긴 진행 중 목표에만 확정 버튼을 준다.
+   *
+   * 서버가 자동으로 ACHIEVED로 바꾸지 않는 이유는 지표가 다시 내려갈 수 있기 때문이다 —
+   * 평균 시청자는 방송마다 오르내리고, 기간이 남았는데 닫으면 이후 방송이 집계에서 빠진다.
+   * 그래서 "달성했다"는 판단은 사람이 내린다.
+   */
+  const canAchieve = achieved && goal.status === 'ACTIVE'
 
   return (
     <Card>
@@ -101,6 +100,18 @@ export default function GoalCard({ goal }: GoalCardProps): React.JSX.Element {
             </ul>
           )}
         </div>
+
+        {canAchieve && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={pending}
+            onClick={() => onAchieve(goal.growthGoalId)}
+          >
+            <CheckCircle2 className="size-[14px]" strokeWidth={1.8} aria-hidden />
+            {pending ? '처리 중…' : '달성으로 확정'}
+          </Button>
+        )}
       </CardContent>
     </Card>
   )
