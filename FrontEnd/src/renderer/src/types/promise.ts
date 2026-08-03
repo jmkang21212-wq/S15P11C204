@@ -20,3 +20,18 @@ export interface ConfirmPromiseInput {
   content?: string
   dueDate?: string
 }
+
+/**
+ * PATCH /promises/{id} 입력 (API 10.8.3 확장, BE `PatchValue` 계약).
+ *
+ * 필드를 아예 넣지 않으면 "변경 없음", `null`을 넣으면 "값을 비움"이다. 그래서 안 바뀐
+ * 필드는 키 자체를 만들지 않아야 한다. 전부 생략하면 BE가 400(`emptyPatch`)을 낸다.
+ *
+ * `PENDING`·`ON_HOLD`·`COMPLETED`만 수정 대상이다(`PromiseStatus.isPatchTarget`).
+ * 확정 전(`DETECTED`)에는 confirm을 먼저 거쳐야 한다.
+ */
+export interface UpdatePromiseInput {
+  status?: PromiseStatus
+  content?: string
+  dueDate?: string | null
+}

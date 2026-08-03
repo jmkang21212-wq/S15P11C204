@@ -1,16 +1,28 @@
+import { useState } from 'react'
 import { cn } from '@renderer/lib/utils'
 import { formatTime } from '@renderer/lib/format'
 import { getMonthGridDays, toDateKey } from './calendarGrid'
+import { isScheduleDrag, readScheduleDragData, setScheduleDragData } from './scheduleDnd'
+import type { ScheduleDragPayload } from './scheduleDnd'
 import type { CalendarEvent, CalendarPromiseItem } from '@renderer/types/schedule'
 
 interface CalendarMonthProps {
   year: number
   month: number // 0-indexed
   events: CalendarEvent[]
-  /** 기한이 잡힌 진행 중 약속 — 읽기 전용 칩으로만 표시한다 (확정/무시 API 연동 전). */
+  /** 기한이 잡힌 진행 중 약속. 칩을 다른 날짜로 끌어 기한을 옮길 수 있다. */
   promises: CalendarPromiseItem[]
   selectedEventId: number | null
   onSelectEvent: (event: CalendarEvent) => void
+  /**
+   * 약속·일정을 날짜 칸에 떨어뜨렸을 때. 종류와 출처에 따라 동작이 갈린다 —
+   * 미정 약속은 일정 전환, 약속 칩은 기한 이동, 일정은 날짜 이동이다.
+   */
+  onDropItem: (payload: ScheduleDragPayload, dateKey: string) => void
+  /** 처리 중인 약속. 중복 드롭을 막고 칩을 흐리게 표시한다. */
+  movingPromiseId: number | null
+  /** 처리 중인 일정. 같은 이유로 잠근다. */
+  movingEventId: number | null
 }
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토']
@@ -33,9 +45,30 @@ export default function CalendarMonth({
   events,
   promises,
   selectedEventId,
-  onSelectEvent
+  onSelectEvent,
+  onDropItem,
+  movingPromiseId,
+  movingEventId
 }: CalendarMonthProps): React.JSX.Element {
   const cells = getMonthGridDays(year, month)
+  // 어느 칸 위에 있는지 표시용. dragleave가 자식 요소 경계마다 튀므로 칸 단위 키로 관리한다.
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null)
+
+  const handleDrop = (event: React.DragEvent, dateKey: string): void => {
+    setDragOverKey(null)
+    if (!isScheduleDrag(event.dataTransfer)) return
+    event.preventDefault()
+    const payload = readScheduleDragData(event.dataTransfer)
+    if (payload !== null) onDropItem(payload, dateKey)
+  }
+
+  /** preventDefault를 해야 브라우저가 드롭을 허용한다. 캘린더 항목 드래그가 아니면 받지 않는다. */
+  const handleDragOver = (event: React.DragEvent, dateKey: string): void => {
+    if (!isScheduleDrag(event.dataTransfer)) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    if (dragOverKey !== dateKey) setDragOverKey(dateKey)
+  }
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden px-6 pb-6">
@@ -65,9 +98,13 @@ export default function CalendarMonth({
           return (
             <div
               key={i}
+              onDragOver={(event) => handleDragOver(event, dayKey)}
+              onDragLeave={() => setDragOverKey((key) => (key === dayKey ? null : key))}
+              onDrop={(event) => handleDrop(event, dayKey)}
               className={cn(
                 'min-h-0 overflow-hidden border-r border-b p-1.5',
-                !inMonth && 'bg-muted/30'
+                !inMonth && 'bg-muted/30',
+                dragOverKey === dayKey && 'bg-primary/10 ring-2 ring-primary ring-inset'
               )}
             >
               <span
@@ -80,36 +117,67 @@ export default function CalendarMonth({
                 {d.getDate()}
               </span>
               <div className="mt-1 flex flex-col gap-1">
-                {dayEvents.map((e) => (
-                  <button
-                    key={e.calendarEventId}
-                    type="button"
-                    onClick={() => onSelectEvent(e)}
-                    title={e.title}
-                    className={cn(
-                      'flex w-full flex-col rounded px-1.5 py-1 text-left text-caption leading-tight',
-                      e.eventType === 'DAY_OFF'
-                        ? 'bg-muted text-muted-foreground'
-                        : 'bg-accent text-accent-foreground',
-                      e.calendarEventId === selectedEventId && 'ring-2 ring-primary'
-                    )}
-                  >
-                    {e.eventType === 'BROADCAST' && (
-                      <span className="font-bold opacity-70">{formatTime(e.startAt)}</span>
-                    )}
-                    <span className="line-clamp-2 break-words">{e.title}</span>
-                  </button>
-                ))}
-                {/* 약속 — 확정/무시 API가 아직 없어 클릭 불가한 읽기 전용 칩으로만 얹는다. */}
-                {dayPromises.map((p) => (
-                  <div
-                    key={p.promiseId}
-                    title={p.content}
-                    className="rounded border border-dashed border-warning/40 bg-warning/5 px-1.5 py-1 text-left text-caption leading-tight text-warning"
-                  >
-                    <span className="line-clamp-2 break-words">🔖 {p.content}</span>
-                  </div>
-                ))}
+                {/*
+                  일정 칩 — 다른 날짜로 끌면 시각·기간은 그대로 두고 날짜만 옮겨진다.
+                  이미 끝난 일정(COMPLETED)은 옮기지 않는다. 방송이 실제로 있었던 날을
+                  바꾸는 셈이라 기록을 왜곡한다.
+                */}
+                {dayEvents.map((e) => {
+                  const movable = e.status === 'SCHEDULED' && movingEventId !== e.calendarEventId
+                  return (
+                    <button
+                      key={e.calendarEventId}
+                      type="button"
+                      draggable={movable}
+                      onDragStart={(event) =>
+                        setScheduleDragData(event.dataTransfer, {
+                          kind: 'event',
+                          id: e.calendarEventId
+                        })
+                      }
+                      onClick={() => onSelectEvent(e)}
+                      title={movable ? `${e.title} — 다른 날짜로 끌어 일정 변경` : e.title}
+                      className={cn(
+                        'flex w-full flex-col rounded px-1.5 py-1 text-left text-caption leading-tight',
+                        e.eventType === 'DAY_OFF'
+                          ? 'bg-muted text-muted-foreground'
+                          : 'bg-accent text-accent-foreground',
+                        e.calendarEventId === selectedEventId && 'ring-2 ring-primary',
+                        movable && 'cursor-grab active:cursor-grabbing',
+                        movingEventId === e.calendarEventId && 'opacity-50'
+                      )}
+                    >
+                      {e.eventType === 'BROADCAST' && (
+                        <span className="font-bold opacity-70">{formatTime(e.startAt)}</span>
+                      )}
+                      <span className="line-clamp-2 break-words">{e.title}</span>
+                    </button>
+                  )
+                })}
+                {/* 약속 칩 — 다른 날짜로 끌면 기한이 옮겨진다(잘못 떨어뜨려도 되돌릴 수 있다). */}
+                {dayPromises.map((p) => {
+                  const moving = movingPromiseId === p.promiseId
+                  return (
+                    <div
+                      key={p.promiseId}
+                      draggable={!moving}
+                      onDragStart={(event) =>
+                        setScheduleDragData(event.dataTransfer, {
+                          kind: 'promise',
+                          id: p.promiseId,
+                          source: 'calendar'
+                        })
+                      }
+                      title={`${p.content} — 다른 날짜로 끌어 기한 변경`}
+                      className={cn(
+                        'rounded border border-dashed border-warning/40 bg-warning/5 px-1.5 py-1 text-left text-caption leading-tight text-warning',
+                        moving ? 'opacity-50' : 'cursor-grab active:cursor-grabbing'
+                      )}
+                    >
+                      <span className="line-clamp-2 break-words">🔖 {p.content}</span>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )
