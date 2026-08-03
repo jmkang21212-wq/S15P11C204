@@ -3,7 +3,6 @@ package com.example.laive.platform.persistence;
 import com.example.laive.platform.domain.PlatformAccount;
 import com.example.laive.platform.domain.PlatformAccountSecret;
 import com.example.laive.platform.domain.PlatformAccountUpsert;
-import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -40,8 +39,9 @@ public interface PlatformAccountMapper {
                         ELSE connection_status
                    END AS connection_status,
                    connected_at
-              FROM platform_accounts
+             FROM platform_accounts
              WHERE streamer_id = #{streamerId}
+               AND connection_status <> 'DISCONNECTED'
              ORDER BY connected_at
             """)
     List<PlatformAccount> findByStreamerId(@Param("streamerId") long streamerId);
@@ -153,13 +153,40 @@ public interface PlatformAccountMapper {
     );
 
     /** 본인 소유 연동만 삭제한다. */
-    @Delete("""
-            DELETE FROM platform_accounts
-             WHERE id = #{platformAccountId}
-               AND streamer_id = #{streamerId}
+    @Select("""
+            WITH removed AS (
+                DELETE FROM platform_accounts pa
+                 WHERE pa.id = #{platformAccountId}
+                   AND pa.streamer_id = #{streamerId}
+                   AND NOT EXISTS (SELECT 1 FROM broadcast_sessions WHERE platform_account_id = pa.id)
+                   AND NOT EXISTS (SELECT 1 FROM calendar_events WHERE platform_account_id = pa.id)
+                   AND NOT EXISTS (SELECT 1 FROM viewer_profiles WHERE platform_account_id = pa.id)
+                   AND NOT EXISTS (SELECT 1 FROM broadcast_platform_sessions WHERE platform_account_id = pa.id)
+                   AND NOT EXISTS (SELECT 1 FROM calendar_event_platform_accounts WHERE platform_account_id = pa.id)
+                RETURNING 1
+            ), disconnected AS (
+                UPDATE platform_accounts pa
+                   SET connection_status = 'DISCONNECTED',
+                       access_token = NULL,
+                       refresh_token = NULL,
+                       access_token_expires_at = NULL,
+                       refresh_token_expires_at = NULL,
+                       disconnected_at = now()
+                 WHERE pa.id = #{platformAccountId}
+                   AND pa.streamer_id = #{streamerId}
+                   AND NOT EXISTS (SELECT 1 FROM removed)
+                RETURNING 1
+            )
+            SELECT count(*)::int FROM (
+                SELECT 1 FROM removed UNION ALL SELECT 1 FROM disconnected
+            ) changed
             """)
     int delete(
             @Param("platformAccountId") long platformAccountId,
             @Param("streamerId") long streamerId
     );
+
+    default int disconnect(long platformAccountId, long streamerId) {
+        return delete(platformAccountId, streamerId);
+    }
 }

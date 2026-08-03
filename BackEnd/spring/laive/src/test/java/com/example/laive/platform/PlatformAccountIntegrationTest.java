@@ -9,6 +9,7 @@ import com.example.laive.platform.persistence.PlatformAccountMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -34,6 +35,9 @@ class PlatformAccountIntegrationTest {
 
     @Autowired
     private AuthMapper authMapper;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Test
     void createsThenUpdatesSameChannelForOwningStreamer() {
@@ -169,6 +173,54 @@ class PlatformAccountIntegrationTest {
         assertThat(platformAccountMapper.findSecretByIdAndStreamerId(accountId, other)).isEmpty();
         assertThat(platformAccountMapper.delete(accountId, owner)).isEqualTo(1);
         assertThat(platformAccountMapper.findByStreamerId(owner)).isEmpty();
+    }
+
+    @Test
+    void disconnectsAccountAndRemovesCredentialWhenHistoryExists() {
+        long streamerId = createStreamer();
+        long accountId = platformAccountMapper
+                .upsert(upsert(streamerId, "channel-" + UUID.randomUUID(), "history", "enc-access"))
+                .orElseThrow();
+        jdbcTemplate.update(
+                """
+                INSERT INTO broadcast_sessions (
+                    streamer_id, platform_account_id, title, language, status, started_at, ended_at
+                ) VALUES (?, ?, 'history', 'ko', 'ENDED', now() - interval '1 hour', now())
+                """,
+                streamerId,
+                accountId
+        );
+
+        assertThat(platformAccountMapper.delete(accountId, streamerId)).isEqualTo(1);
+
+        PlatformAccountSecret disconnected = platformAccountMapper
+                .findSecretByIdAndStreamerId(accountId, streamerId)
+                .orElseThrow();
+        assertThat(disconnected.connectionStatus()).isEqualTo("DISCONNECTED");
+        assertThat(disconnected.accessToken()).isNull();
+        assertThat(disconnected.refreshToken()).isNull();
+        assertThat(platformAccountMapper.findByStreamerId(streamerId)).isEmpty();
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM platform_account_credentials WHERE platform_account_id = ?",
+                Integer.class,
+                accountId
+        )).isZero();
+    }
+
+    @Test
+    void dualWritesCredentialPayloadDuringExpandPhase() {
+        long streamerId = createStreamer();
+        long accountId = platformAccountMapper
+                .upsert(upsert(streamerId, "channel-" + UUID.randomUUID(), "credential", "enc-access"))
+                .orElseThrow();
+
+        String payload = jdbcTemplate.queryForObject(
+                "SELECT encrypted_credential_payload FROM platform_account_credentials WHERE platform_account_id = ?",
+                String.class,
+                accountId
+        );
+
+        assertThat(payload).contains("enc-access").contains("enc-refresh");
     }
 
     private long createStreamer() {
