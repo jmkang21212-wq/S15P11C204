@@ -4,16 +4,20 @@ import { Card, CardContent } from '@renderer/components/ui/card'
 import { Progress } from '@renderer/components/ui/progress'
 import { Skeleton } from '@renderer/components/ui/skeleton'
 import ClipThumbnail from '@renderer/components/common/ClipThumbnail'
+import StatusBadge from '@renderer/components/common/StatusBadge'
 import { formatClipLength, formatMs } from '@renderer/lib/format'
-import type { ReportHighlight } from '@renderer/types/report'
+import type { ClipStatus, ReportHighlight } from '@renderer/types/report'
 
 /**
- * 클립 카드 — 완료 / 생성 중 두 상태를 가진다.
- *
- * `clipUrl`이 null이면 아직 클립 파일이 없다. 응답에 "생성 중"과 "생성 실패"를
- * 구분할 필드가 없어(명세서 §1.5) 둘 다 생성 중으로 표시한다.
- * 진행 중 표현은 design.md §6에 따라 뉴트럴 프로그레스 바 + 캡션이다.
+ * 클립 카드 — `clipUrl`이 있으면 완료, 없으면 `clipStatus`로 셋 중 하나를 보여준다.
+ * PENDING(생성 대기 — 아직 재시도 여지 있음)만 진행 중으로 취급한다.
+ * design.md §6: 진행 중은 뉴트럴 프로그레스 바 + 캡션, 실패는 StatusBadge(danger/neutral).
  */
+
+const PENDING_LABEL: Record<Exclude<ClipStatus, 'UPLOADED' | 'PENDING'>, string> = {
+  FAILED: '클립을 만들지 못했어요',
+  SKIPPED: '녹화본이 없어 클립을 만들 수 없어요'
+}
 
 interface ClipCardProps {
   highlight: ReportHighlight
@@ -28,7 +32,6 @@ export default function ClipCard({
 }: ClipCardProps): React.JSX.Element {
   const range = `${formatMs(highlight.startMs)} – ${formatMs(highlight.endMs)}`
   const clipUrl = highlight.clipUrl
-  const pending = clipUrl === null
 
   return (
     <Card className="gap-0 py-4">
@@ -42,22 +45,7 @@ export default function ClipCard({
           </span>
         </div>
 
-        {pending ? (
-          <div className="flex flex-col gap-1.5">
-            {/*
-              design.md §6 "진행 중은 뉴트럴 프로그레스 바 + 캡션".
-              shadcn Progress는 기본이 Primary 색이고 value가 없으면 빈 막대로 보이므로,
-              벤더 파일을 고치는 대신 여기서 뉴트럴 색 + 진행감(pulse)만 입힌다.
-              진행률을 모르는 상태라 수치는 표시하지 않는다.
-            */}
-            <Progress
-              value={100}
-              aria-label="클립 생성 중"
-              className="animate-pulse bg-muted [&>[data-slot=progress-indicator]]:bg-muted-foreground/40"
-            />
-            <span className="text-caption text-muted-foreground">클립을 만드는 중이에요</span>
-          </div>
-        ) : (
+        {clipUrl !== null ? (
           <div className="flex items-center gap-2">
             <Button
               type="button"
@@ -80,6 +68,25 @@ export default function ClipCard({
               다운로드
             </Button>
           </div>
+        ) : highlight.clipStatus === 'PENDING' ? (
+          <div className="flex flex-col gap-1.5">
+            {/*
+              shadcn Progress는 기본이 Primary 색이고 value가 없으면 빈 막대로 보이므로,
+              벤더 파일을 고치는 대신 여기서 뉴트럴 색 + 진행감(pulse)만 입힌다.
+              진행률을 모르는 상태라 수치는 표시하지 않는다.
+            */}
+            <Progress
+              value={100}
+              aria-label="클립 생성 중"
+              className="animate-pulse bg-muted [&>[data-slot=progress-indicator]]:bg-muted-foreground/40"
+            />
+            <span className="text-caption text-muted-foreground">클립을 만드는 중이에요</span>
+          </div>
+        ) : (
+          <StatusBadge
+            tone={highlight.clipStatus === 'FAILED' ? 'danger' : 'neutral'}
+            label={PENDING_LABEL[highlight.clipStatus]}
+          />
         )}
       </CardContent>
     </Card>

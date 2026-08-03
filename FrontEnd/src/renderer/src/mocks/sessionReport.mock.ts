@@ -132,7 +132,8 @@ const HIGHLIGHTS: ReportHighlight[] = [
     startMs: 87 * MINUTE_MS,
     endMs: 87 * MINUTE_MS + 41_000,
     clipUrl: 'https://cdn.example.com/clips/71.mp4',
-    thumbnailUrl: 'https://cdn.example.com/clips/71.jpg'
+    thumbnailUrl: 'https://cdn.example.com/clips/71.jpg',
+    clipStatus: 'UPLOADED'
   },
   {
     highlightId: 72,
@@ -140,7 +141,8 @@ const HIGHLIGHTS: ReportHighlight[] = [
     startMs: 89 * MINUTE_MS,
     endMs: 89 * MINUTE_MS + 55_000,
     clipUrl: 'https://cdn.example.com/clips/72.mp4',
-    thumbnailUrl: 'https://cdn.example.com/clips/72.jpg'
+    thumbnailUrl: 'https://cdn.example.com/clips/72.jpg',
+    clipStatus: 'UPLOADED'
   },
   {
     highlightId: 73,
@@ -148,7 +150,8 @@ const HIGHLIGHTS: ReportHighlight[] = [
     startMs: 120 * MINUTE_MS,
     endMs: 120 * MINUTE_MS + 68_000,
     clipUrl: 'https://cdn.example.com/clips/73.mp4',
-    thumbnailUrl: 'https://cdn.example.com/clips/73.jpg'
+    thumbnailUrl: 'https://cdn.example.com/clips/73.jpg',
+    clipStatus: 'UPLOADED'
   },
   {
     highlightId: 74,
@@ -156,7 +159,8 @@ const HIGHLIGHTS: ReportHighlight[] = [
     startMs: 62 * MINUTE_MS,
     endMs: 62 * MINUTE_MS + 52_000,
     clipUrl: 'https://cdn.example.com/clips/74.mp4',
-    thumbnailUrl: 'https://cdn.example.com/clips/74.jpg'
+    thumbnailUrl: 'https://cdn.example.com/clips/74.jpg',
+    clipStatus: 'UPLOADED'
   }
 ]
 

@@ -2,8 +2,9 @@
  * 대시보드 API 응답 타입 — `GET /api/v1/dashboard` 의 data 필드 계약.
  * mock 데이터와 실제 API가 공통으로 따르는 형태.
  *
- * BE가 `COALESCE`로 막아 주는 값(요약·클립 URL·시청자 수)은 여기서도 non-null이다.
- * 반대로 조각 자체(`upcomingBroadcast` 등)는 null이 정상 상태다 — `DashboardData` 참고.
+ * BE가 `COALESCE`로 막아 주는 값(요약·시청자 수)은 여기서도 non-null이다.
+ * 클립 URL은 예외 — 생성 전·실패면 null이다(`RecentHighlight` 참고).
+ * 조각 자체(`upcomingBroadcast` 등)도 null이 정상 상태다 — `DashboardData` 참고.
  */
 
 import type { PromiseStatus } from './promise'
@@ -55,8 +56,9 @@ export interface WeeklyMetrics {
 export interface RecentHighlight {
   highlightId: number
   durationMs: number
-  clipUrl: string
-  thumbnailUrl: string
+  /** 클립 생성 전이거나 실패하면 null (BE `ClipUrlResolver`가 정규화). */
+  clipUrl: string | null
+  thumbnailUrl: string | null
 }
 
 export interface DashboardData {
