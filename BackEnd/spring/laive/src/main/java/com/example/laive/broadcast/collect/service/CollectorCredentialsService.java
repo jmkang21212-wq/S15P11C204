@@ -3,6 +3,8 @@ package com.example.laive.broadcast.collect.service;
 import com.example.laive.broadcast.collect.dto.response.CollectorCredentialsResponse;
 import com.example.laive.broadcast.collect.repository.mybatis.CollectMapper;
 import com.example.laive.broadcast.collect.repository.mybatis.SessionCollectionRef;
+import com.example.laive.broadcast.collect.repository.mybatis.PlatformCollectorSpecRow;
+import com.example.laive.broadcast.collect.dto.response.PlatformCollectorSpecResponse;
 import com.example.laive.broadcast.session.exception.BroadcastSessionException;
 import com.example.laive.platform.domain.PlatformAccountSecret;
 import com.example.laive.platform.persistence.PlatformAccountMapper;
@@ -51,5 +53,27 @@ public class CollectorCredentialsService {
                 .orElseThrow(BroadcastSessionException::platformAccountNotFound);
 
         return new CollectorCredentialsResponse(resolution.accessToken(), secret.channelId());
+    }
+
+    @Transactional
+    public PlatformCollectorSpecResponse issuePlatformSession(long platformSessionId) {
+        PlatformCollectorSpecRow spec = collectMapper.findPlatformCollectorSpec(platformSessionId)
+                .orElseThrow(BroadcastSessionException::notFound);
+        PlatformTokenRefresher.TokenResolution resolution = tokenRefresher.resolve(
+                spec.streamerId(), spec.platformAccountId());
+        if (resolution.reauthRequired()) {
+            throw BroadcastSessionException.platformReauthRequired();
+        }
+        return new PlatformCollectorSpecResponse(
+                spec.platformSessionId(),
+                spec.sessionId(),
+                spec.platformCode(),
+                resolution.accessToken(),
+                spec.externalAccountId(),
+                spec.channelName(),
+                spec.externalBroadcastId(),
+                spec.liveChatId(),
+                spec.watchUrl()
+        );
     }
 }

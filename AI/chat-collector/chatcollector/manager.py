@@ -4,7 +4,8 @@ import threading
 from typing import Optional
 
 from chatcollector.session import CollectorSession
-from chatcollector.spring import SpringClient
+from chatcollector.spring import PlatformSpringClient, SpringClient
+from chatcollector.youtube import YouTubeCollectorSession
 
 log = logging.getLogger(__name__)
 
@@ -28,6 +29,34 @@ class CollectorManager:
         # Lock 밖에서 스레드를 띄운다. start()가 Spring을 호출할 수 있어
         # Lock을 쥔 채로 부르면 다른 세션의 시작·종료가 함께 막힌다.
         session.start()
+        return True
+
+    def start_platform(self, platform_session_id: int) -> bool:
+        with self._lock:
+            if platform_session_id in self._sessions:
+                return False
+
+        spec = self._spring.fetch_platform_spec(platform_session_id)
+        platform = spec['platformCode']
+        bound_spring = PlatformSpringClient(
+            self._spring, platform_session_id, spec)
+        if platform == 'CHZZK':
+            session = CollectorSession(platform_session_id, bound_spring)
+        elif platform == 'YOUTUBE':
+            session = YouTubeCollectorSession(platform_session_id, bound_spring)
+        else:
+            raise ValueError(f'unsupported collector platform: {platform}')
+
+        with self._lock:
+            if platform_session_id in self._sessions:
+                return False
+            self._sessions[platform_session_id] = session
+        try:
+            session.start()
+        except Exception:
+            with self._lock:
+                self._sessions.pop(platform_session_id, None)
+            raise
         return True
 
     def stop(self, session_id: int, grace_period_sec: float) -> bool:

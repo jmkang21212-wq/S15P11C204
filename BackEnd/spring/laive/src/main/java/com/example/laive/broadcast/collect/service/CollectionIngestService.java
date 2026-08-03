@@ -7,6 +7,7 @@ import com.example.laive.broadcast.collect.domain.ViewerMetricItem;
 import com.example.laive.broadcast.collect.repository.mybatis.CollectMapper;
 import com.example.laive.broadcast.collect.repository.mybatis.ResolvedChatMessage;
 import com.example.laive.broadcast.collect.repository.mybatis.SessionCollectionRef;
+import com.example.laive.broadcast.collect.repository.mybatis.PlatformSessionCollectionRef;
 import com.example.laive.broadcast.collect.repository.mybatis.ViewerProfileRef;
 import com.example.laive.broadcast.collect.repository.mybatis.ViewerSeen;
 import com.example.laive.broadcast.session.exception.BroadcastSessionException;
@@ -58,6 +59,19 @@ public class CollectionIngestService {
         return new BatchIngestResult(inserted, 0);
     }
 
+    @Transactional
+    public BatchIngestResult appendPlatformChatMessages(
+            long platformSessionId,
+            List<ChatMessageItem> items
+    ) {
+        PlatformSessionCollectionRef session = requirePlatformSession(platformSessionId);
+        Map<String, Long> viewerIds = resolveViewerIds(session.platformAccountId(), items);
+        List<ResolvedChatMessage> resolved = resolve(items, viewerIds);
+        int inserted = collectMapper.insertPlatformChatMessages(
+                session.sessionId(), platformSessionId, resolved);
+        return new BatchIngestResult(inserted, items.size() - inserted);
+    }
+
     /**
      * 시청자 수 배치를 저장한다.
      *
@@ -82,6 +96,18 @@ public class CollectionIngestService {
         return new BatchIngestResult(inserted, items.size() - inserted);
     }
 
+    @Transactional
+    public BatchIngestResult appendPlatformViewerMetrics(
+            long platformSessionId,
+            List<ViewerMetricItem> items
+    ) {
+        PlatformSessionCollectionRef session = requirePlatformSession(platformSessionId);
+        List<ViewerMetricItem> deduplicated = deduplicateViewerMetrics(items);
+        int inserted = collectMapper.insertPlatformViewerMetrics(
+                session.sessionId(), platformSessionId, deduplicated);
+        return new BatchIngestResult(inserted, items.size() - inserted);
+    }
+
     /** 수집 공백 구간을 기록하거나 이미 기록된 구간을 닫는다. */
     @Transactional
     public void recordCollectionGap(long sessionId, CollectionGap gap) {
@@ -91,10 +117,32 @@ public class CollectionIngestService {
         collectMapper.upsertCollectionGap(sessionId, gap);
     }
 
+    @Transactional
+    public void recordPlatformCollectionGap(long platformSessionId, CollectionGap gap) {
+        PlatformSessionCollectionRef session = requirePlatformSession(platformSessionId);
+        collectMapper.upsertPlatformCollectionGap(
+                session.sessionId(), platformSessionId, gap);
+    }
+
     /** 세션 종료 시 아직 열려 있는 공백을 종료 시각으로 닫는다. */
     @Transactional
     public int closeOpenCollectionGaps(long sessionId, Instant endedAt) {
         return collectMapper.closeOpenCollectionGaps(sessionId, endedAt);
+    }
+
+    @Transactional
+    public int closeOpenPlatformCollectionGaps(long platformSessionId, Instant endedAt) {
+        requirePlatformSession(platformSessionId);
+        return collectMapper.closeOpenPlatformCollectionGaps(platformSessionId, endedAt);
+    }
+
+    public PlatformSessionCollectionRef requirePlatformSession(long platformSessionId) {
+        return collectMapper.findPlatformSessionRef(platformSessionId)
+                .orElseThrow(BroadcastSessionException::notFound);
+    }
+
+    public Integer combinedViewerCount(long sessionId, Instant measuredAt) {
+        return collectMapper.sumLatestPlatformViewerCounts(sessionId, measuredAt);
     }
 
     /**
@@ -127,6 +175,35 @@ public class CollectionIngestService {
             viewerIds.put(ref.viewerHash(), ref.viewerId());
         }
         return viewerIds;
+    }
+
+    private static List<ResolvedChatMessage> resolve(
+            List<ChatMessageItem> items,
+            Map<String, Long> viewerIds
+    ) {
+        return items.stream()
+                .map(item -> new ResolvedChatMessage(
+                        viewerIds.get(item.viewerHash()),
+                        item.message(),
+                        item.sentAt(),
+                        item.sentimentLabel(),
+                        item.platformMessageId(),
+                        item.messageType(),
+                        item.amount(),
+                        item.currency(),
+                        item.providerEventType()
+                ))
+                .toList();
+    }
+
+    private static List<ViewerMetricItem> deduplicateViewerMetrics(
+            List<ViewerMetricItem> items
+    ) {
+        Map<Instant, ViewerMetricItem> byMeasuredAt = new LinkedHashMap<>();
+        for (ViewerMetricItem item : items) {
+            byMeasuredAt.put(item.measuredAt(), item);
+        }
+        return List.copyOf(byMeasuredAt.values());
     }
 
     private static Instant earlier(Instant left, Instant right) {

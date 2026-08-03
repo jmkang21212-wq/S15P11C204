@@ -31,6 +31,7 @@ SPRING_MAX_RETRIES = int(os.getenv('COLLECTOR_SPRING_MAX_RETRIES', '3'))
 # --- 치지직 ---
 
 CHZZK_API_BASE = os.getenv('CHZZK_API_BASE', 'https://openapi.chzzk.naver.com')
+YOUTUBE_API_BASE = os.getenv('YOUTUBE_API_BASE', 'https://www.googleapis.com')
 
 # 시청자 수 폴링. Open API에 채널별 동시 시청자 수가 없어 서비스 API를 쓴다.
 CHZZK_LIVE_STATUS_URL = os.getenv(

@@ -115,7 +115,8 @@ public class BroadcastSessionController {
             @AuthenticationPrincipal Jwt jwt
     ) {
         return queryService.getCurrent(streamerIdExtractor.extract(jwt))
-                .map(BroadcastSessionDetailResponse::from)
+                .map(detail -> BroadcastSessionDetailResponse.from(
+                        detail, queryService.getPlatformSessions(detail.sessionId())))
                 .map(ApiResponse::success)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.noContent().build());
@@ -155,7 +156,8 @@ public class BroadcastSessionController {
             @PathVariable @Positive long sessionId
     ) {
         var detail = queryService.getSession(streamerIdExtractor.extract(jwt), sessionId);
-        return ResponseEntity.ok(ApiResponse.success(BroadcastSessionDetailResponse.from(detail)));
+        return ResponseEntity.ok(ApiResponse.success(BroadcastSessionDetailResponse.from(
+                detail, queryService.getPlatformSessions(detail.sessionId()))));
     }
 }
 

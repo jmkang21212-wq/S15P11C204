@@ -1,6 +1,7 @@
 package com.example.laive.broadcast.collect.domain;
 
 import java.time.Instant;
+import java.math.BigDecimal;
 
 /**
  * 수집기가 보낸 채팅 한 건이다(명세 13.3.1).
@@ -11,13 +12,35 @@ import java.time.Instant;
  * @param sentimentLabel 감정 코드(V8의 8종). 수집기는 보내지 않고 chat-ai 중계가 붙인다.
  *                       분류하지 못했으면 null — 원본 저장이 라벨에 볼모잡히지 않는다
  */
-public record ChatMessageItem(String viewerHash, String message, Instant sentAt, String sentimentLabel) {
+public record ChatMessageItem(
+        String viewerHash,
+        String message,
+        Instant sentAt,
+        String sentimentLabel,
+        String platformMessageId,
+        ChatMessageType messageType,
+        BigDecimal amount,
+        String currency,
+        String providerEventType
+) {
+
+    public ChatMessageItem {
+        messageType = messageType == null ? ChatMessageType.TEXT : messageType;
+    }
 
     public ChatMessageItem(String viewerHash, String message, Instant sentAt) {
-        this(viewerHash, message, sentAt, null);
+        this(viewerHash, message, sentAt, null, null, ChatMessageType.TEXT,
+                null, null, null);
+    }
+
+    public ChatMessageItem(String viewerHash, String message, Instant sentAt, String sentimentLabel) {
+        this(viewerHash, message, sentAt, sentimentLabel, null, ChatMessageType.TEXT,
+                null, null, null);
     }
 
     public ChatMessageItem withSentimentLabel(String sentimentLabel) {
-        return new ChatMessageItem(viewerHash, message, sentAt, sentimentLabel);
+        return new ChatMessageItem(
+                viewerHash, message, sentAt, sentimentLabel, platformMessageId,
+                messageType, amount, currency, providerEventType);
     }
 }

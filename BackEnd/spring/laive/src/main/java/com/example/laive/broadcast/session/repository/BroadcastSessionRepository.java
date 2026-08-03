@@ -54,8 +54,9 @@ public interface BroadcastSessionRepository {
 
     int updateReportStatistics(long reportId, SessionStatistics statistics);
 
+    int replaceReportPlatformMetrics(long reportId, long sessionId);
+
     int markReportPartial(long reportId, Instant generatedAt);
 
     int markReportFailed(long reportId);
 }
-

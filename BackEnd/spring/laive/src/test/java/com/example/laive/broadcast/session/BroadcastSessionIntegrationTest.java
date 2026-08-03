@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -48,6 +49,41 @@ class BroadcastSessionIntegrationTest {
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
+
+    @Test
+    void createsProviderChildrenAndCombinesViewerBuckets() {
+        long streamerId = createStreamer();
+        long firstAccountId = createPlatformAccount(streamerId);
+        long secondAccountId = createPlatformAccount(streamerId);
+
+        var started = transactionService.start(
+                streamerId,
+                new StartBroadcastSessionCommand(
+                        List.of(firstAccountId, secondAccountId),
+                        null,
+                        "멀티 플랫폼 집계 테스트",
+                        "FPS",
+                        "ko"
+                )
+        );
+
+        assertThat(started.platformSessions()).hasSize(2);
+        assertThat(outboxCount(started.sessionId())).isEqualTo(2);
+
+        Instant firstMinute = Instant.parse("2026-08-01T10:00:10Z");
+        Instant secondMinute = Instant.parse("2026-08-01T10:01:10Z");
+        long firstPlatformSessionId = started.platformSessions().get(0).platformSessionId();
+        long secondPlatformSessionId = started.platformSessions().get(1).platformSessionId();
+        insertPlatformViewerMetric(started.sessionId(), firstPlatformSessionId, firstMinute, 100);
+        insertPlatformViewerMetric(started.sessionId(), secondPlatformSessionId, firstMinute, 200);
+        insertPlatformViewerMetric(started.sessionId(), firstPlatformSessionId, secondMinute, 150);
+        insertPlatformViewerMetric(started.sessionId(), secondPlatformSessionId, secondMinute, 250);
+
+        SessionStatistics statistics = repository.calculateStatistics(started.sessionId());
+
+        assertThat(statistics.averageViewers()).isEqualTo(350);
+        assertThat(statistics.peakViewers()).isEqualTo(400);
+    }
 
     @Test
     void persistsCompleteLifecycleUsingErdRelationships() {
@@ -260,6 +296,25 @@ class BroadcastSessionIntegrationTest {
                 VALUES (?, clock_timestamp(), ?)
                 """,
                 sessionId,
+                viewerCount
+        );
+    }
+
+    private void insertPlatformViewerMetric(
+            long sessionId,
+            long platformSessionId,
+            Instant measuredAt,
+            int viewerCount
+    ) {
+        jdbcTemplate.update(
+                """
+                INSERT INTO viewer_metrics (
+                    session_id, platform_session_id, measured_at, viewer_count
+                ) VALUES (?, ?, ?, ?)
+                """,
+                sessionId,
+                platformSessionId,
+                java.sql.Timestamp.from(measuredAt),
                 viewerCount
         );
     }

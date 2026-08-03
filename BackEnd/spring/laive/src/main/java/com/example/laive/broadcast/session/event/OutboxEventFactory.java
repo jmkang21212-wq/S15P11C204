@@ -55,6 +55,38 @@ public class OutboxEventFactory {
         );
     }
 
+    public PendingOutboxEvent platformSessionPreparationRequested(
+            long sessionId,
+            long platformSessionId,
+            long streamerId,
+            long platformAccountId,
+            String platformCode,
+            Instant requestedAt,
+            String language,
+            Instant occurredAt
+    ) {
+        UUID eventId = UUID.randomUUID();
+        return pending(
+                eventId,
+                sessionId,
+                BroadcastOutboxEventType.PLATFORM_SESSION_PREPARATION_REQUESTED,
+                "platform-session:" + platformSessionId + ":prepare",
+                new PlatformSessionPreparationRequestedEvent(
+                        eventId,
+                        SCHEMA_VERSION,
+                        sessionId,
+                        platformSessionId,
+                        streamerId,
+                        platformAccountId,
+                        platformCode,
+                        requestedAt,
+                        language,
+                        occurredAt
+                ),
+                occurredAt
+        );
+    }
+
     public PendingOutboxEvent started(
             long sessionId,
             long streamerId,

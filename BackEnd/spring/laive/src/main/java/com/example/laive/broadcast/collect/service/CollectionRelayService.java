@@ -10,6 +10,7 @@ import com.example.laive.broadcast.realtime.integration.ChatAiGateway;
 import com.example.laive.broadcast.realtime.integration.RealtimeSessionLifecycle;
 import com.example.laive.broadcast.realtime.integration.SentimentSnapshotStore;
 import com.example.laive.broadcast.realtime.service.RealtimeSessionRegistry;
+import com.example.laive.broadcast.collect.repository.mybatis.PlatformSessionCollectionRef;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -90,10 +91,45 @@ public class CollectionRelayService {
         return result;
     }
 
+    public BatchIngestResult appendPlatformChatMessages(
+            long platformSessionId,
+            List<ChatMessageItem> items
+    ) {
+        PlatformSessionCollectionRef source = ingestService.requirePlatformSession(platformSessionId);
+        long sessionId = source.sessionId();
+        realtimeLifecycle.ensureRegistered(sessionId);
+
+        List<IngestChat> chats = items.stream()
+                .map(item -> new IngestChat(item.viewerHash(), item.message(), item.sentAt()))
+                .toList();
+        Optional<ChatAiIngestResult> classified =
+                chatAiGateway.ingest(sessionId, registry.currentViewers(sessionId), chats);
+        registry.markIngest(sessionId, clock.instant());
+
+        BatchIngestResult result = ingestService.appendPlatformChatMessages(
+                platformSessionId,
+                classified.map(ai -> labeled(items, ai.labels())).orElse(items)
+        );
+        registry.feedChats(
+                sessionId,
+                clock.instant(),
+                items.stream().map(ChatMessageItem::viewerHash).toList()
+        );
+        classified.map(ChatAiIngestResult::window)
+                .ifPresent(window -> snapshotStore.recordSentiment(sessionId, window, clock.instant()));
+        return result;
+    }
+
     /** 수집 공백 보고를 저장하고 판정기에도 알린다(가드 9). */
     public void recordCollectionGap(long sessionId, CollectionGap gap) {
         ingestService.recordCollectionGap(sessionId, gap);
         registry.onGap(sessionId, gap.endedAt());
+    }
+
+    public void recordPlatformCollectionGap(long platformSessionId, CollectionGap gap) {
+        PlatformSessionCollectionRef source = ingestService.requirePlatformSession(platformSessionId);
+        ingestService.recordPlatformCollectionGap(platformSessionId, gap);
+        registry.onGap(source.sessionId(), gap.endedAt());
     }
 
     /** 시청자 수 배치를 저장하고 최신값을 판정기와 콘솔 스냅샷에 반영한다. */
@@ -105,6 +141,26 @@ public class CollectionRelayService {
                 .ifPresent(latest -> {
                     registry.recordViewers(sessionId, latest.viewerCount(), latest.measuredAt());
                     snapshotStore.recordViewers(sessionId, latest.viewerCount(), latest.measuredAt());
+                });
+        return result;
+    }
+
+    public BatchIngestResult appendPlatformViewerMetrics(
+            long platformSessionId,
+            List<ViewerMetricItem> items
+    ) {
+        PlatformSessionCollectionRef source = ingestService.requirePlatformSession(platformSessionId);
+        BatchIngestResult result = ingestService.appendPlatformViewerMetrics(platformSessionId, items);
+        items.stream()
+                .max(Comparator.comparing(ViewerMetricItem::measuredAt))
+                .ifPresent(latest -> {
+                    Integer combined = ingestService.combinedViewerCount(
+                            source.sessionId(), latest.measuredAt());
+                    if (combined != null) {
+                        registry.recordViewers(source.sessionId(), combined, latest.measuredAt());
+                        snapshotStore.recordViewers(
+                                source.sessionId(), combined, latest.measuredAt());
+                    }
                 });
         return result;
     }

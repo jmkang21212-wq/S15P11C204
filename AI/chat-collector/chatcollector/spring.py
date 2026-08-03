@@ -60,6 +60,59 @@ class SpringClient:
         data = body['data']
         return data['accessToken'], data['channelId']
 
+    def fetch_platform_spec(self, platform_session_id: int) -> dict:
+        body = self._request(
+            'GET',
+            f'/internal/v1/platform-sessions/{platform_session_id}/collector-spec',
+        )
+        return body['data']
+
+    def send_platform_chat_batch(
+        self, platform_session_id: int, items: list[dict]
+    ) -> dict:
+        return self._request(
+            'POST',
+            f'/internal/v1/platform-sessions/{platform_session_id}/chat-messages:batch',
+            json={'items': items},
+            request_id=str(uuid.uuid4()),
+        )['data']
+
+    def send_platform_viewer_metrics(
+        self, platform_session_id: int, items: list[dict]
+    ) -> dict:
+        return self._request(
+            'POST',
+            f'/internal/v1/platform-sessions/{platform_session_id}/viewer-metrics:batch',
+            json={'items': items},
+            request_id=str(uuid.uuid4()),
+        )['data']
+
+    def report_platform_status(
+        self, platform_session_id: int, status: str, occurred_at: float
+    ) -> None:
+        self._request(
+            'POST',
+            f'/internal/v1/platform-sessions/{platform_session_id}/collector-status',
+            json={'status': status, 'occurredAt': iso(occurred_at)},
+        )
+
+    def report_platform_gap(
+        self,
+        platform_session_id: int,
+        started_at: float,
+        ended_at: Optional[float],
+        reason: str,
+    ) -> None:
+        self._request(
+            'POST',
+            f'/internal/v1/platform-sessions/{platform_session_id}/collection-gaps',
+            json={
+                'startedAt': iso(started_at),
+                'endedAt': iso(ended_at) if ended_at is not None else None,
+                'reason': reason,
+            },
+        )
+
     # --- 저장 ---
 
     def send_chat_batch(self, session_id: int, items: list[dict]) -> dict:
@@ -157,3 +210,47 @@ class SpringClient:
                 time.sleep(0.5 * (2 ** attempt))  # 0.5 -> 1 -> 2초
 
         raise SpringUnavailable(f'{method} {path}')
+
+
+class PlatformSpringClient:
+    """Binds the legacy collector protocol to a provider child session."""
+
+    def __init__(
+        self,
+        delegate: SpringClient,
+        platform_session_id: int,
+        spec: dict,
+    ):
+        self._delegate = delegate
+        self._platform_session_id = platform_session_id
+        self.spec = spec
+
+    def fetch_credentials(self, _session_id: int) -> tuple[str, str]:
+        return self.spec['accessToken'], self.spec['externalAccountId']
+
+    def refresh_spec(self) -> dict:
+        """Fetches a fresh provider token without restarting the collector worker."""
+        self.spec = self._delegate.fetch_platform_spec(self._platform_session_id)
+        return self.spec
+
+    def send_chat_batch(self, _session_id: int, items: list[dict]) -> dict:
+        return self._delegate.send_platform_chat_batch(
+            self._platform_session_id, items)
+
+    def send_viewer_metrics(self, _session_id: int, items: list[dict]) -> dict:
+        return self._delegate.send_platform_viewer_metrics(
+            self._platform_session_id, items)
+
+    def report_status(self, _session_id: int, status: str, occurred_at: float) -> None:
+        self._delegate.report_platform_status(
+            self._platform_session_id, status, occurred_at)
+
+    def report_gap(
+        self,
+        _session_id: int,
+        started_at: float,
+        ended_at: Optional[float],
+        reason: str,
+    ) -> None:
+        self._delegate.report_platform_gap(
+            self._platform_session_id, started_at, ended_at, reason)

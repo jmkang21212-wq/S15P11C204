@@ -131,6 +131,11 @@ public class MyBatisBroadcastSessionRepository implements BroadcastSessionReposi
     }
 
     @Override
+    public int replaceReportPlatformMetrics(long reportId, long sessionId) {
+        return mapper.replaceReportPlatformMetrics(reportId, sessionId);
+    }
+
+    @Override
     public int markReportPartial(long reportId, Instant generatedAt) {
         return mapper.markReportPartial(reportId, generatedAt);
     }
@@ -140,4 +145,3 @@ public class MyBatisBroadcastSessionRepository implements BroadcastSessionReposi
         return mapper.markReportFailed(reportId);
     }
 }
-

@@ -76,6 +76,30 @@ public class HttpChatCollectorGateway implements ChatCollectorGateway {
         }
     }
 
+    @Override
+    public void startPlatformSession(
+            long sessionId,
+            long platformSessionId,
+            long streamerId,
+            long platformAccountId,
+            String platformCode
+    ) {
+        try {
+            restClient.post()
+                    .uri("/collectors/platform-sessions/{platformSessionId}", platformSessionId)
+                    .headers(this::authorize)
+                    .retrieve()
+                    .toBodilessEntity();
+            log.info("Platform collector start requested: platformSessionId={} platform={}",
+                    platformSessionId, platformCode);
+        } catch (RestClientException exception) {
+            throw new IllegalStateException(
+                    "Cannot start platform collector: platformSessionId=" + platformSessionId,
+                    exception
+            );
+        }
+    }
+
     /**
      * 수집을 종료하고 남은 배치를 Flush하게 한다.
      *
@@ -107,6 +131,28 @@ public class HttpChatCollectorGateway implements ChatCollectorGateway {
         }
 
         statusStore.record(sessionId, CollectorState.STOPPED, endedAt);
+    }
+
+    @Override
+    public void stopPlatformSession(
+            long platformSessionId,
+            Instant endedAt,
+            Duration gracePeriod
+    ) {
+        try {
+            restClient.delete()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/collectors/platform-sessions/{platformSessionId}")
+                            .queryParam("gracePeriodMs", gracePeriod.toMillis())
+                            .build(platformSessionId))
+                    .headers(this::authorize)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (RestClientException exception) {
+            log.warn("Platform collector stop failed: platformSessionId={}",
+                    platformSessionId, exception);
+        }
+        ingestService.closeOpenPlatformCollectionGaps(platformSessionId, endedAt);
     }
 
     private void authorize(HttpHeaders headers) {

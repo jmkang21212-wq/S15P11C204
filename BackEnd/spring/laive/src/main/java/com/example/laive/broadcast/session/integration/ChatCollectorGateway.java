@@ -11,7 +11,24 @@ public interface ChatCollectorGateway {
     default void start(long sessionId, long streamerId, long platformAccountId) {
     }
 
+    /** 신규 Collector는 플랫폼 자식 세션을 worker 식별자로 사용한다. */
+    default void startPlatformSession(
+            long sessionId,
+            long platformSessionId,
+            long streamerId,
+            long platformAccountId,
+            String platformCode
+    ) {
+        start(sessionId, streamerId, platformAccountId);
+    }
+
     default void stopAndFlush(long sessionId, Instant endedAt, Duration gracePeriod) {
     }
-}
 
+    default void stopPlatformSession(
+            long platformSessionId,
+            Instant endedAt,
+            Duration gracePeriod
+    ) {
+    }
+}
