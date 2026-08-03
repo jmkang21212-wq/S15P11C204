@@ -5,6 +5,7 @@ import com.example.laive.promise.domain.PromiseCalendarItem;
 import com.example.laive.promise.dto.response.PromiseCalendarItemResponse;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 기간 조회 응답이다. 범위를 62일로 제한해 전량 반환하므로 페이지 필드가 없다 (API 8.1).
@@ -22,8 +23,24 @@ public record CalendarEventListResponse(
             List<CalendarEvent> events,
             List<PromiseCalendarItem> promises
     ) {
+        return from(events, promises, Map.of());
+    }
+
+    public static CalendarEventListResponse from(
+            List<CalendarEvent> events,
+            List<PromiseCalendarItem> promises,
+            Map<Long, List<Long>> platformAccountIds
+    ) {
         return new CalendarEventListResponse(
-                events.stream().map(CalendarEventResponse::from).toList(),
+                events.stream()
+                        .map(event -> CalendarEventResponse.from(
+                                event,
+                                platformAccountIds.getOrDefault(
+                                        event.calendarEventId(),
+                                        event.platformAccountId() == null
+                                                ? List.of()
+                                                : List.of(event.platformAccountId()))))
+                        .toList(),
                 promises.stream().map(PromiseCalendarItemResponse::from).toList()
         );
     }

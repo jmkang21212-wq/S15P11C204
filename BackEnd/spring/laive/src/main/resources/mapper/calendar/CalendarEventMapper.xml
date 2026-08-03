@@ -73,6 +73,32 @@
         )
     </select>
 
+    <select id="findLinkedPlatformAccounts"
+            resultType="com.example.laive.calendar.repository.CalendarEventPlatformAccountLink">
+        SELECT calendar_event_id,
+               platform_account_id
+          FROM calendar_event_platform_accounts
+         WHERE calendar_event_id IN
+         <foreach collection="calendarEventIds" item="id" open="(" separator="," close=")">
+             #{id}
+         </foreach>
+         ORDER BY calendar_event_id, platform_account_id
+    </select>
+
+    <delete id="deleteLinkedPlatformAccounts">
+        DELETE FROM calendar_event_platform_accounts
+         WHERE calendar_event_id = #{calendarEventId}
+    </delete>
+
+    <insert id="insertLinkedPlatformAccounts">
+        INSERT INTO calendar_event_platform_accounts (calendar_event_id, platform_account_id)
+        VALUES
+        <foreach collection="platformAccountIds" item="platformAccountId" separator=",">
+            (#{calendarEventId}, #{platformAccountId})
+        </foreach>
+        ON CONFLICT DO NOTHING
+    </insert>
+
     <select id="insertEvent" resultType="long" affectData="true" flushCache="true">
         INSERT INTO calendar_events (
             streamer_id,

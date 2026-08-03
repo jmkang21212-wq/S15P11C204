@@ -9,6 +9,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
 
 /**
  * 소유권 조건이 포함된 일정 조회를 담당한다.
@@ -35,6 +37,29 @@ public class CalendarEventQueryService {
     public CalendarEvent getEvent(long streamerId, long calendarEventId) {
         return repository.findDetail(streamerId, calendarEventId)
                 .orElseThrow(CalendarEventException::notFound);
+    }
+
+    public Map<Long, List<Long>> getPlatformAccountIds(List<CalendarEvent> events) {
+        if (events.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, List<Long>> result = new LinkedHashMap<>();
+        repository.findLinkedPlatformAccounts(
+                        events.stream().map(CalendarEvent::calendarEventId).toList())
+                .forEach(link -> result.computeIfAbsent(
+                                link.calendarEventId(), ignored -> new java.util.ArrayList<>())
+                        .add(link.platformAccountId()));
+        for (CalendarEvent event : events) {
+            if (!result.containsKey(event.calendarEventId()) && event.platformAccountId() != null) {
+                result.put(event.calendarEventId(), List.of(event.platformAccountId()));
+            }
+        }
+        return result;
+    }
+
+    public List<Long> getPlatformAccountIds(CalendarEvent event) {
+        return getPlatformAccountIds(List.of(event))
+                .getOrDefault(event.calendarEventId(), List.of());
     }
 
     private void requireValidRange(Instant from, Instant to) {
