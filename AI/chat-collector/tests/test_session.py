@@ -86,7 +86,34 @@ def test_원본_식별자_대신_해시를_큐에_넣는다(session):
     assert item['viewerHash'].startswith('sha256:')
     assert 'raw-channel-id' not in item['viewerHash']
     assert item['message'] == 'ㅋㅋㅋ'
-    assert set(item) == {'viewerHash', 'message', 'sentAt'}
+    # 정확 일치 단정은 의도된 감지선이다 — 필드를 늘릴 때 이 목록도 함께 늘려서
+    # "원본 식별자가 새 필드로 새어 나가지 않는지"를 강제로 재검토하게 만든다.
+    assert set(item) == {'viewerHash', 'message', 'sentAt', 'nickname', 'userRole'}
+
+
+def test_닉네임과_역할은_원문으로_실린다(session):
+    session._on_chat({
+        'senderChannelId': 'raw-channel-id',
+        'content': '오늘도 왔어요',
+        'messageTime': int(time.time() * 1000),
+        'profile': {'nickname': '한별팬1호', 'userRoleCode': 'common_user'},
+    })
+
+    item = session._chat.get_nowait()
+    assert item['nickname'] == '한별팬1호'
+    assert item['userRole'] == 'common_user'
+
+
+def test_profile이_없으면_닉네임은_None이다(session):
+    session._on_chat({
+        'senderChannelId': 'raw-channel-id',
+        'content': '첫 채팅',
+        'messageTime': int(time.time() * 1000),
+    })
+
+    item = session._chat.get_nowait()
+    assert item['nickname'] is None
+    assert item['userRole'] is None
 
 
 def test_스트리머_채팅을_따로_센다(session):
