@@ -46,6 +46,15 @@ spring:
         # REPORT_AI_TEMPERATURE=1로 같이 올리고, 생성 성향은 reasoning-effort로 조절한다.
         temperature: "${REPORT_AI_TEMPERATURE:0.2}"
 
+# Swagger UI / OpenAPI 문서. 개발에서는 켜 두고 배포에서는 SWAGGER_ENABLED=false로 끈다.
+# nginx가 /api/·/clips/·/ws/audio·/download/ 만 프록시해 외부에서 닿지 않지만,
+# 방화벽·프록시 설정 실수 한 번으로 API 전체 구조가 공개되는 것을 막는 두 번째 잠금이다.
+springdoc:
+  api-docs:
+    enabled: "${SWAGGER_ENABLED:true}"
+  swagger-ui:
+    enabled: "${SWAGGER_ENABLED:true}"
+
 mybatis:
   mapper-locations: classpath:/mapper/**/*.xml
   type-aliases-package: com.example.laive.domain
