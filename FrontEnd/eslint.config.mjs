@@ -96,5 +96,13 @@ export default defineConfig(
     rules: {
       'no-restricted-syntax': 'off'
     }
+  },
+  // scripts/는 순수 JS로 `node --experimental-strip-types`가 직접 실행하는 수동 도구다.
+  // TS 반환 타입 문법을 쓸 수 없으니(파싱 자체가 깨진다) 그 규칙만 끈다.
+  {
+    files: ['scripts/**/*.mjs'],
+    rules: {
+      '@typescript-eslint/explicit-function-return-type': 'off'
+    }
   }
 )

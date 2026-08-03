@@ -6,6 +6,13 @@ export type ObsConnStatus = 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED'
 export interface ObsState {
   status: ObsConnStatus
   streaming: boolean
+  recording: boolean
+}
+
+/** GetRecordStatus 응답 중 클립 계산에 쓰는 필드만. outputDuration은 밀리초 단위다. */
+export interface ObsRecordStatus {
+  outputActive: boolean
+  outputDuration: number
 }
 
 /** 지난번 연결에 성공한 OBS 접속 정보. 비밀번호 보관은 main(safeStorage)이 맡는다. */
@@ -21,10 +28,35 @@ export interface ObsBridge {
   getState: () => Promise<ObsState>
   /** 저장된 접속 정보. 없으면 null. 연결 성공 시 main이 자동으로 갱신한다. */
   getCredentials: () => Promise<ObsCredentials | null>
+  startRecord: () => Promise<void>
+  /** 녹화를 멈추고 결과 파일 경로를 반환한다. */
+  stopRecord: () => Promise<{ outputPath: string }>
+  getRecordStatus: () => Promise<ObsRecordStatus>
   startStream: () => Promise<void>
   stopStream: () => Promise<void>
   /** 상태 변경 구독. 반환 함수 호출로 구독 해제. */
   onState: (callback: (state: ObsState) => void) => () => void
+}
+
+/** clip:cut 요청 — ClipJob(api/clips.ts)에서 ffmpeg에 필요한 필드만 추린 것. */
+export interface ClipCutRequest {
+  recordingPath: string
+  clipStartSec: number
+  clipDurationSec: number
+}
+
+export type ClipCutResult =
+  | { ok: true; clip: Uint8Array; thumbnail: Uint8Array }
+  | {
+      ok: false
+      /** true면 재시도해도 같은 실패(녹화본 소실 등) — 즉시 포기해야 한다. */
+      permanent: boolean
+      reason: string
+    }
+
+export interface ClipBridge {
+  /** ffmpeg로 컷+썸네일을 만든다. 업로드는 렌더러가 반환된 바이트로 직접 한다. */
+  cut: (request: ClipCutRequest) => Promise<ClipCutResult>
 }
 
 /**
@@ -54,6 +86,8 @@ export interface LaiveApi {
   snapshot: SnapshotBridge
   /** 반복 질문 답변 완료 요청 릴레이 (미니 창 → 콘솔 창). */
   question: QuestionBridge
+  /** 하이라이트 클립 컷 (ffmpeg). */
+  clip: ClipBridge
 }
 
 /** 반복 질문 dismiss 요청 payload. */

@@ -16,6 +16,14 @@ spring:
       minimum-idle: 2
       connection-timeout: 30000
 
+  servlet:
+    multipart:
+      # 클립 업로드(laive.clip.max-upload-bytes)를 받기 위한 값이다. 기본 1MB로는
+      # 전부 거부된다. nginx의 client_max_body_size도 함께 올려야 한다 —
+      # 그쪽이 낮으면 요청이 여기 도달조차 하지 않아 로그에 아무것도 남지 않는다.
+      max-file-size: 200MB
+      max-request-size: 220MB
+
   data:
     redis:
       host: "${REDIS_HOST:127.0.0.1}"
@@ -169,6 +177,24 @@ laive:
     mad-epsilon: "${HIGHLIGHT_MAD_EPSILON:0.001}"     # MAD 절대 하한 (가드 2)
     mad-floor-chatters: "${HIGHLIGHT_MAD_FLOOR_CHATTERS:0.5}"  # MAD 동적 하한(채터 수 단위) — max(ε, 이 값/viewers)
     tick-interval: 1s
+
+  # 하이라이트 클립 생성 (CLIP_SPEC.md)
+  # 영상은 스트리머 PC의 OBS 녹화본에서 Electron이 잘라 올린다 — 서버는 ffmpeg를
+  # 실행하지 않고, 방송당 ~100MB의 결과물만 받는다.
+  clip:
+    # CDN 송출 지연 보정. 시청자는 지연된 화면을 보고 채팅은 그에 대한 반응인데,
+    # OBS 로컬 녹화는 CDN을 거치지 않아 그만큼 빠르다. 안 빼면 클립이 전부
+    # "터지기 직전"에서 끝난다. 실방송 1회로 눈으로 맞춰야 하는 유일한 값이다.
+    platform-delay: 4500ms
+    # 실패 재시도 상한. 소진하면 FAILED로 확정하고 앱이 같은 작업을 다시 받지 않는다.
+    max-attempts: 3
+    storage-dir: "${CLIP_STORAGE_DIR:/var/laive/clips}"
+    # DB에는 상대 경로만 저장하고 조회 시 이 접두사를 붙인다. 절대 URL을 저장하면
+    # 도메인이 바뀌는 순간 그전에 만든 클립이 전부 죽은 링크가 된다.
+    public-base-url: "${CLIP_PUBLIC_BASE_URL:http://localhost:8080/clips}"
+    # nginx의 client_max_body_size도 함께 올려야 한다. 그쪽이 낮으면 요청이
+    # Spring에 도달조차 하지 않아 서버 로그에 아무것도 남지 않는다.
+    max-upload-bytes: 209715200
 
   report:
     ai:

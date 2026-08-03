@@ -20,7 +20,10 @@ interface ApiOptions extends RequestInit {
 
 async function rawFetch(path: string, options: ApiOptions): Promise<Response> {
   const headers = new Headers(options.headers)
-  if (options.body && !headers.has('Content-Type')) {
+  // FormData는 boundary가 포함된 Content-Type을 fetch가 자동으로 붙인다 — 여기서
+  // application/json을 강제하면 그 boundary가 사라져 서버가 멀티파트를 못 읽는다
+  // (클립 업로드가 이 경로를 쓰는 첫 API다).
+  if (options.body && !(options.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
   }
   const token = authStore.getToken()
@@ -86,7 +89,8 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
   const json = await res.json().catch(() => null)
   if (!res.ok || !json || json.success === false) {
     const code = json?.error?.code as string | undefined
-    const message = (json?.error?.message as string | undefined) ?? `요청에 실패했어요 (${res.status})`
+    const message =
+      (json?.error?.message as string | undefined) ?? `요청에 실패했어요 (${res.status})`
     throw new ApiError(message, res.status, code)
   }
   return json.data as T

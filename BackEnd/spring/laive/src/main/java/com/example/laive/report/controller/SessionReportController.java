@@ -2,6 +2,7 @@ package com.example.laive.report.controller;
 
 import com.example.laive.common.api.ApiResponse;
 import com.example.laive.common.security.JwtStreamerIdExtractor;
+import com.example.laive.media.storage.ClipUrlResolver;
 import com.example.laive.report.domain.ReportStatus;
 import com.example.laive.report.dto.response.HighlightResponse;
 import com.example.laive.report.dto.response.SessionReportProcessingResponse;
@@ -23,10 +24,16 @@ import java.util.List;
 public class SessionReportController {
     private final ReportQueryService service;
     private final JwtStreamerIdExtractor streamerIdExtractor;
+    private final ClipUrlResolver clipUrlResolver;
 
-    public SessionReportController(ReportQueryService service, JwtStreamerIdExtractor streamerIdExtractor) {
+    public SessionReportController(
+            ReportQueryService service,
+            JwtStreamerIdExtractor streamerIdExtractor,
+            ClipUrlResolver clipUrlResolver
+    ) {
         this.service = service;
         this.streamerIdExtractor = streamerIdExtractor;
+        this.clipUrlResolver = clipUrlResolver;
     }
 
     @GetMapping("/report")
@@ -39,7 +46,8 @@ public class SessionReportController {
             return ResponseEntity.status(HttpStatus.ACCEPTED)
                     .body(ApiResponse.success(SessionReportProcessingResponse.from(detail)));
         }
-        return ResponseEntity.ok(ApiResponse.success(SessionReportResponse.from(detail)));
+        return ResponseEntity.ok(ApiResponse.success(
+                SessionReportResponse.from(detail, clipUrlResolver)));
     }
 
     @GetMapping("/highlights")
@@ -48,7 +56,7 @@ public class SessionReportController {
             @PathVariable long sessionId
     ) {
         var response = service.getHighlights(streamerIdExtractor.extract(jwt), sessionId)
-                .stream().map(HighlightResponse::from).toList();
+                .stream().map(highlight -> HighlightResponse.from(highlight, clipUrlResolver)).toList();
         return ResponseEntity.ok(ApiResponse.success(response));
     }
 }

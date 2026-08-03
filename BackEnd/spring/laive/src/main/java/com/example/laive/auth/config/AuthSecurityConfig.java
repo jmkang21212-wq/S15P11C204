@@ -66,6 +66,10 @@ public class AuthSecurityConfig {
                                 // 겹치지 않는다.
                                 "/api/v1/portfolios",
                                 "/api/v1/portfolios/*",
+                                // 하이라이트 클립 정적 파일. <video>가 Bearer 헤더를 붙이지
+                                // 못하므로 공개다. 배포에서는 nginx가 먼저 받아 가고
+                                // 여기까지 오지 않는다 (CLIP_SPEC.md).
+                                "/clips/**",
                                 "/actuator/health",
                                 "/error"
                         ).permitAll()

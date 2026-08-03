@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.laive.media.repository.mybatis.RecordingMapper">
+
+    <!--
+      소유권 검사. 남의 세션에 녹화를 보고하지 못하게 막는다. 없는 세션과 타인의
+      세션을 구분하지 않고 둘 다 false를 주어 존재 여부를 노출하지 않는다.
+    -->
+    <select id="existsSession" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1
+            FROM broadcast_sessions
+            WHERE id = #{sessionId}
+              AND streamer_id = #{streamerId}
+        )
+    </select>
+
+    <!--
+      같은 세션에 녹화 시작이 두 번 오는 것은 정상 흐름이다 — 앱이 응답을 못 받고
+      재시도하는 경우다. 여기서 충돌을 내면 앱이 영원히 재시도하므로 기준점만
+      갱신하고 넘어간다. started_at은 첫 보고를 유지한다.
+
+      다만 이미 종료된 녹화는 되살리지 않는다. 클립 작업이 진행 중일 수 있고,
+      늦게 도착한 재시도가 status를 RECORDING으로 되돌리면 그 세션의 작업이
+      조회 대상에서 통째로 사라진다.
+    -->
+    <insert id="upsertStart">
+        INSERT INTO recordings (session_id, started_at, base_wall_clock, base_timecode_ms, status)
+        VALUES (#{sessionId}, #{startedAt}, #{baseWallClock}, #{baseTimecodeMs}, 'RECORDING')
+        ON CONFLICT (session_id) DO UPDATE
+        SET base_wall_clock  = EXCLUDED.base_wall_clock,
+            base_timecode_ms = EXCLUDED.base_timecode_ms
+        WHERE recordings.status = 'RECORDING'
+    </insert>
+
+    <!--
+      기준점 갱신. 60초마다 들어오며 항상 마지막 값만 남긴다 — 가장 가까운
+      기준점에서 환산해야 드리프트 누적이 사라진다(CLIP_SPEC.md).
+
+      종료된 녹화에는 쓰지 않는다. 종료 보고보다 늦게 도착한 갱신이 기준점을
+      뒤로 밀면 이미 계산된 클립 위치와 어긋난다.
+    -->
+    <update id="updateBase">
+        UPDATE recordings
+        SET base_wall_clock  = #{baseWallClock},
+            base_timecode_ms = #{baseTimecodeMs}
+        WHERE session_id = #{sessionId}
+          AND status = 'RECORDING'
+    </update>
+
+    <!--
+      종료 보고. output_path가 확정되어야 클립 작업 대상이 된다.
+      멱등이다 — 이미 COMPLETED인 행에 다시 와도 같은 값으로 덮어쓴다.
+    -->
+    <update id="finish">
+        UPDATE recordings
+        SET ended_at    = #{endedAt},
+            output_path = #{outputPath},
+            status      = #{status}
+        WHERE session_id = #{sessionId}
+    </update>
+</mapper>

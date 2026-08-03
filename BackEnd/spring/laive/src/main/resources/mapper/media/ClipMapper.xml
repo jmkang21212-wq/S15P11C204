@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.laive.media.repository.mybatis.ClipMapper">
+
+    <!--
+      ClipJobRow record의 생성자 인자 순서와 컬럼 순서를 일치시킨다.
+      MyBatis는 record를 생성자로 매핑하므로 순서가 어긋나면 조용히 잘못 채워진다.
+
+      triggers를 LEFT JOIN하는 이유
+        highlights.trigger_id가 ON DELETE SET NULL이라 NULL일 수 있다. 정상 흐름에서는
+        발생하지 않지만 INNER JOIN으로 막으면 그 하이라이트가 목록에서 조용히 사라져
+        영원히 PENDING으로 남는다. 폴백 계산은 ClipOffsetCalculator가 한다.
+
+      recordings 조건 세 개
+        녹화본이 확정되고(COMPLETED) 파일 경로와 시간 기준점이 모두 있어야 자를 수 있다.
+        하나라도 없으면 목록에서 빠지며, 그 하이라이트는 PENDING으로 남는다 — 늦게
+        도착한 종료 보고로 되살아날 수 있으므로 SKIPPED로 확정하지 않는다.
+    -->
+    <select id="findPendingJobs" resultType="com.example.laive.media.domain.ClipJobRow">
+        SELECT h.id           AS highlight_id,
+               s.id           AS session_id,
+               s.title        AS session_title,
+               s.started_at   AS session_started_at,
+               t.started_at   AS trigger_started_at,
+               h.start_ms,
+               h.end_ms,
+               r.output_path  AS recording_path,
+               r.base_wall_clock,
+               r.base_timecode_ms
+          FROM highlights h
+          JOIN reports rep            ON rep.id = h.report_id
+          JOIN broadcast_sessions s   ON s.id = rep.session_id
+          JOIN recordings r           ON r.session_id = s.id
+          LEFT JOIN triggers t        ON t.id = h.trigger_id
+         WHERE s.streamer_id = #{streamerId}
+           AND h.clip_status = 'PENDING'
+           AND r.status = 'COMPLETED'
+           AND r.output_path IS NOT NULL
+           AND r.base_wall_clock IS NOT NULL
+         ORDER BY s.started_at DESC, h.start_ms ASC
+    </select>
+
+    <!-- 소유권과 현재 상태를 함께 읽는다. 없는 하이라이트와 타인의 것을 구분하지 않는다. -->
+    <select id="findTarget" resultType="com.example.laive.media.domain.ClipTarget">
+        SELECT h.id  AS highlight_id,
+               s.id  AS session_id,
+               h.clip_status,
+               h.clip_url,
+               h.thumbnail_url
+          FROM highlights h
+          JOIN reports rep          ON rep.id = h.report_id
+          JOIN broadcast_sessions s ON s.id = rep.session_id
+         WHERE h.id = #{highlightId}
+           AND s.streamer_id = #{streamerId}
+    </select>
+
+    <!--
+      PENDING일 때만 반영한다. 이미 UPLOADED인 행에 다시 오면 0을 돌려주고,
+      서비스가 기존 URL로 답한다 — 저장은 됐는데 응답을 못 받은 재시도가 정상 흐름이다.
+      clip_url과 clip_status를 함께 써야 ck_highlights_clip_url_status를 만족한다.
+    -->
+    <update id="markUploaded">
+        UPDATE highlights
+           SET clip_url           = #{clipPath},
+               thumbnail_url      = #{thumbnailPath},
+               clip_status        = 'UPLOADED',
+               clip_failed_reason = NULL
+         WHERE id = #{highlightId}
+           AND clip_status = 'PENDING'
+    </update>
+
+    <!--
+      실패 누적. 상한에 닿는 순간 FAILED로 확정해 앱이 같은 작업을 다시 받지 않게 한다.
+      상한 판정을 DB에서 하는 이유는 경합이다 — 앱을 두 창 띄우면 같은 작업이 동시에
+      실패할 수 있고, 읽고-더하고-쓰기를 애플리케이션에서 하면 한 번이 유실된다.
+    -->
+    <update id="recordFailure">
+        UPDATE highlights
+           SET clip_attempts      = clip_attempts + 1,
+               clip_failed_reason = #{reason},
+               clip_status        = CASE
+                                        WHEN clip_attempts + 1 >= #{maxAttempts} THEN 'FAILED'
+                                        ELSE 'PENDING'
+                                    END
+         WHERE id = #{highlightId}
+           AND clip_status = 'PENDING'
+    </update>
+
+    <!-- 재시도해도 결과가 같은 실패는 횟수를 쓰지 않고 즉시 확정한다. -->
+    <update id="markSkipped">
+        UPDATE highlights
+           SET clip_status        = 'SKIPPED',
+               clip_failed_reason = #{reason}
+         WHERE id = #{highlightId}
+           AND clip_status = 'PENDING'
+    </update>
+</mapper>

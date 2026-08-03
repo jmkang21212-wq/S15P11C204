@@ -1,5 +1,6 @@
 package com.example.laive.report.dto.response;
 
+import com.example.laive.media.storage.ClipUrlResolver;
 import com.example.laive.report.domain.ReportStatus;
 import com.example.laive.report.domain.SessionReportDetail;
 
@@ -18,7 +19,7 @@ public record SessionReportResponse(
         List<HighlightResponse> highlights,
         Instant generatedAt
 ) {
-    public static SessionReportResponse from(SessionReportDetail detail) {
+    public static SessionReportResponse from(SessionReportDetail detail, ClipUrlResolver urlResolver) {
         var report = detail.report();
         return new SessionReportResponse(
                 report.reportId(), report.status(), ReportSessionResponse.from(report),
@@ -26,7 +27,8 @@ public record SessionReportResponse(
                 detail.viewerTimeline().stream().map(ViewerTimelineResponse::from).toList(),
                 detail.triggers().stream().map(ReportTriggerResponse::from).toList(),
                 detail.insights().stream().map(ReportInsightResponse::from).toList(),
-                detail.highlights().stream().map(HighlightResponse::from).toList(),
+                detail.highlights().stream()
+                        .map(highlight -> HighlightResponse.from(highlight, urlResolver)).toList(),
                 report.generatedAt()
         );
     }
