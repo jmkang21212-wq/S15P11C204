@@ -20,7 +20,10 @@ CONTROL_TOKEN = os.getenv('COLLECTOR_CONTROL_TOKEN', '')
 
 # --- Spring ---
 
-SPRING_BASE_URL = os.getenv('SPRING_BASE_URL', 'http://127.0.0.1:8080')
+# getenv의 두 번째 인자가 아니라 'or'를 쓰는 이유:
+# getenv는 "없음"과 "있지만 빈 값"을 구분한다. .env.example에 'SPRING_BASE_URL='
+# 줄이 있으므로 복사해 쓰면 후자가 되어 기본값이 영영 안 먹는다(S15P11C204-183).
+SPRING_BASE_URL = os.getenv('SPRING_BASE_URL') or 'http://127.0.0.1:8080'
 
 # Spring의 laive.internal.service-token과 같은 값이어야 한다(API 명세 13.1).
 SPRING_TOKEN = os.getenv('SPRING_TOKEN', '')
