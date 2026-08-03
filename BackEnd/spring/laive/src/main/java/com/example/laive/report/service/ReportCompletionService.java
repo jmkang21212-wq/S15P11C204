@@ -57,7 +57,8 @@ public class ReportCompletionService {
                         context.report().endedAt().toEpochMilli() - context.report().startedAt().toEpochMilli()),
                 generationRepository.findRisks(
                         event.sessionId(), context.report().startedAt(), context.report().endedAt()
-                )
+                ),
+                queryRepository.findPlatformMetrics(event.reportId())
         ));
         var highlights = highlightGenerator.generate(new HighlightGenerationContext(
                 triggers,

@@ -27,7 +27,8 @@ public interface GrowthMapper {
             @Param("streamerId") long streamerId,
             @Param("periodType") GrowthPeriodType periodType,
             @Param("from") LocalDate from,
-            @Param("to") LocalDate to
+            @Param("to") LocalDate to,
+            @Param("platformCode") String platformCode
     );
 
     List<GrowthGoal> findGoals(

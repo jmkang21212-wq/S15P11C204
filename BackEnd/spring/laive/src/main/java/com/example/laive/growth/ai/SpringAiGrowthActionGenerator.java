@@ -33,9 +33,10 @@ public class SpringAiGrowthActionGenerator implements GrowthActionGenerator {
     public GrowthActionResult generate(GrowthActionInput input) {
         try {
             String reports = input.recentReports().stream()
-                    .map(report -> "%s | avg=%s peak=%s chat=%d minutes=%d | %s".formatted(
+                    .map(report -> "%s | avg=%s peak=%s chat=%d minutes=%d | platforms=%s | %s".formatted(
                             report.endedAt(), report.avgViewers(), report.peakViewers(),
                             report.totalChat(), report.broadcastMinutes(),
+                            abbreviate(report.platformBreakdown(), 500),
                             abbreviate(report.summary(), 500)
                     ))
                     .reduce("", (left, right) -> left + "\n" + right);

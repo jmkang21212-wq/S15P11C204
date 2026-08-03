@@ -14,5 +14,14 @@ public interface GrowthReportQueryRepository {
             GrowthPeriod period
     );
 
+    default List<GrowthSeriesPoint> findSeries(
+            long streamerId,
+            GrowthPeriodType periodType,
+            GrowthPeriod period,
+            String platformCode
+    ) {
+        return findSeries(streamerId, periodType, period);
+    }
+
     List<GrowthGoalMetrics> findGoalMetrics(long streamerId, List<Long> goalIds);
 }

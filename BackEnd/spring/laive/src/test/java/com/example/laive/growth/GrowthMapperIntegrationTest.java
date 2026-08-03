@@ -133,6 +133,70 @@ class GrowthMapperIntegrationTest {
         assertThat(point.totalChat()).isEqualTo(300);
     }
 
+    @Test
+    void filtersGrowthSeriesByProviderChildSession() {
+        long streamerId = createStreamer();
+        long chzzkAccountId = createPlatform(streamerId, "CHZZK");
+        long youtubeAccountId = createPlatform(streamerId, "YOUTUBE");
+        Instant startedAt = Instant.parse("2026-07-13T01:00:00Z");
+        Instant endedAt = Instant.parse("2026-07-13T02:00:00Z");
+        long sessionId = createEndedSession(
+                streamerId, chzzkAccountId, startedAt, endedAt);
+        long reportId = jdbcTemplate.queryForObject(
+                """
+                INSERT INTO reports (
+                    session_id, status, avg_viewers, peak_viewers, total_chat, generated_at
+                ) VALUES (?, 'COMPLETED', 200, 350, 40, now())
+                RETURNING id
+                """,
+                Long.class,
+                sessionId
+        );
+        long chzzkPlatformSessionId = jdbcTemplate.queryForObject(
+                """
+                SELECT id FROM broadcast_platform_sessions
+                 WHERE broadcast_session_id = ? AND platform_account_id = ?
+                """,
+                Long.class,
+                sessionId,
+                chzzkAccountId
+        );
+        long youtubePlatformSessionId = jdbcTemplate.queryForObject(
+                """
+                INSERT INTO broadcast_platform_sessions (
+                    broadcast_session_id, platform_account_id, status, started_at, ended_at
+                ) VALUES (?, ?, 'ENDED', ?, ?)
+                RETURNING id
+                """,
+                Long.class,
+                sessionId,
+                youtubeAccountId,
+                Timestamp.from(startedAt),
+                Timestamp.from(endedAt)
+        );
+        insertPlatformReportMetrics(reportId, chzzkPlatformSessionId, 100, 10);
+        insertPlatformReportMetrics(reportId, youtubePlatformSessionId, 300, 30);
+
+        var youtube = repository.findSeries(
+                streamerId,
+                GrowthPeriodType.WEEKLY,
+                new GrowthPeriod(WEEK_START, WEEK_END),
+                "YOUTUBE"
+        ).getFirst();
+        var all = repository.findSeries(
+                streamerId,
+                GrowthPeriodType.WEEKLY,
+                new GrowthPeriod(WEEK_START, WEEK_END),
+                "ALL"
+        ).getFirst();
+
+        assertThat(youtube.averageViewers()).isEqualTo(300);
+        assertThat(youtube.totalChat()).isEqualTo(30);
+        assertThat(youtube.broadcastMinutes()).isEqualTo(60);
+        assertThat(all.averageViewers()).isEqualTo(200);
+        assertThat(all.totalChat()).isEqualTo(40);
+    }
+
     private long createStreamer() {
         StreamerInsert streamer = new StreamerInsert(
                 "growth-" + UUID.randomUUID() + "@example.com", "growth tester", null
@@ -142,10 +206,14 @@ class GrowthMapperIntegrationTest {
     }
 
     private long createPlatform(long streamerId) {
+        return createPlatform(streamerId, "CHZZK");
+    }
+
+    private long createPlatform(long streamerId, String platformCode) {
         Instant now = Instant.now();
         return platformAccountMapper.upsert(new PlatformAccountUpsert(
                 streamerId,
-                "CHZZK",
+                platformCode,
                 "growth-" + UUID.randomUUID(),
                 "growth channel",
                 "encrypted-access",
@@ -154,6 +222,27 @@ class GrowthMapperIntegrationTest {
                 now.plus(30, ChronoUnit.DAYS),
                 "user:read"
         )).orElseThrow();
+    }
+
+    private void insertPlatformReportMetrics(
+            long reportId,
+            long platformSessionId,
+            int averageViewers,
+            long totalChat
+    ) {
+        jdbcTemplate.update(
+                """
+                INSERT INTO report_platform_metrics (
+                    report_id, platform_session_id, avg_viewers, peak_viewers,
+                    total_chat, analyzed_chat, broadcast_seconds, data_quality
+                ) VALUES (?, ?, ?, ?, ?, 0, 3600, 'COMPLETE')
+                """,
+                reportId,
+                platformSessionId,
+                averageViewers,
+                averageViewers,
+                totalChat
+        );
     }
 
     private long createEndedSession(

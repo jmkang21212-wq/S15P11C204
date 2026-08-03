@@ -3,6 +3,7 @@ package com.example.laive.report.repository.mybatis;
 import com.example.laive.report.domain.ReportInsight;
 import com.example.laive.report.domain.SessionHighlight;
 import com.example.laive.report.domain.ViewerTimelinePoint;
+import com.example.laive.report.domain.ReportPlatformMetrics;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -17,4 +18,5 @@ public interface SessionReportMapper {
     List<ReportTriggerRow> findTriggers(@Param("sessionId") long sessionId);
     List<ReportInsight> findInsights(@Param("reportId") long reportId);
     List<SessionHighlight> findHighlights(@Param("reportId") long reportId);
+    List<ReportPlatformMetrics> findPlatformMetrics(@Param("reportId") long reportId);
 }
