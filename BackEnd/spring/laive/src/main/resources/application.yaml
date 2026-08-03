@@ -30,10 +30,13 @@ spring:
     openai:
       api-key: "${REPORT_AI_API_KEY:disabled}"
       base-url: "${REPORT_AI_BASE_URL:https://api.openai.com}"
+      # chat.options.* 는 Spring AI 2.0에서 deprecated다. chat.* 바로 아래에 둔다.
       chat:
-        options:
-          model: "${REPORT_AI_MODEL:gpt-4o-mini}"
-          temperature: 0.2
+        model: "${REPORT_AI_MODEL:gpt-4.1-mini}"
+        # gpt-5 계열(추론 모델)은 temperature를 기본값 1만 허용한다 — 0.2를 실으면
+        # OpenAI가 unsupported_value 400으로 거부한다. 모델을 그쪽으로 바꾸려면
+        # REPORT_AI_TEMPERATURE=1로 같이 올리고, 생성 성향은 reasoning-effort로 조절한다.
+        temperature: "${REPORT_AI_TEMPERATURE:0.2}"
 
 mybatis:
   mapper-locations: classpath:/mapper/**/*.xml
@@ -183,6 +186,12 @@ laive:
       max-output-tokens: 1000
       max-actions: 3
       timeout: 20s
+    roadmap-ai:
+      enabled: "${GROWTH_ROADMAP_AI_ENABLED:${GROWTH_AI_ENABLED:false}}"
+      prompt-version: "${GROWTH_ROADMAP_AI_PROMPT_VERSION:growth-roadmap-v1}"
+      max-input-chars: 24000
+      timeout: 30s
+      refresh-cooldown: 7d
 
   # Spring이 치지직 채팅 수집기 제어 서비스를 호출할 때 쓰는 설정
   collector:

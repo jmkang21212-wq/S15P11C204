@@ -1,0 +1,465 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.laive.growth.roadmap.repository.mybatis.GrowthRoadmapMapper">
+
+    <resultMap id="roadmapMap" type="com.example.laive.growth.roadmap.domain.GrowthRoadmap">
+        <constructor>
+            <idArg column="id" javaType="_long"/>
+            <arg column="streamer_id" javaType="_long"/>
+            <arg column="status" javaType="com.example.laive.growth.roadmap.domain.RoadmapStatus"/>
+            <arg column="quality" javaType="com.example.laive.growth.roadmap.domain.RoadmapQuality"/>
+            <arg column="current_generation_id" javaType="java.lang.Long"/>
+            <arg column="source_report_id" javaType="java.lang.Long"/>
+            <arg column="prompt_version" javaType="java.lang.String"/>
+            <arg column="stale" javaType="_boolean"/>
+            <arg column="generated_at" javaType="java.time.Instant"/>
+            <arg column="generation_error" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="generationMap"
+               type="com.example.laive.growth.roadmap.domain.GrowthRoadmapGeneration">
+        <constructor>
+            <idArg column="id" javaType="_long"/>
+            <arg column="roadmap_id" javaType="_long"/>
+            <arg column="source_report_id" javaType="java.lang.Long"/>
+            <arg column="trigger_type" javaType="com.example.laive.growth.roadmap.domain.RoadmapGenerationTrigger"/>
+            <arg column="status" javaType="com.example.laive.growth.roadmap.domain.RoadmapGenerationStatus"/>
+            <arg column="quality" javaType="com.example.laive.growth.roadmap.domain.RoadmapQuality"/>
+            <arg column="prompt_version" javaType="java.lang.String"/>
+            <arg column="idempotency_key" javaType="java.lang.String"/>
+            <arg column="input_fingerprint" javaType="java.lang.String"/>
+            <arg column="requested_at" javaType="java.time.Instant"/>
+            <arg column="started_at" javaType="java.time.Instant"/>
+            <arg column="completed_at" javaType="java.time.Instant"/>
+            <arg column="error_code" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="suggestionMap"
+               type="com.example.laive.growth.roadmap.domain.GrowthGoalSuggestion">
+        <constructor>
+            <idArg column="id" javaType="_long"/>
+            <arg column="roadmap_id" javaType="_long"/>
+            <arg column="generation_id" javaType="_long"/>
+            <arg column="display_order" javaType="_int"/>
+            <arg column="metric_type" javaType="com.example.laive.growth.domain.GrowthMetricType"/>
+            <arg column="target_value" javaType="java.math.BigDecimal"/>
+            <arg column="unit" javaType="com.example.laive.growth.domain.GrowthMetricUnit"/>
+            <arg column="period_start" javaType="java.time.LocalDate"/>
+            <arg column="period_end" javaType="java.time.LocalDate"/>
+            <arg column="title" javaType="java.lang.String"/>
+            <arg column="rationale" javaType="java.lang.String"/>
+            <arg column="status" javaType="com.example.laive.growth.roadmap.domain.SuggestionStatus"/>
+            <arg column="accepted_goal_id" javaType="java.lang.Long"/>
+            <arg column="accepted_at" javaType="java.time.Instant"/>
+            <arg column="dismissed_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="goalMap" type="com.example.laive.growth.domain.GrowthGoal">
+        <constructor>
+            <idArg column="id" javaType="_long"/>
+            <arg column="streamer_id" javaType="_long"/>
+            <arg column="metric_type" javaType="com.example.laive.growth.domain.GrowthMetricType"/>
+            <arg column="target_value" javaType="java.math.BigDecimal"/>
+            <arg column="unit" javaType="com.example.laive.growth.domain.GrowthMetricUnit"/>
+            <arg column="period_start" javaType="java.time.LocalDate"/>
+            <arg column="period_end" javaType="java.time.LocalDate"/>
+            <arg column="status" javaType="com.example.laive.growth.domain.GrowthGoalStatus"/>
+            <arg column="revision" javaType="_long"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="roadmapColumns">
+        id, streamer_id, status, quality, current_generation_id, source_report_id,
+        prompt_version, stale, generated_at, generation_error
+    </sql>
+    <sql id="generationColumns">
+        id, roadmap_id, source_report_id, trigger_type, status, quality,
+        prompt_version, idempotency_key, input_fingerprint, requested_at,
+        started_at, completed_at, error_code
+    </sql>
+    <sql id="suggestionColumns">
+        id, roadmap_id, generation_id, display_order, metric_type, target_value,
+        unit, period_start, period_end, title, rationale, status,
+        accepted_goal_id, accepted_at, dismissed_at
+    </sql>
+
+    <select id="findRoadmap" resultMap="roadmapMap">
+        SELECT <include refid="roadmapColumns"/>
+          FROM growth_roadmaps
+         WHERE streamer_id = #{streamerId}
+    </select>
+
+    <select id="findRoadmapForUpdate" resultMap="roadmapMap">
+        SELECT <include refid="roadmapColumns"/>
+          FROM growth_roadmaps
+         WHERE id = #{roadmapId}
+         FOR UPDATE
+    </select>
+
+    <select id="insertRoadmap" resultType="long" flushCache="true">
+        INSERT INTO growth_roadmaps (streamer_id, prompt_version)
+        VALUES (#{streamerId}, #{promptVersion})
+        ON CONFLICT (streamer_id)
+        DO UPDATE SET prompt_version = growth_roadmaps.prompt_version
+        RETURNING id
+    </select>
+
+    <select id="countEligibleReports" resultType="long">
+        SELECT count(*)
+          FROM reports r
+          JOIN broadcast_sessions s ON s.id = r.session_id
+         WHERE s.streamer_id = #{streamerId}
+           AND s.status = 'ENDED'
+           AND r.status IN ('COMPLETED', 'PARTIAL')
+    </select>
+
+    <select id="findStreamerIdByReport" resultType="long">
+        SELECT s.streamer_id
+          FROM reports r
+          JOIN broadcast_sessions s ON s.id = r.session_id
+         WHERE r.id = #{reportId}
+           AND r.status IN ('COMPLETED', 'PARTIAL')
+    </select>
+
+    <select id="findGeneration" resultMap="generationMap">
+        SELECT <include refid="generationColumns"/>
+          FROM growth_roadmap_generations
+         WHERE id = #{generationId}
+    </select>
+
+    <select id="findGenerationForUpdate" resultMap="generationMap">
+        SELECT <include refid="generationColumns"/>
+          FROM growth_roadmap_generations
+         WHERE id = #{generationId}
+         FOR UPDATE
+    </select>
+
+    <select id="findRunningGeneration" resultMap="generationMap">
+        SELECT <include refid="generationColumns"/>
+          FROM growth_roadmap_generations
+         WHERE roadmap_id = #{roadmapId}
+           AND status IN ('PENDING', 'PROCESSING')
+         ORDER BY requested_at DESC, id DESC
+         LIMIT 1
+    </select>
+
+    <select id="insertGeneration" resultType="long" flushCache="true">
+        INSERT INTO growth_roadmap_generations (
+            roadmap_id, source_report_id, trigger_type, status, quality,
+            prompt_version, idempotency_key, requested_at
+        ) VALUES (
+            #{roadmapId}, #{sourceReportId}, #{triggerType}, #{status}, #{quality},
+            #{promptVersion}, #{idempotencyKey}, #{requestedAt}
+        )
+        ON CONFLICT (idempotency_key)
+        DO UPDATE SET idempotency_key = EXCLUDED.idempotency_key
+        RETURNING id
+    </select>
+
+    <update id="supersedeCompeting">
+        UPDATE growth_roadmap_generations
+           SET status = 'SUPERSEDED', completed_at = now()
+         WHERE roadmap_id = #{roadmapId}
+           AND id &lt;&gt; #{generationId}
+           AND status IN ('WAITING_FOR_DATA', 'PENDING', 'PROCESSING')
+    </update>
+
+    <update id="markGenerationProcessing">
+        UPDATE growth_roadmap_generations
+           SET status = 'PROCESSING', started_at = #{startedAt}, error_code = NULL
+         WHERE id = #{generationId}
+           AND status = 'PENDING'
+    </update>
+    <update id="markGenerationPending">
+        UPDATE growth_roadmap_generations
+           SET status = 'PENDING', error_code = #{errorCode}
+         WHERE id = #{generationId}
+           AND status = 'PROCESSING'
+    </update>
+    <update id="markGenerationCompleted">
+        UPDATE growth_roadmap_generations
+           SET status = 'COMPLETED', input_fingerprint = #{fingerprint},
+               completed_at = #{completedAt}, error_code = NULL
+         WHERE id = #{generationId}
+           AND status = 'PROCESSING'
+    </update>
+    <update id="markGenerationFailed">
+        UPDATE growth_roadmap_generations
+           SET status = 'FAILED', completed_at = #{completedAt}, error_code = #{errorCode}
+         WHERE id = #{generationId}
+           AND status IN ('PENDING', 'PROCESSING')
+    </update>
+
+    <update id="markRoadmapPending">
+        UPDATE growth_roadmaps
+           SET status = 'PENDING', quality = #{quality},
+               source_report_id = #{sourceReportId}, prompt_version = #{promptVersion},
+               stale = current_generation_id IS NOT NULL, generation_error = NULL
+         WHERE id = #{roadmapId}
+    </update>
+    <update id="markRoadmapWaiting">
+        UPDATE growth_roadmaps
+           SET status = 'WAITING_FOR_DATA', prompt_version = #{promptVersion},
+               stale = current_generation_id IS NOT NULL
+         WHERE id = #{roadmapId}
+    </update>
+    <update id="markRoadmapStale">
+        UPDATE growth_roadmaps SET stale = true WHERE id = #{roadmapId}
+    </update>
+    <update id="markRoadmapProcessing">
+        UPDATE growth_roadmaps SET status = 'PROCESSING' WHERE id = #{roadmapId}
+    </update>
+    <update id="markRoadmapReady">
+        UPDATE growth_roadmaps
+           SET status = 'READY', quality = #{quality},
+               current_generation_id = #{generationId},
+               source_report_id = #{sourceReportId}, prompt_version = #{promptVersion},
+               stale = false, generated_at = #{generatedAt}, generation_error = NULL
+         WHERE id = #{roadmapId}
+    </update>
+    <update id="markRoadmapFailed">
+        UPDATE growth_roadmaps
+           SET status = CASE WHEN current_generation_id IS NULL THEN 'FAILED' ELSE 'READY' END,
+               stale = current_generation_id IS NOT NULL,
+               generation_error = #{errorCode}
+         WHERE id = #{roadmapId}
+    </update>
+
+    <select id="findCurrentSuggestions" resultMap="suggestionMap">
+        SELECT s.id, s.roadmap_id, s.generation_id, s.display_order,
+               s.metric_type, s.target_value, s.unit, s.period_start, s.period_end,
+               s.title, s.rationale, s.status, s.accepted_goal_id,
+               s.accepted_at, s.dismissed_at
+          FROM growth_goal_suggestions s
+          JOIN growth_roadmaps r ON r.id = s.roadmap_id
+         WHERE s.roadmap_id = #{roadmapId}
+           AND s.generation_id = r.current_generation_id
+         ORDER BY s.display_order, s.id
+    </select>
+
+    <select id="findSuggestionActions"
+            resultType="com.example.laive.growth.roadmap.domain.GrowthSuggestionAction">
+        SELECT id, suggestion_id, display_order, title, content
+          FROM growth_suggestion_actions
+         WHERE suggestion_id IN
+        <foreach collection="suggestionIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+         ORDER BY suggestion_id, display_order, id
+    </select>
+
+    <select id="findOwnedSuggestionForUpdate" resultMap="suggestionMap">
+        SELECT s.id, s.roadmap_id, s.generation_id, s.display_order,
+               s.metric_type, s.target_value, s.unit, s.period_start, s.period_end,
+               s.title, s.rationale, s.status, s.accepted_goal_id,
+               s.accepted_at, s.dismissed_at
+          FROM growth_goal_suggestions s
+          JOIN growth_roadmaps r ON r.id = s.roadmap_id
+         WHERE s.id = #{suggestionId}
+           AND r.streamer_id = #{streamerId}
+         FOR UPDATE OF s
+    </select>
+
+    <update id="supersedeSuggested">
+        UPDATE growth_goal_suggestions
+           SET status = 'SUPERSEDED'
+         WHERE roadmap_id = #{roadmapId}
+           AND status = 'SUGGESTED'
+    </update>
+
+    <select id="insertSuggestion" resultType="long" flushCache="true">
+        INSERT INTO growth_goal_suggestions (
+            roadmap_id, generation_id, display_order, metric_type, target_value,
+            unit, period_start, period_end, title, rationale
+        ) VALUES (
+            #{roadmapId}, #{generationId}, #{displayOrder}, #{suggestion.metricType},
+            #{suggestion.targetValue}, #{suggestion.unit}, #{suggestion.periodStart},
+            #{suggestion.periodEnd}, #{suggestion.title}, #{suggestion.rationale}
+        )
+        RETURNING id
+    </select>
+
+    <insert id="insertSuggestionActions">
+        INSERT INTO growth_suggestion_actions (
+            suggestion_id, display_order, title, content
+        ) VALUES
+        <foreach collection="actions" item="action" index="index" separator=",">
+            (#{suggestionId}, #{index} + 1, #{action.title}, #{action.content})
+        </foreach>
+    </insert>
+
+    <update id="acceptSuggestion">
+        UPDATE growth_goal_suggestions
+           SET status = 'ACCEPTED', accepted_goal_id = #{goalId},
+               accepted_at = #{acceptedAt}
+         WHERE id = #{suggestionId}
+           AND status = 'SUGGESTED'
+    </update>
+    <update id="dismissSuggestion">
+        UPDATE growth_goal_suggestions
+           SET status = 'DISMISSED', dismissed_at = #{dismissedAt}
+         WHERE id = #{suggestionId}
+           AND status = 'SUGGESTED'
+    </update>
+    <insert id="copySuggestionActions">
+        INSERT INTO growth_actions (
+            growth_goal_id, source_suggestion_id, title, content
+        )
+        SELECT #{goalId}, suggestion_id, title, content
+          FROM growth_suggestion_actions
+         WHERE suggestion_id = #{suggestionId}
+         ORDER BY display_order
+    </insert>
+
+    <select id="findWeeklyTrends"
+            resultType="com.example.laive.growth.roadmap.ai.RoadmapTrendPoint">
+        WITH buckets AS (
+            SELECT day::date AS period_start, (day::date + 6) AS period_end
+              FROM generate_series(
+                   cast(#{from} as date)::timestamp,
+                   cast(#{to} as date)::timestamp,
+                   interval '7 days'
+              ) day
+        ), eligible AS (
+            SELECT s.started_at, s.ended_at, r.avg_viewers, r.total_chat
+              FROM broadcast_sessions s
+              JOIN reports r ON r.session_id = s.id
+             WHERE s.streamer_id = #{streamerId}
+               AND s.status = 'ENDED'
+               AND r.status IN ('COMPLETED', 'PARTIAL')
+               AND (s.started_at AT TIME ZONE 'UTC')::date
+                   BETWEEN #{from} AND #{to}
+        )
+        SELECT b.period_start, b.period_end,
+               round(avg(e.avg_viewers))::int AS avg_viewers,
+               coalesce(sum(e.total_chat), 0)::bigint AS total_chat,
+               round(coalesce(sum(extract(epoch FROM (e.ended_at - e.started_at))), 0)
+                     / 60.0)::bigint AS broadcast_minutes,
+               round((count(e.started_at)::numeric), 2) AS broadcasts_per_week
+          FROM buckets b
+          LEFT JOIN eligible e
+            ON (e.started_at AT TIME ZONE 'UTC')::date
+               BETWEEN b.period_start AND b.period_end
+         GROUP BY b.period_start, b.period_end
+         ORDER BY b.period_start
+    </select>
+
+    <select id="findRecentReports"
+            resultType="com.example.laive.growth.roadmap.ai.RoadmapSessionReport">
+        SELECT r.id AS report_id, s.id AS session_id, s.title,
+               coalesce(s.category, '') AS category, s.ended_at, r.status,
+               r.avg_viewers, r.peak_viewers, coalesce(r.total_chat, 0)::bigint AS total_chat,
+               coalesce(r.analyzed_chat, 0)::bigint AS analyzed_chat,
+               round(extract(epoch FROM (s.ended_at - s.started_at)) / 60.0)::bigint
+                   AS broadcast_minutes,
+               coalesce(r.summary, '') AS summary,
+               coalesce((SELECT string_agg(i.title || ': ' || i.content, E'\n'
+                                           ORDER BY i.id)
+                           FROM (SELECT * FROM report_insights
+                                  WHERE report_id = r.id ORDER BY id LIMIT 3) i), '') AS insights,
+               coalesce((SELECT string_agg(t.trigger_type || ': ' ||
+                                           coalesce(t.narrative, ''), E'\n'
+                                           ORDER BY t.peak_z DESC, t.id)
+                           FROM (SELECT * FROM triggers WHERE session_id = s.id
+                                  ORDER BY peak_z DESC, id LIMIT 5) t), '') AS triggers,
+               coalesce((SELECT string_agg(h.start_ms || '-' || h.end_ms, ', '
+                                           ORDER BY h.start_ms, h.id)
+                           FROM (SELECT * FROM highlights WHERE report_id = r.id
+                                  ORDER BY start_ms, id LIMIT 5) h), '') AS highlights,
+               concat('analyzed=', coalesce(r.analyzed_chat, 0),
+                      ', joy=', coalesce(r.joy_count, 0),
+                      ', excitement=', coalesce(r.excitement_count, 0),
+                      ', support=', coalesce(r.support_count, 0),
+                      ', neutral=', coalesce(r.neutral_count, 0)) AS emotion_summary,
+               coalesce((SELECT string_agg(x.risk_category || ':' || x.risk_level ||
+                                           '=' || x.cnt, ', ' ORDER BY x.risk_category, x.risk_level)
+                           FROM (SELECT risk_category, risk_level, count(*) cnt
+                                   FROM risk_events WHERE session_id = s.id
+                                  GROUP BY risk_category, risk_level) x), '') AS risk_summary,
+               EXISTS (SELECT 1 FROM collection_gaps g WHERE g.session_id = s.id)
+                   AS collection_gap
+          FROM reports r
+          JOIN broadcast_sessions s ON s.id = r.session_id
+         WHERE s.streamer_id = #{streamerId}
+           AND s.status = 'ENDED'
+           AND r.status IN ('COMPLETED', 'PARTIAL')
+         ORDER BY s.ended_at DESC, r.id DESC
+         LIMIT #{limit}
+    </select>
+
+    <select id="findRecentStatistics"
+            resultType="com.example.laive.growth.roadmap.ai.RecentBroadcastStatistics">
+        SELECT count(s.id)::bigint AS broadcast_count,
+               round((count(s.id)::numeric / (30.0 / 7.0)), 2) AS broadcasts_per_week,
+               round(coalesce(sum(extract(epoch FROM (s.ended_at - s.started_at))), 0)
+                     / 60.0)::bigint AS total_broadcast_minutes,
+               round(coalesce(avg(extract(epoch FROM (s.ended_at - s.started_at))), 0)
+                     / 60.0, 2) AS average_broadcast_minutes,
+               round(avg(r.avg_viewers), 2) AS average_viewers,
+               max(r.peak_viewers)::int AS peak_viewers,
+               coalesce(sum(r.total_chat), 0)::bigint AS total_chat,
+               round(coalesce(sum(r.total_chat), 0)::numeric /
+                     nullif(count(s.id), 0), 2) AS chats_per_broadcast,
+               coalesce(string_agg(DISTINCT coalesce(s.category, '미분류'), ', '), '')
+                   AS category_distribution
+          FROM broadcast_sessions s
+          JOIN reports r ON r.session_id = s.id
+         WHERE s.streamer_id = #{streamerId}
+           AND s.status = 'ENDED'
+           AND r.status IN ('COMPLETED', 'PARTIAL')
+           AND s.started_at &gt;= #{from}
+    </select>
+
+    <select id="findPreviousSuggestions"
+            resultType="com.example.laive.growth.roadmap.ai.PreviousSuggestionSummary">
+        SELECT s.metric_type, s.title, s.status
+          FROM growth_goal_suggestions s
+          JOIN growth_roadmaps r ON r.id = s.roadmap_id
+         WHERE r.streamer_id = #{streamerId}
+         ORDER BY s.created_at DESC, s.id DESC
+         LIMIT #{limit}
+    </select>
+
+    <select id="findAcceptedGoals"
+            resultType="com.example.laive.growth.roadmap.ai.AcceptedGoalSummary">
+        SELECT metric_type, target_value, 0::numeric AS current_value,
+               0::numeric AS progress_rate, status
+          FROM growth_goals
+         WHERE streamer_id = #{streamerId}
+           AND status IN ('ACTIVE', 'ACHIEVED')
+         ORDER BY period_end, id
+    </select>
+
+    <select id="findLatestCompletedAt" resultType="java.time.Instant">
+        SELECT max(completed_at)
+          FROM growth_roadmap_generations
+         WHERE roadmap_id = #{roadmapId}
+           AND status = 'COMPLETED'
+    </select>
+
+    <select id="findActiveGoals" resultMap="goalMap">
+        SELECT id, streamer_id, metric_type, target_value, unit,
+               period_start, period_end, status, revision
+          FROM growth_goals
+         WHERE streamer_id = #{streamerId}
+           AND status = 'ACTIVE'
+         ORDER BY id
+    </select>
+
+    <select id="findStreamersNeedingPromptVersion" resultType="long">
+        SELECT DISTINCT s.streamer_id
+          FROM broadcast_sessions s
+          JOIN reports r ON r.session_id = s.id
+          LEFT JOIN growth_roadmaps roadmap ON roadmap.streamer_id = s.streamer_id
+         WHERE s.status = 'ENDED'
+           AND r.status IN ('COMPLETED', 'PARTIAL')
+           AND (roadmap.id IS NULL OR roadmap.prompt_version &lt;&gt; #{promptVersion})
+         ORDER BY s.streamer_id
+         LIMIT #{limit}
+    </select>
+</mapper>

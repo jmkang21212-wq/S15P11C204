@@ -34,4 +34,20 @@ public class GrowthException extends BusinessException {
     public static GrowthException actionGenerationDisabled() {
         return new GrowthException(GrowthErrorCode.GROWTH_ACTION_GENERATION_DISABLED);
     }
+
+    public static GrowthException roadmapNotFound() {
+        return new GrowthException(GrowthErrorCode.GROWTH_ROADMAP_NOT_FOUND);
+    }
+
+    public static GrowthException roadmapSuggestionConflict() {
+        return new GrowthException(GrowthErrorCode.GROWTH_ROADMAP_SUGGESTION_CONFLICT);
+    }
+
+    public static GrowthException insufficientRoadmapData() {
+        return new GrowthException(GrowthErrorCode.GROWTH_ROADMAP_INSUFFICIENT_DATA);
+    }
+
+    public static GrowthException roadmapGenerationDisabled() {
+        return new GrowthException(GrowthErrorCode.GROWTH_ROADMAP_GENERATION_DISABLED);
+    }
 }
