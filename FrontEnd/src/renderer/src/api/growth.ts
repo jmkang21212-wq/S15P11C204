@@ -4,7 +4,8 @@ import type {
   GrowthActionGenerationRequest,
   GrowthGoal,
   GrowthReport,
-  PeriodType
+  PeriodType,
+  UpdateGrowthGoalInput
 } from '@renderer/types/growth'
 
 /**
@@ -56,6 +57,23 @@ export async function fetchGrowthGoals(): Promise<GrowthGoal[]> {
 
   const data = await apiFetch<{ items: GrowthGoal[] }>('/growth-goals')
   return data.items
+}
+
+/**
+ * 목표의 상태·목표치·기간을 부분 수정한다.
+ *
+ * 달성 처리(`status: 'ACHIEVED'`)가 이 경로를 쓴다. 서버가 달성률 100%를 자동으로 확정하지
+ * 않는 이유는 지표가 다시 내려갈 수 있기 때문이다 — 평균 시청자는 방송마다 오르내리고,
+ * 기간이 남았는데 목표를 닫으면 이후 방송이 집계에서 빠진다. 사람이 확정한다.
+ */
+export function updateGrowthGoal(
+  growthGoalId: number,
+  input: UpdateGrowthGoalInput
+): Promise<GrowthGoal> {
+  return apiFetch<GrowthGoal>(`/growth-goals/${growthGoalId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(input)
+  })
 }
 
 export function regenerateGrowthActions(
