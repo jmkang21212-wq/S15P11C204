@@ -30,12 +30,13 @@ spring:
     openai:
       api-key: "${REPORT_AI_API_KEY:disabled}"
       base-url: "${REPORT_AI_BASE_URL:https://api.openai.com}"
+      # chat.options.* 는 Spring AI 2.0에서 deprecated다. chat.* 바로 아래에 둔다.
       chat:
-        options:
-          # temperature는 보내지 않는다: gpt-5 계열(추론 모델)은 기본값 1만 허용해
-          # 0.2를 실으면 OpenAI가 unsupported_value 400으로 거부한다.
-          # 생성 성향을 조절해야 하면 reasoning-effort / verbosity를 쓴다.
-          model: "${REPORT_AI_MODEL:gpt-4o-mini}"
+        model: "${REPORT_AI_MODEL:gpt-4.1-mini}"
+        # gpt-5 계열(추론 모델)은 temperature를 기본값 1만 허용한다 — 0.2를 실으면
+        # OpenAI가 unsupported_value 400으로 거부한다. 모델을 그쪽으로 바꾸려면
+        # REPORT_AI_TEMPERATURE=1로 같이 올리고, 생성 성향은 reasoning-effort로 조절한다.
+        temperature: "${REPORT_AI_TEMPERATURE:0.2}"
 
 mybatis:
   mapper-locations: classpath:/mapper/**/*.xml
