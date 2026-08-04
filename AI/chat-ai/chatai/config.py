@@ -98,10 +98,15 @@ Q_SIM_THRESHOLD = float(os.getenv('CHATAI_Q_SIM', '0.50'))
 # 상위를 오염시킨다 — 완성형 한글이라 자모 필터에 안 걸리기 때문. 4자로 사라진다.
 Q_MIN_CONTENT_LEN = int(os.getenv('CHATAI_Q_MIN_LEN', '4'))
 
-Q_BATCH_SIZE = 100                # 이만큼 모이면 임베딩
-Q_BATCH_SEC = 30                  # 덜 모여도 이 시간이면 임베딩
+# 임베딩 배치 트리거 — 건수와 시간 중 먼저 오는 쪽. 2026-08-04 100건/30초 →
+# 50건/10초로 조정: 채팅→노출 최대 지연에서 이 구간이 제일 컸다(30초).
+# 대가는 임베딩 호출 빈도 최대 3배 — GMS 임베딩은 저렴해서 수용, 부담되면 env로 되돌린다.
+Q_BATCH_SIZE = int(os.getenv('CHATAI_Q_BATCH_SIZE', '50'))
+Q_BATCH_SEC = int(os.getenv('CHATAI_Q_BATCH_SEC', '10'))
 Q_MAX_CLUSTERS = 2000             # 초과 시 askers 최소부터 제거
-Q_MIN_ASKERS = int(os.getenv('CHATAI_Q_MIN_ASKERS', '3'))   # Top N 노출 최소 인원
+# Top N 노출 최소 인원. 2026-08-04 3 → 2명으로 조정 — 소규모 방송·시연에서
+# 3명이 안 모여 목록이 영영 비는 문제. 2명 우연 일치가 섞이는 대가는 감수한다.
+Q_MIN_ASKERS = int(os.getenv('CHATAI_Q_MIN_ASKERS', '2'))
 Q_PENDING_MAX = 5000              # GMS 장애 시 버틸 대기열 상한
 Q_TTL = 43200                     # 12시간 — 장방송 대비 (윈도우 10분과 다르다)
 Q_LOCK_SEC = 60                   # 워커 싱글톤 락 (다중 uvicorn 워커 대비)
