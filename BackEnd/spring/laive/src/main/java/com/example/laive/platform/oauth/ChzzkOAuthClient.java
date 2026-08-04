@@ -2,6 +2,7 @@ package com.example.laive.platform.oauth;
 
 import com.example.laive.platform.config.PlatformProperties;
 import com.example.laive.platform.exception.PlatformException;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -16,7 +17,8 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
 /**
- * 치지직 Open API와 통신해 인증 URL 생성, 토큰 발급·갱신·폐기, 채널 조회를 수행한다.
+ * 치지직 Open API와 통신해 인증 URL 생성, 토큰 발급·갱신·폐기, 채널 조회,
+ * 방송 설정 조회·변경을 수행한다.
  *
  * 네이버 로그인과 달리 토큰 요청 바디는 JSON이어야 하며
  * (form-urlencoded로 보내면 400을 반환한다) 성공 응답도 content로 감싸여 온다.
@@ -34,6 +36,9 @@ public class ChzzkOAuthClient {
             new ParameterizedTypeReference<>() {
             };
     private static final ParameterizedTypeReference<ChzzkApiResponse<Object>> VOID_TYPE =
+            new ParameterizedTypeReference<>() {
+            };
+    private static final ParameterizedTypeReference<ChzzkApiResponse<ChzzkLiveSetting>> LIVE_SETTING_TYPE =
             new ParameterizedTypeReference<>() {
             };
 
@@ -136,6 +141,57 @@ public class ChzzkOAuthClient {
         return user;
     }
 
+    /**
+     * 연동된 채널의 방송 설정(제목·카테고리·태그)을 조회한다.
+     * "방송 설정 조회" scope가 없는 토큰이면 403이 온다.
+     */
+    public ChzzkLiveSetting fetchLiveSetting(String accessToken) {
+        requireConfigured();
+        Result<ChzzkLiveSetting> result = execute(
+                restClient.get()
+                        .uri(properties.liveSettingUri())
+                        .header("Authorization", "Bearer " + accessToken)
+                        .accept(MediaType.APPLICATION_JSON),
+                LIVE_SETTING_TYPE
+        );
+        requireScopeGranted(result, "방송 설정 조회");
+        return requireContent(result, "방송 설정 조회", true);
+    }
+
+    /**
+     * 연동된 채널의 방송 제목을 변경한다.
+     * 성공 응답에는 content가 없으므로 상태 코드만 확인한다.
+     */
+    public void updateLiveSetting(String accessToken, String defaultLiveTitle) {
+        requireConfigured();
+        Result<Object> result = execute(
+                restClient.patch()
+                        .uri(properties.liveSettingUri())
+                        .header("Authorization", "Bearer " + accessToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .accept(MediaType.APPLICATION_JSON)
+                        .body(new LiveSettingUpdateRequest(defaultLiveTitle)),
+                VOID_TYPE
+        );
+        requireScopeGranted(result, "방송 설정 변경");
+        if (result.isUnauthorized()) {
+            log.info("치지직 방송 설정 변경 중 토큰 거부: detail={}", result.describe());
+            throw new ChzzkTokenRejectedException(result.describe());
+        }
+        if (!result.status().is2xxSuccessful()) {
+            log.warn("치지직 방송 설정 변경 실패: status={} detail={}", result.status(), result.describe());
+            throw PlatformException.connectionFailed();
+        }
+    }
+
+    private void requireScopeGranted(Result<?> result, String operation) {
+        // 403은 토큰은 유효하나 연동 당시 승인받지 않은 scope다 — 재연동으로만 해소된다.
+        if (result.isForbidden()) {
+            log.info("치지직 {} 중 권한 부족: detail={}", operation, result.describe());
+            throw new ChzzkScopeInsufficientException(result.describe());
+        }
+    }
+
     private ChzzkTokenResponse postForToken(
             String uri,
             Object request,
@@ -217,6 +273,10 @@ public class ChzzkOAuthClient {
             return status.value() == 401;
         }
 
+        boolean isForbidden() {
+            return status.value() == 403;
+        }
+
         /** 로그용 요약. 치지직이 준 코드와 메시지만 담고 토큰은 포함하지 않는다. */
         String describe() {
             return body == null ? "empty body" : body.code() + " " + body.message();
@@ -246,5 +306,13 @@ public class ChzzkOAuthClient {
             String token,
             String tokenTypeHint
     ) {
+    }
+
+    /**
+     * null 필드를 보내면 치지직이 "빈 값 불가"로 거부할 수 있어 채운 필드만 직렬화한다.
+     * 지금은 제목뿐이지만 카테고리·태그 필드를 추가할 때를 대비한다.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private record LiveSettingUpdateRequest(String defaultLiveTitle) {
     }
 }

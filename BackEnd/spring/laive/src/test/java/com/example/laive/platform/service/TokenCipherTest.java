@@ -73,7 +73,7 @@ class TokenCipherTest {
 
     private PlatformProperties properties(String tokenEncryptionKey) {
         return new PlatformProperties(
-                new PlatformProperties.Chzzk("id", "secret", "uri", "auth", "token", "revoke", "me"),
+                new PlatformProperties.Chzzk("id", "secret", "uri", "auth", "token", "revoke", "me", "live-setting"),
                 tokenEncryptionKey,
                 Duration.ofMinutes(5),
                 Duration.ofMinutes(5)

@@ -3,13 +3,16 @@ package com.example.laive.platform.api;
 import com.example.laive.common.api.ApiResponse;
 import com.example.laive.platform.service.PlatformAccountService;
 import com.example.laive.platform.service.PlatformAccountService.CompletedLink;
+import com.example.laive.platform.service.PlatformLiveSettingService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -25,9 +28,14 @@ import java.net.URI;
 public class PlatformAccountController {
 
     private final PlatformAccountService platformAccountService;
+    private final PlatformLiveSettingService liveSettingService;
 
-    public PlatformAccountController(PlatformAccountService platformAccountService) {
+    public PlatformAccountController(
+            PlatformAccountService platformAccountService,
+            PlatformLiveSettingService liveSettingService
+    ) {
         this.platformAccountService = platformAccountService;
+        this.liveSettingService = liveSettingService;
     }
 
     /** 내 연동 목록을 조회한다. */
@@ -74,6 +82,29 @@ public class PlatformAccountController {
                 .build()
                 .toUri();
         return ResponseEntity.status(HttpStatus.FOUND).location(location).build();
+    }
+
+    /** 연동 채널의 플랫폼 방송 설정(제목 등)을 조회한다. */
+    @GetMapping("/{platformAccountId}/live-setting")
+    public ResponseEntity<ApiResponse<LiveSettingResponse>> liveSetting(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable long platformAccountId
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(
+                LiveSettingResponse.of(liveSettingService.get(streamerId(jwt), platformAccountId))
+        ));
+    }
+
+    /** 연동 채널의 플랫폼 방송 제목을 변경한다. */
+    @PatchMapping("/{platformAccountId}/live-setting")
+    public ResponseEntity<ApiResponse<LiveSettingResponse>> updateLiveSetting(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable long platformAccountId,
+            @RequestBody UpdateLiveSettingRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.success(LiveSettingResponse.of(
+                liveSettingService.update(streamerId(jwt), platformAccountId, request.defaultLiveTitle())
+        )));
     }
 
     /** 연동을 해제하고 플랫폼 쪽 승인도 정리한다. */

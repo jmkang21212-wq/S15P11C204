@@ -155,6 +155,7 @@ public class BroadcastSessionTransactionService {
                     account.platform(),
                     now,
                     session.language(),
+                    session.title(),
                     now
             ));
         }

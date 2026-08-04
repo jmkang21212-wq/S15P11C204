@@ -116,7 +116,12 @@ public class PlatformTokenRefresher {
                 && now.isBefore(expiresAt.minus(properties.accessTokenRefreshThreshold()));
     }
 
-    private TokenResolution markReauthRequired(long platformAccountId, String reason) {
+    /**
+     * 갱신 실패 외에 API 호출 시점에 토큰이 거부(401)된 경우에도
+     * 재연동 필요 상태를 기록할 수 있도록 공개한다.
+     */
+    @Transactional
+    public TokenResolution markReauthRequired(long platformAccountId, String reason) {
         log.info("Platform reauthorization required: platformAccountId={} reason={}", platformAccountId, reason);
         platformAccountMapper.updateConnectionStatus(platformAccountId, REAUTH_REQUIRED);
         return TokenResolution.requiringReauth();

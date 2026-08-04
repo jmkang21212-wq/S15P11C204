@@ -3,9 +3,11 @@ package com.example.laive.platform.config;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
+import java.net.http.HttpClient;
 import java.time.Duration;
 
 /**
@@ -22,11 +24,13 @@ public class PlatformConfig {
 
     /**
      * 치지직 호출 전용 RestClient. 공유 Builder 빈을 변형하지 않도록 복제본에 타임아웃을 적용한다.
+     * HttpURLConnection 기반 팩토리는 PATCH를 지원하지 않아(방송 설정 변경이 PATCH다)
+     * JDK HttpClient 기반 팩토리를 쓴다.
      */
     @Bean
     RestClient chzzkRestClient(RestClient.Builder restClientBuilder) {
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(CONNECT_TIMEOUT);
+        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(
+                HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build());
         requestFactory.setReadTimeout(READ_TIMEOUT);
         return restClientBuilder.clone().requestFactory(requestFactory).build();
     }

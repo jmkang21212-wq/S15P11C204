@@ -63,6 +63,7 @@ public class OutboxEventFactory {
             String platformCode,
             Instant requestedAt,
             String language,
+            String title,
             Instant occurredAt
     ) {
         UUID eventId = UUID.randomUUID();
@@ -81,6 +82,7 @@ public class OutboxEventFactory {
                         platformCode,
                         requestedAt,
                         language,
+                        title,
                         occurredAt
                 ),
                 occurredAt
