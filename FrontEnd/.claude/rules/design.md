@@ -79,7 +79,7 @@ assets/globals.css (@theme inline)      3층. 실제 클래스(text-title, bg-pr
 
 ### 1.6 외부 브랜드 색은 토큰화하지 않는다
 
-네이버·치지직·SOOP 색은 각 서비스의 브랜드 가이드라인이 정한 값이라 우리 디자인 시스템을 바꿔도 그대로여야 한다. `assets/theme/*`에 넣지 않고 `lib/brand.ts` 한 곳에 상수로 모아 "의도적으로 토큰이 아님"을 드러낸다.
+네이버·치지직·유튜브 색은 각 서비스의 브랜드 가이드라인이 정한 값이라 우리 디자인 시스템을 바꿔도 그대로여야 한다. `assets/theme/*`에 넣지 않고 `lib/brand.ts` 한 곳에 상수로 모아 "의도적으로 토큰이 아님"을 드러낸다.
 
 ## 2. 레이아웃
 
@@ -93,7 +93,7 @@ assets/globals.css (@theme inline)      3층. 실제 클래스(text-title, bg-pr
 
 | 컴포넌트 | 용도 |
 |---|---|
-| `GNB` | 좌측 내비. props: `live`(boolean), `liveSessionId`. 펼침/접힘은 `useGnbCollapsed` 훅으로 화면 간 공유하며 상단 토글 버튼(`->\|`/`\|<-`)으로 사용자가 전환한다. 상단 로고+토글 → LIVE 배너(`live`일 때만) → 메뉴 8개 → 하단 연동 상태 + 계정. 활성 항목만 Primary Soft 배경 + 인디고 텍스트, 아이콘은 24 viewBox 스트로크 1.8. |
+| `GNB` | 좌측 내비. props: `live`(boolean), `liveSessionId`. 펼침/접힘은 `useGnbCollapsed` 훅으로 화면 간 공유하며 상단 토글 버튼(`->\|`/`\|<-`)으로 사용자가 전환한다. 상단 로고+토글 → LIVE 배너(`live`일 때만) → 메뉴 8개 → 하단 연동 상태 + 계정. 연동 계정이 여러 개면 `연동됨 · N개 채널`로 뭉쳐 보여준다. 활성 항목만 Primary Soft 배경 + 인디고 텍스트, 아이콘은 24 viewBox 스트로크 1.8. |
 | `StateView` (`EmptyState`/`ErrorState`) | 빈/에러 상태 표준 컴포넌트. `EmptyState`는 `icon`/`title`/`description`/`action`, `ErrorState`는 `message`/`onRetry`를 받는다. 모든 화면이 이거 하나로 통일돼 있다. |
 | `StatusBadge` | 상태 배지. 도메인 상태 타입을 직접 받지 않고 `tone`(`success`/`warning`/`danger`/`neutral`) + `label`만 받는다 — 도메인→tone 매핑은 각 화면이 갖는다. |
 | `DeltaText` | 증감 표기 — §6 "Success/Danger 텍스트 + 화살표, 수치는 mono". `digits` prop으로 소수점 자리 조정. |

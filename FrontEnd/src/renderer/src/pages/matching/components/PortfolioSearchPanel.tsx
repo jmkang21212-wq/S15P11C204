@@ -138,7 +138,7 @@ export default function PortfolioSearchPanel({
           <SelectContent>
             <SelectItem value="ALL">전체 플랫폼</SelectItem>
             <SelectItem value="CHZZK">치지직</SelectItem>
-            <SelectItem value="SOOP">SOOP</SelectItem>
+            <SelectItem value="YOUTUBE">유튜브</SelectItem>
           </SelectContent>
         </Select>
 

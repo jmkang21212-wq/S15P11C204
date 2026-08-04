@@ -124,13 +124,20 @@ export default function GNB({ live = false, liveSessionId }: GNBProps): React.JS
       setLoggingOut(false)
     }
   }
-  const primary = accounts?.find((a) => a.connectionStatus === 'CONNECTED') ?? accounts?.[0] ?? null
-  const linkStatus: 'connected' | 'reauth' | 'none' =
-    primary === null
-      ? 'none'
-      : primary.connectionStatus === 'REAUTH_REQUIRED'
-        ? 'reauth'
-        : 'connected'
+  // 다중 연동을 지원한다 — 하나라도 REAUTH_REQUIRED면 경고를 우선 보여준다.
+  const connectedAccounts = accounts?.filter((a) => a.connectionStatus === 'CONNECTED') ?? []
+  const reauthAccount = accounts?.find((a) => a.connectionStatus === 'REAUTH_REQUIRED') ?? null
+  const linkStatus: 'connected' | 'reauth' | 'none' = reauthAccount
+    ? 'reauth'
+    : connectedAccounts.length > 0
+      ? 'connected'
+      : 'none'
+  const connectedLabel =
+    connectedAccounts.length >= 2
+      ? `연동됨 · ${connectedAccounts.length}개 채널`
+      : connectedAccounts.length === 1
+        ? `연동됨 · ${connectedAccounts[0].channelName}`
+        : '연동됨'
   return (
     <nav
       className={cn(
@@ -229,7 +236,7 @@ export default function GNB({ live = false, liveSessionId }: GNBProps): React.JS
             )}
           >
             <span className="size-2 shrink-0 rounded-full bg-success" aria-hidden />
-            <GnbLabel show={!collapsed}>연동됨{primary && ` · ${primary.channelName}`}</GnbLabel>
+            <GnbLabel show={!collapsed}>{connectedLabel}</GnbLabel>
           </div>
         ) : (
           <button
