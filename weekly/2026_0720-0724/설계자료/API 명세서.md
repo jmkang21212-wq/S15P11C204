@@ -4,8 +4,8 @@
 
 | 항목 | 내용 |
 | --- | --- |
-| 문서 버전 | v1.6 |
-| 수정일 | 2026-07-31 |
+| 문서 버전 | v1.7 |
+| 수정일 | 2026-08-03 |
 | 기준 문서 | 프로젝트 명세서, LAIVE ERD 수정본, STREAMPILOT UI 목업 v0.2 |
 | API 버전 | v1 |
 | 문서 범위 | 핵심 화면 및 Must 기능 + 일정·약속·성장 목표·채팅 리플레이·내부 AI 분석 API 확장 |
@@ -930,6 +930,16 @@ Access Token과 Refresh Token은 `PLATFORM_ACCOUNTS`에 암호화하여 저장�
         "lastAskedAt": "2026-07-21T13:03:20Z"
       }
     ],
+    "topViewers": [
+      {
+        "viewerId": 77,
+        "nickname": "한별팬1호",
+        "viewerAlias": "viewer-a91c",
+        "chatScore": 42,
+        "watchScore": 35,
+        "totalScore": 112.0
+      }
+    ],
     "lastEventId": "1753089600123-0"
   }
 }
@@ -962,6 +972,18 @@ Access Token과 Refresh Token은 `PLATFORM_ACCOUNTS`에 암호화하여 저장�
 - `askers` — 몇 명이 물었나(유니크). 화면에 표시할 숫자이자 정렬 기준.
 - `messages` — 총 메시지 수. `askers`와 크게 벌어지면 한 명의 도배다.
 - `reasked` — 답변 완료 처리 후 같은 질문이 임계(+10명) 이상 다시 늘어 재노출됐다. "답이 시청자에게 닿지 않았다"는 신호이므로 배지 등으로 구분 표시를 권장한다.
+
+`topViewers`는 이 세션의 **열성 시청자 상위 5명, 총점 내림차순**이다 (FR-F-03, 2026-08-03 구현).
+
+- 점수는 도배에 뚫리지 않게 설계됐다: `chatScore` = 분(minute)당 채팅을 **3개까지만**
+  인정한 합, `watchScore` = 채팅을 친 분의 수(꾸준함 — 시청 지속의 채팅 기반 근사),
+  총점 = `chatScore + watchScore×2 + Σ log10(후원액+1)×10`. 1분에 100개를 쳐도 3점이라
+  5분 도배(5점대)가 2시간 꾸준 참여(100점대)를 이길 수 없다. 가중치는 초기값이며 튜닝 대상이다.
+- **스트리머 본인과 매니저는 제외**된다 (`viewer_profiles.user_role` 기준).
+- `nickname`은 수집기가 관측한 표시용 닉네임이다. 아직 관측 전(과거 시청자 등)이면
+  `null`이며, 그때는 항상 채워지는 `viewerAlias`(해시 파생, 11.5와 같은 형식)로 표시한다.
+- 계산은 조회 시점 `CHAT_MESSAGES` 집계이고, 방송 종료 시 `VIEWER_SCORES`에 확정
+  저장된다 — 채팅은 90일 보존 후 삭제되므로 그 행이 유일한 영구 기록이다.
 
 **답변 완료 처리** (2026-07-30 구현):
 
@@ -1410,7 +1432,7 @@ DETECTED ──confirm──▶ PENDING ◀──▶ ON_HOLD
 - `offsetMs`는 하이라이트 시작점을 0으로 한 계산 필드이며 플레이어와 채팅 동기화에 사용한다.
 - 정렬은 `CHAT_MESSAGES.sent_at ASC, CHAT_MESSAGES.id ASC`이고 `size`의 최댓값은 500이다.
 - `cursor`는 서버가 마지막 정렬 키를 인코딩해 발급하며 클라이언트가 직접 생성하지 않는다.
-- ERD의 `VIEWER_PROFILES`에는 닉네임 컬럼이 없으므로 실제 플랫폼 닉네임 대신 `viewer_hash`로부터 세션 내에서 안정적인 `viewerAlias`를 계산한다. 실제 닉네임이 필요하면 ERD에 별도 컬럼을 추가해야 한다.
+- `viewerAlias`는 `viewer_hash`에서 파생한 세션 내 안정 별칭이다. (v1.7: `VIEWER_PROFILES`에 `nickname` 컬럼이 추가되어 실명 표기가 가능해졌다 — 열성 시청자 10.6 참조. 리플레이는 익명성 유지를 위해 별칭을 계속 쓴다.)
 - 목업의 후원 메시지는 현재 ERD에 후원 이벤트 테이블이 없으므로 채팅 리플레이 응답에서 제외한다.
 
 ---
@@ -1697,7 +1719,9 @@ SC-11의 채널명·태그 검색, 카테고리 필터, 규모 필터를 지원�
     {
       "viewerHash": "sha256:a91c...",
       "message": "이거 클립 박제각",
-      "sentAt": "2026-07-20T14:31:03Z"
+      "sentAt": "2026-07-20T14:31:03Z",
+      "nickname": "한별팬1호",
+      "userRole": "common_user"
     }
   ]
 }
@@ -1714,6 +1738,16 @@ SC-11의 채널명·태그 검색, 카테고리 필터, 규모 필터를 지원�
 ```
 
 Spring은 `viewerHash`로 `VIEWER_PROFILES`를 조회하거나 생성한 뒤 `CHAT_MESSAGES(session_id, viewer_id, message, sent_at)`에 저장한다. 플랫폼의 원본 사용자 식별자는 수집기에서 해시하고 이 API로 전달하지 않는다.
+
+`nickname`·`userRole`은 선택 필드다 (v1.7 — 열성 시청자 FR-F-03).
+
+- **개인정보 경계**: 채널 원본 식별자를 해시로만 전달하는 가명화 원칙은 유지된다.
+  닉네임은 열성 시청자 화면 표기를 위해 **표시 목적에 한해** 원문으로 저장하기로
+  확정한 의도적 완화다 (2026-08-03 결정).
+- `VIEWER_PROFILES.nickname`은 마지막으로 관측된 값으로 갱신되고(닉변 추적), 값이
+  없는 배치는 기존 값을 지우지 않는다. `userRole`(치지직 `userRoleCode` 어휘:
+  `streamer`/`manager`/`common_user`)은 스트리머 본인·매니저를 열성 집계에서
+  제외하는 근거다.
 
 #### 13.3.2 시청자 지표 배치 저장
 

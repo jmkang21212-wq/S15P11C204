@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.laive.broadcast.fandom.repository.mybatis.ViewerScoreMapper">
+
+    <!--
+      열성 시청자 점수 산식의 단일 원천이다 (FR-F-03). 실시간 top 조회와 종료 시
+      확정 저장이 이 조각을 공유한다 — 복붙하면 두 공식이 반드시 갈라진다.
+
+      도배 방지 설계:
+      - chat_score : 분(minute)당 채팅을 3개까지만 인정하고 합산. 1분에 100개를
+                     쳐도 3점이라 도배로는 점수가 안 오른다.
+      - watch_score: 채팅을 친 분의 수(distinct minute). 5분 도배(5)와 2시간
+                     꾸준 참여(120)를 갈라놓는 주 지표다. "시청 지속"의 채팅 기반
+                     근사이기도 하다(플랫폼이 개별 시청자 접속 시간을 안 준다).
+      - 후원       : log10(금액+1)×10. 이미 수집 중인 DONATION 금액을 로그
+                     스케일로 반영한다 — 고액 도네 한 번이 채팅 수백 개와 등가가
+                     되지 않게 완만하게 누른다.
+      total = chat + watch×2 + donation. 가중치는 초기값이며 실방송 데이터로 튜닝한다.
+
+      세션 범위 스캔은 ix_chat_messages_session_sent (session_id, sent_at, id)를 탄다.
+    -->
+    <sql id="viewerScoreAggregate">
+        WITH per_minute AS (
+            SELECT viewer_id,
+                   date_trunc('minute', sent_at) AS minute,
+                   LEAST(count(*), 3)            AS capped_chats,
+                   COALESCE(SUM(log(amount + 1))
+                       FILTER (WHERE message_type = 'DONATION' AND amount > 0), 0) AS donation_log
+              FROM chat_messages
+             WHERE session_id = #{sessionId}
+             GROUP BY viewer_id, date_trunc('minute', sent_at)
+        )
+        SELECT pm.viewer_id,
+               SUM(pm.capped_chats)::int AS chat_score,
+               COUNT(*)::int             AS watch_score,
+               ROUND(SUM(pm.capped_chats) + COUNT(*) * 2 + SUM(pm.donation_log) * 10, 2)
+                                         AS total_score
+          FROM per_minute pm
+         GROUP BY pm.viewer_id
+    </sql>
+
+    <!--
+      TopViewer record 생성자 순서와 컬럼 순서를 일치시킨다
+      (viewerId, nickname, viewerHash, chatScore, watchScore, totalScore).
+      스트리머 본인·매니저는 "시청자"가 아니므로 노출에서 뺀다 — 저장(persist)은
+      전 시청자를 남기고 노출만 거른다.
+    -->
+    <select id="findTopViewers" resultType="com.example.laive.broadcast.fandom.domain.TopViewer">
+        SELECT agg.viewer_id,
+               vp.nickname,
+               vp.viewer_hash,
+               agg.chat_score,
+               agg.watch_score,
+               agg.total_score
+          FROM (
+               <include refid="viewerScoreAggregate"/>
+               ) agg
+          JOIN viewer_profiles vp ON vp.id = agg.viewer_id
+         WHERE COALESCE(vp.user_role, '') NOT IN ('streamer', 'manager')
+         ORDER BY agg.total_score DESC, agg.viewer_id
+         LIMIT #{limit}
+    </select>
+
+    <!--
+      종료 확정 저장. streamer_id는 세션에서 조인으로 얻는다.
+      ON CONFLICT (session_id, viewer_id)라 아웃박스 재시도가 와도 행이 늘지 않고
+      최신 집계로 덮어써진다(멱등).
+    -->
+    <insert id="persistViewerScores">
+        INSERT INTO viewer_scores
+            (streamer_id, viewer_id, session_id, chat_score, watch_score, total_score)
+        SELECT bs.streamer_id,
+               agg.viewer_id,
+               #{sessionId},
+               agg.chat_score,
+               agg.watch_score,
+               agg.total_score
+          FROM (
+               <include refid="viewerScoreAggregate"/>
+               ) agg
+          JOIN broadcast_sessions bs ON bs.id = #{sessionId}
+        ON CONFLICT (session_id, viewer_id) DO UPDATE
+           SET chat_score  = EXCLUDED.chat_score,
+               watch_score = EXCLUDED.watch_score,
+               total_score = EXCLUDED.total_score
+    </insert>
+
+</mapper>

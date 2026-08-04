@@ -1,5 +1,6 @@
 package com.example.laive.broadcast.session.service;
 
+import com.example.laive.broadcast.fandom.repository.mybatis.ViewerScoreMapper;
 import com.example.laive.broadcast.session.config.BroadcastSessionProperties;
 import com.example.laive.broadcast.session.event.BroadcastEndedEvent;
 import com.example.laive.broadcast.session.integration.AiSessionGateway;
@@ -22,6 +23,7 @@ public class BroadcastSessionFinalizationService {
     private final BroadcastSessionProperties properties;
     private final ReportGenerationService reportGenerationService;
     private final BroadcastPlatformSessionMapper platformSessionMapper;
+    private final ViewerScoreMapper viewerScoreMapper;
 
     public BroadcastSessionFinalizationService(
             ChatCollectorGateway chatCollectorGateway,
@@ -30,7 +32,8 @@ public class BroadcastSessionFinalizationService {
             BroadcastSessionTransactionService transactionService,
             BroadcastSessionProperties properties,
             ReportGenerationService reportGenerationService,
-            BroadcastPlatformSessionMapper platformSessionMapper
+            BroadcastPlatformSessionMapper platformSessionMapper,
+            ViewerScoreMapper viewerScoreMapper
     ) {
         this.chatCollectorGateway = chatCollectorGateway;
         this.aiSessionGateway = aiSessionGateway;
@@ -39,6 +42,7 @@ public class BroadcastSessionFinalizationService {
         this.properties = properties;
         this.reportGenerationService = reportGenerationService;
         this.platformSessionMapper = platformSessionMapper;
+        this.viewerScoreMapper = viewerScoreMapper;
     }
 
     public void finalizeSession(BroadcastEndedEvent event) {
@@ -66,6 +70,10 @@ public class BroadcastSessionFinalizationService {
                 properties.finalizationGracePeriod()
         );
         transactionService.finalizeStatistics(event.reportId(), event.sessionId());
+        // 열성 시청자 점수 확정(FR-F-03). 수집기 flush 뒤라 채팅이 전부 들어와 있고,
+        // chat_messages는 90일 뒤 지워지므로 이 행이 유일한 영구 기록이다.
+        // ON CONFLICT 단문이라 아웃박스 재시도에도 멱등하다.
+        viewerScoreMapper.persistViewerScores(event.sessionId());
         reportGenerationService.start(event.sessionId(), event.reportId());
         redisGateway.finish(event.sessionId(), event.endedAt());
     }

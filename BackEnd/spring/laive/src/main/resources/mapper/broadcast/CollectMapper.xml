@@ -77,14 +77,19 @@
             resultType="com.example.laive.broadcast.collect.repository.mybatis.ViewerProfileRef"
             affectData="true"
             flushCache="true">
-        INSERT INTO viewer_profiles (platform_account_id, viewer_hash, first_seen_at, last_seen_at)
+        INSERT INTO viewer_profiles
+            (platform_account_id, viewer_hash, first_seen_at, last_seen_at, nickname, user_role)
         VALUES
         <foreach collection="seen" item="row" separator=",">
-            (#{platformAccountId}, #{row.viewerHash}, #{row.firstSeenAt}, #{row.lastSeenAt})
+            (#{platformAccountId}, #{row.viewerHash}, #{row.firstSeenAt}, #{row.lastSeenAt},
+             #{row.nickname,jdbcType=VARCHAR}, #{row.userRole,jdbcType=VARCHAR})
         </foreach>
         ON CONFLICT (platform_account_id, viewer_hash) DO UPDATE
            SET first_seen_at = LEAST(viewer_profiles.first_seen_at, EXCLUDED.first_seen_at),
-               last_seen_at  = GREATEST(viewer_profiles.last_seen_at, EXCLUDED.last_seen_at)
+               last_seen_at  = GREATEST(viewer_profiles.last_seen_at, EXCLUDED.last_seen_at),
+               <!-- 닉변은 최신 값으로 따라가고, 닉네임 없는 배치가 기존 값을 지우지 않는다 -->
+               nickname      = COALESCE(EXCLUDED.nickname,  viewer_profiles.nickname),
+               user_role     = COALESCE(EXCLUDED.user_role, viewer_profiles.user_role)
         RETURNING id AS viewer_id,
                   viewer_hash
     </select>

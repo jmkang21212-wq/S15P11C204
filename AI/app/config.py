@@ -35,15 +35,23 @@ LLM_MAX_RETRIES = 1
 LLM_CONTEXT_SEC = 10.0
 LLM_MIN_TEXT_LEN = 2
 
-# 이 등급 이상만 위험 발언으로 알린다.
+# LLM 판정이 이 등급 이상일 때만 알린다.
+#
+# ⚠ 사전 경로에는 걸리지 않는다. 사전 히트는 severity와 무관하게 전부 알린다
+# (server.py의 `if hits:`). 스트리머가 금칙어로 "이건 무조건 잡아"라고 등록한 것이
+# 임계값에 걸러지면 안 되기 때문이다.
 #
 # 등급은 '위험한지'가 아니라 '얼마나 심한지'를 뜻한다. 위험이 아니라는 판단은
 # none이 받고, low부터는 실제로 비속어가 있다는 뜻이다(프롬프트에 그렇게 명시했다).
-# 그래서 none만 걸러내면 된다.
 #
-# 이 구분이 없던 시절에는 LLM이 low를 "위험도 낮음(= 위험 아님)"으로 쓰는 바람에
-# 평범한 대화에 경고가 붙었다. category=none 방어와 함께 봐야 한다.
-LLM_ALERT_MIN_RISK = "low"
+# medium인 이유: low는 "닥쳐·꺼져·재수없어·때릴 거야" 수준이다. 이걸 알림으로 띄우면
+# 경고가 흔해지고, 흔해진 경고는 스트리머가 보지 않게 된다 — 그 순간 정작 잡아야 할
+# 발언까지 같이 묻힌다(RISK_POLICY_SPEC.md §0과 같은 문제의식이다).
+#
+# low였던 시절의 근거는 "none만 걸러내면 된다"였는데, 그건 LLM이 low를 "위험도 낮음
+# (= 위험 아님)"으로 쓰던 것을 막으려던 맥락이었다. 그 방어는 지금 category=none 검사
+# (llm_judge.py의 `is_risky`)가 따로 하고 있어 임계값이 겸할 필요가 없다.
+LLM_ALERT_MIN_RISK = "medium"
 
 # --- 오디오 ---
 SAMPLE_RATE = 16000
@@ -80,8 +88,17 @@ PROMISE_MIN_CONFIDENCE = 0.6   # 이보다 낮으면 버린다
 PROMISE_DEDUP_SEC = 900        # 같은 약속을 15분 내에 반복하면 한 번만 보낸다
 
 # --- Spring 전송 ---
-# 비어 있으면 전송을 아예 하지 않는다. 스펙 합의 전까지는 이대로 두면 된다.
-SPRING_BASE_URL = os.getenv("SPRING_BASE_URL", "").rstrip("/")
+# 기본값은 로컬 Spring. 수집기(chat-collector/config.py)와 같은 규칙이다 —
+# "비우면 로컬"로 통일해서 .env를 안 채워도 개발이 되게 한다.
+# 배포에서는 compose가 SPRING_BASE_URL을 항상 넣어주므로 이 값은 쓰이지 않는다.
+#
+# 예전에는 기본값이 ""(전송 안 함)이었다. Spring 연동 규약이 정해지기 전에
+# 만들어져 붙일 곳이 없었기 때문인데, 그 조건은 이미 해소됐다(S15P11C204-183).
+#
+# getenv의 두 번째 인자가 아니라 'or'를 쓰는 이유:
+# getenv는 "없음"과 "있지만 빈 값"을 구분한다. .env.example에 'SPRING_BASE_URL='
+# 줄이 있으므로 복사해 쓰면 전자가 아니라 후자가 되어 기본값이 영영 안 먹는다.
+SPRING_BASE_URL = (os.getenv("SPRING_BASE_URL") or "http://127.0.0.1:8080").rstrip("/")
 SPRING_TOKEN = os.getenv("SPRING_TOKEN", "")   # 서버간 인증용
 # Spring의 내부 API 규약(명세 13.1)을 따른다. {sessionId}는 broadcast_sessions.id다.
 # 프론트가 핸드셰이크에 실어 보낸 번호를 그대로 넣는다.

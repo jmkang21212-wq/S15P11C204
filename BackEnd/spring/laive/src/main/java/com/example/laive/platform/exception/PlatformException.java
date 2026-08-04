@@ -37,6 +37,18 @@ public class PlatformException extends RuntimeException {
         );
     }
 
+    /**
+     * 연동 당시 승인받지 않은 권한이 필요한 요청이다. 토큰 자체는 유효하므로
+     * 연동 상태는 건드리지 않으며, 다시 연동해 새 scope를 승인받아야 해소된다.
+     */
+    public static PlatformException scopeInsufficient() {
+        return new PlatformException(
+                HttpStatus.CONFLICT,
+                "PLATFORM_SCOPE_INSUFFICIENT",
+                "이 기능에 필요한 권한이 없어요. 치지직 채널을 다시 연동해 주세요."
+        );
+    }
+
     /** 다른 회원이 이미 연동한 채널이다. */
     public static PlatformException alreadyLinked() {
         return new PlatformException(

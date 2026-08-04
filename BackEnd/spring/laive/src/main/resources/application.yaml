@@ -98,6 +98,7 @@ laive:
       token-uri: "https://openapi.chzzk.naver.com/auth/v1/token"
       revoke-uri: "https://openapi.chzzk.naver.com/auth/v1/token/revoke"
       user-me-uri: "https://openapi.chzzk.naver.com/open/v1/users/me"
+      live-setting-uri: "https://openapi.chzzk.naver.com/open/v1/lives/setting"
     youtube:
       client-id: "${YOUTUBE_CLIENT_ID:}"
       client-secret: "${YOUTUBE_CLIENT_SECRET:}"

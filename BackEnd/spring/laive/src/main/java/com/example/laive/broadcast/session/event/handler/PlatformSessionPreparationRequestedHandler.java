@@ -12,9 +12,12 @@ import com.example.laive.platform.core.ExternalBroadcast;
 import com.example.laive.platform.core.PlatformAdapterRegistry;
 import com.example.laive.platform.core.PlatformIntegrationAdapter;
 import com.example.laive.platform.core.PlatformCapabilityCode;
+import com.example.laive.platform.core.PlatformLiveSettingUpdate;
 import com.example.laive.platform.service.PlatformAccountService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
@@ -23,6 +26,9 @@ import java.util.Optional;
 /** Prepares one provider child session without coupling the parent lifecycle to a provider. */
 @Component
 public class PlatformSessionPreparationRequestedHandler implements BroadcastOutboxEventHandler {
+
+    private static final Logger log =
+            LoggerFactory.getLogger(PlatformSessionPreparationRequestedHandler.class);
 
     private final ObjectMapper objectMapper;
     private final PlatformAdapterRegistry adapterRegistry;
@@ -73,6 +79,8 @@ public class PlatformSessionPreparationRequestedHandler implements BroadcastOutb
             return broadcast;
         });
 
+        syncBroadcastTitle(event, adapter);
+
         for (String capability : adapter.descriptor().capabilities()) {
             if (PlatformCapabilityCode.SESSION_CAPABILITIES.contains(capability)) {
                 platformSessionMapper.markCapabilityRunning(
@@ -105,6 +113,31 @@ public class PlatformSessionPreparationRequestedHandler implements BroadcastOutb
         } catch (RuntimeException ignored) {
             // A malformed payload cannot safely identify the child session.
         }
+    }
+
+    /**
+     * 세션 제목을 플랫폼 방송 제목에도 반영한다. 부가 기능이라 실패해도 방송 시작을
+     * 막지 않는다 — 권한 부족·토큰 거부·연결 실패 전부 warn만 남긴다.
+     * Outbox 재시도에서 같은 제목으로 다시 호출돼도 멱등하다.
+     */
+    private void syncBroadcastTitle(
+            PlatformSessionPreparationRequestedEvent event,
+            PlatformIntegrationAdapter adapter
+    ) {
+        // title이 null이면 필드 추가 이전에 저장된 페이로드다.
+        if (event.title() == null) {
+            return;
+        }
+        adapter.liveSetting().ifPresent(liveSetting -> {
+            try {
+                String accessToken = platformAccountService.accessToken(
+                        event.streamerId(), event.platformAccountId());
+                liveSetting.updateLiveSetting(accessToken, new PlatformLiveSettingUpdate(event.title()));
+            } catch (RuntimeException exception) {
+                log.warn("방송 제목 동기화 실패: platformSessionId={} cause={}",
+                        event.platformSessionId(), exception.getClass().getSimpleName());
+            }
+        });
     }
 
     private void saveResources(long platformSessionId, ExternalBroadcast broadcast) {

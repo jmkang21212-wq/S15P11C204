@@ -75,7 +75,9 @@ class CollectionIngestIntegrationTest {
                 ChatMessageType.DONATION,
                 new BigDecimal("2.5000"),
                 "KRW",
-                "superChatEvent"
+                "superChatEvent",
+                "후원자닉네임",
+                null
         );
 
         BatchIngestResult first = ingestService.appendPlatformChatMessages(
@@ -168,6 +170,47 @@ class CollectionIngestIntegrationTest {
 
         assertThat(lastSeen).isCloseTo(late, within10Millis());
         assertThat(firstSeen).isCloseTo(early, within10Millis());
+    }
+
+    @Test
+    void 닉네임과_역할을_프로필에_저장하고_닉변을_따라간다() {
+        long sessionId = createSession();
+        String hash = "sha256:" + UUID.randomUUID();
+
+        ingestService.appendChatMessages(sessionId, List.of(
+                chatWithNickname(hash, "첫 채팅", "옛닉네임", "common_user")));
+        ingestService.appendChatMessages(sessionId, List.of(
+                chatWithNickname(hash, "둘째 채팅", "새닉네임", null)));
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT nickname FROM viewer_profiles WHERE viewer_hash = ?", String.class, hash))
+                .isEqualTo("새닉네임");
+        // 역할 없는 배치가 이미 아는 역할을 지우면 안 된다 (COALESCE 보존)
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT user_role FROM viewer_profiles WHERE viewer_hash = ?", String.class, hash))
+                .isEqualTo("common_user");
+    }
+
+    @Test
+    void 닉네임_없는_배치는_기존_닉네임을_지우지_않는다() {
+        long sessionId = createSession();
+        String hash = "sha256:" + UUID.randomUUID();
+
+        ingestService.appendChatMessages(sessionId, List.of(
+                chatWithNickname(hash, "닉네임 있는 채팅", "한별팬1호", "common_user")));
+        // 구버전 수집기·YouTube 일부처럼 닉네임이 안 실린 배치
+        ingestService.appendChatMessages(sessionId, List.of(
+                new ChatMessageItem(hash, "닉네임 없는 채팅", Instant.now())));
+
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT nickname FROM viewer_profiles WHERE viewer_hash = ?", String.class, hash))
+                .isEqualTo("한별팬1호");
+    }
+
+    private static ChatMessageItem chatWithNickname(
+            String hash, String message, String nickname, String userRole) {
+        return new ChatMessageItem(hash, message, Instant.now(), null, null,
+                ChatMessageType.TEXT, null, null, null, nickname, userRole);
     }
 
     @Test

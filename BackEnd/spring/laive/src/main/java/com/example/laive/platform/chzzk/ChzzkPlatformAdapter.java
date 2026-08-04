@@ -6,9 +6,15 @@ import com.example.laive.platform.core.PlatformCredentialRejectedException;
 import com.example.laive.platform.core.PlatformDescriptor;
 import com.example.laive.platform.core.PlatformIdentity;
 import com.example.laive.platform.core.PlatformIntegrationAdapter;
+import com.example.laive.platform.core.PlatformLiveSetting;
+import com.example.laive.platform.core.PlatformLiveSettingCapability;
+import com.example.laive.platform.core.PlatformLiveSettingUpdate;
 import com.example.laive.platform.core.PlatformOAuthCapability;
 import com.example.laive.platform.core.PlatformOAuthTokens;
+import com.example.laive.platform.core.PlatformScopeInsufficientException;
+import com.example.laive.platform.oauth.ChzzkLiveSetting;
 import com.example.laive.platform.oauth.ChzzkOAuthClient;
+import com.example.laive.platform.oauth.ChzzkScopeInsufficientException;
 import com.example.laive.platform.oauth.ChzzkTokenRejectedException;
 import com.example.laive.platform.oauth.ChzzkTokenResponse;
 import com.example.laive.platform.oauth.ChzzkUser;
@@ -21,7 +27,8 @@ import java.util.Set;
 
 /** 기존 CHZZK 구현을 코어 서비스에서 분리하는 Adapter다. */
 @Component
-public class ChzzkPlatformAdapter implements PlatformIntegrationAdapter, PlatformOAuthCapability {
+public class ChzzkPlatformAdapter
+        implements PlatformIntegrationAdapter, PlatformOAuthCapability, PlatformLiveSettingCapability {
 
     public static final PlatformCode CODE = PlatformCode.of("CHZZK");
     private static final Duration REFRESH_TOKEN_TTL = Duration.ofDays(30);
@@ -49,7 +56,8 @@ public class ChzzkPlatformAdapter implements PlatformIntegrationAdapter, Platfor
                         PlatformCapabilityCode.OAUTH,
                         PlatformCapabilityCode.LIVE_DISCOVERY,
                         PlatformCapabilityCode.CHAT_COLLECTION,
-                        PlatformCapabilityCode.VIEWER_METRICS
+                        PlatformCapabilityCode.VIEWER_METRICS,
+                        PlatformCapabilityCode.BROADCAST_SETTINGS
                 ),
                 null
         );
@@ -57,6 +65,11 @@ public class ChzzkPlatformAdapter implements PlatformIntegrationAdapter, Platfor
 
     @Override
     public Optional<PlatformOAuthCapability> oauth() {
+        return Optional.of(this);
+    }
+
+    @Override
+    public Optional<PlatformLiveSettingCapability> liveSetting() {
         return Optional.of(this);
     }
 
@@ -96,6 +109,42 @@ public class ChzzkPlatformAdapter implements PlatformIntegrationAdapter, Platfor
         } catch (ChzzkTokenRejectedException exception) {
             throw new PlatformCredentialRejectedException("CHZZK credential rejected", exception);
         }
+    }
+
+    @Override
+    public PlatformLiveSetting fetchLiveSetting(String accessToken) {
+        try {
+            return normalize(client.fetchLiveSetting(accessToken));
+        } catch (ChzzkTokenRejectedException exception) {
+            throw new PlatformCredentialRejectedException("CHZZK credential rejected", exception);
+        } catch (ChzzkScopeInsufficientException exception) {
+            throw new PlatformScopeInsufficientException("CHZZK scope insufficient", exception);
+        }
+    }
+
+    @Override
+    public void updateLiveSetting(String accessToken, PlatformLiveSettingUpdate update) {
+        try {
+            client.updateLiveSetting(accessToken, update.defaultLiveTitle());
+        } catch (ChzzkTokenRejectedException exception) {
+            throw new PlatformCredentialRejectedException("CHZZK credential rejected", exception);
+        } catch (ChzzkScopeInsufficientException exception) {
+            throw new PlatformScopeInsufficientException("CHZZK scope insufficient", exception);
+        }
+    }
+
+    private PlatformLiveSetting normalize(ChzzkLiveSetting setting) {
+        ChzzkLiveSetting.ChzzkLiveCategory category = setting.category();
+        return new PlatformLiveSetting(
+                setting.defaultLiveTitle(),
+                category == null ? null : new PlatformLiveSetting.Category(
+                        category.categoryType(),
+                        category.categoryId(),
+                        category.categoryValue(),
+                        category.posterImageUrl()
+                ),
+                setting.tags()
+        );
     }
 
     private PlatformOAuthTokens normalize(ChzzkTokenResponse token) {

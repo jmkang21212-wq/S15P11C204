@@ -160,7 +160,8 @@ class PortfolioApiIntegrationTest {
         Fixture f = createFixture();
         long sessionId = createEndedSession(f);
         long reportId = createReport(sessionId, 100, 300, 1_000);
-        long h1 = createHighlight(reportId, "https://cdn.example.com/clips/1.mp4");
+        // DB에는 상대 경로(저장 키)만 있다 — 절대 URL 조립은 ClipUrlResolver의 몫이다.
+        long h1 = createHighlight(reportId, "1/1.mp4");
         long h2 = createHighlight(reportId, null);
 
         PortfolioDetail created = commandService.create(f.streamerId, new CreatePortfolioCommand(
@@ -171,9 +172,9 @@ class PortfolioApiIntegrationTest {
         assertThat(created.tags()).extracting(StreamerTag::name)
                 .containsExactly("FPS", "저챗");                      // 고른 순서 유지
         assertThat(created.featuredHighlights()).hasSize(2);
-        // 요청은 id·순서만 보냈지만 응답은 클립 URL을 채워 돌려줘야 한다
+        // 요청은 id·순서만 보냈지만 응답은 절대 클립 URL을 채워 돌려줘야 한다
         assertThat(created.featuredHighlights().get(0).clipUrl())
-                .isEqualTo("https://cdn.example.com/clips/1.mp4");
+                .isEqualTo("http://localhost:8080/clips/1/1.mp4");
         assertThat(created.featuredHighlights().get(1).clipUrl()).isNull();
     }
 

@@ -142,7 +142,7 @@ class DictionaryMatcher:
 
             # 사전은 문맥을 모른다. 아래 두 경우는 단정하지 않고 버려서
             # server.py가 LLM 판정으로 넘기게 한다.
-            if _crosses_whitespace(text, o_start, o_end):
+            if _misaligned_with_words(text, o_start, o_end):
                 continue
             if _QUOTE_SUFFIX.match(norm[end + 1:]):
                 continue
@@ -154,14 +154,35 @@ class DictionaryMatcher:
         return _drop_contained(hits)
 
 
-def _crosses_whitespace(text: str, start: int, end: int) -> bool:
-    """매칭 구간이 원문의 띄어쓰기를 가로질렀는지 본다.
+def _misaligned_with_words(text: str, start: int, end: int) -> bool:
+    """공백을 가로지르는 매칭이 어절과 정확히 맞아떨어지지 않으면 버린다.
 
-    정규화가 공백을 지우는 탓에 "즉시 발동", "동시 발사", "제시 발표"에서 '시발'이
-    걸린다. 이런 단어 경계 매칭은 대부분 오탐이므로 사전이 단정하지 않는다.
-    음성인식 결과라 "씨 발"처럼 띄어 발음되는 경우는 드물고, 있더라도 LLM이 잡는다.
+    정규화가 공백을 지우는 탓에 "즉시 발동", "몇 시 발표"에서 '시발'이 걸린다.
+    반대로 음성인식이 욕설을 통째로 띄어 놓는 일도 잦다 — Whisper 한국어 출력은
+    "씨 발", "개 새끼"처럼 끊는 경우가 드물지 않아서, 예전처럼 공백이 있다는 이유만으로
+    전부 버리면 가장 명백한 욕설을 놓친다.
+
+    둘을 가르는 것은 **매칭이 어절과 정확히 겹치는가**다:
+
+        "씨 발 뭐야"      |씨 발|이 어절 둘을 통째로 덮는다        → 받는다
+        "즉시 발동"       즉|시 발|동, 양쪽 다 어절 중간         → 버린다
+        "몇 시 발표였지"   |시 발|표, 시작은 맞지만 끝이 어절 중간   → 버린다
+
+    시작만 보는 규칙으로는 마지막 예가 걸러지지 않는다. '시'는 시간 표현("몇 시",
+    "세 시")에서 단독 어절로 자주 나오고 뒤에 '발-'로 시작하는 단어가 얼마든지 오므로
+    (발표·발전·발음·발견·발생), allowlist로 막으려 들면 끝이 없다.
+
+    대신 "개 새끼야"처럼 조사·어미가 붙은 형태는 여기서 버려진다. 이건 손실이 아니라
+    이관이다 — 사전이 단정하지 않으면 server.py가 LLM 판정으로 넘기고, 그쪽이 문맥까지
+    보고 잡는다(terms.yaml 설계 원칙 1과 같은 태도다).
+
+    공백이 없는 매칭은 이 검사와 무관하다.
     """
-    return any(ch.isspace() for ch in text[start:end])
+    if not any(ch.isspace() for ch in text[start:end]):
+        return False
+    at_word_start = start == 0 or text[start - 1].isspace()
+    at_word_end = end >= len(text) or text[end].isspace()
+    return not (at_word_start and at_word_end)
 
 
 def _drop_contained(hits: list[Hit]) -> list[Hit]:

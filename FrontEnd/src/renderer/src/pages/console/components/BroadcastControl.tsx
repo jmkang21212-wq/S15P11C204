@@ -57,8 +57,8 @@ interface BroadcastControlProps {
    * 확정되어 화면에 반영된 뒤에 불러야 전사·경고가 DB에 저장된다.
    */
   onStarted: (sessionId: number) => void
-  /** 방송 종료 시 음성 분석도 함께 멈춘다. */
-  onStop: () => void
+  /** 방송 종료 — 음성 분석을 멈추고 이 방송의 브리핑 기록을 정리한다. */
+  onEnd: () => void
 }
 
 /**
@@ -80,7 +80,7 @@ interface BroadcastControlProps {
 export default function BroadcastControl({
   sessionId,
   onStarted,
-  onStop
+  onEnd
 }: BroadcastControlProps): React.JSX.Element {
   const navigate = useNavigate()
   const obs = useObs()
@@ -265,7 +265,10 @@ export default function BroadcastControl({
         }).catch(() => undefined)
       }
     }
-    onStop()
+    onEnd()
+    // 미니 위젯은 방송 중 실시간 정보를 띄우는 창이라 방송이 끝나면 볼 것이 없다.
+    // 닫지 않으면 값이 멈춘 채 방송 화면 위에 계속 떠 있는다.
+    window.api.closeMiniWindow()
 
     try {
       await endSession(sessionId)
@@ -381,10 +384,15 @@ export default function BroadcastControl({
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="오늘 방송 제목"
               />
-              <p className="text-micro text-muted-foreground">
+              {/*
+                이 제목이 치지직에도 반영된다는 사실을 밝혀 둔다 — 방송 중에는 우측
+                패널에서 같은 값을 바꾸게 되므로, 둘이 별개라는 오해를 미리 막는다.
+              */}
+              <p className="text-micro leading-relaxed text-muted-foreground">
                 {calendarEventId === null
                   ? '예정된 일정 없이 시작해요.'
-                  : '예정된 일정과 연결해 시작해요.'}
+                  : '예정된 일정과 연결해 시작해요.'}{' '}
+                치지직 채널 제목에도 함께 반영돼요.
               </p>
               {error && <p className="text-xs text-destructive">{error}</p>}
               <Button size="sm" onClick={() => void handleStart()} disabled={busy}>

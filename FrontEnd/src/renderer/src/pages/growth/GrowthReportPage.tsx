@@ -1,14 +1,20 @@
 import { useCallback, useState } from 'react'
-import { MessageSquare, Target, Timer, Users } from 'lucide-react'
-import { Card, CardContent } from '@renderer/components/ui/card'
+import { MessageSquare, Timer, Users } from 'lucide-react'
 import { Skeleton } from '@renderer/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@renderer/components/ui/tabs'
-import { EmptyState, ErrorState } from '@renderer/components/common/StateView'
+import { ErrorState } from '@renderer/components/common/StateView'
 import PageHeader from '@renderer/components/common/PageHeader'
 import MetricCard, { MetricCardSkeleton } from '@renderer/components/common/MetricCard'
 import GrowthTrendChart from './components/GrowthTrendChart'
-import GoalCard from './components/GoalCard'
-import { fetchGrowthGoals, fetchGrowthReport } from '@renderer/api/growth'
+import GoalRoadmapPanel from './components/GoalRoadmapPanel'
+import { fetchGrowthGoals, fetchGrowthReport, updateGrowthGoal } from '@renderer/api/growth'
+import {
+  acceptGoalSuggestion,
+  dismissGoalSuggestion,
+  fetchGrowthRoadmap,
+  regenerateGrowthRoadmap
+} from '@renderer/api/growthRoadmap'
+import { ApiError } from '@renderer/api/client'
 import { useAsyncData } from '@renderer/hooks/useAsyncData'
 import { formatCount } from '@renderer/lib/format'
 import type { PeriodType, SeriesMetric } from '@renderer/types/growth'
@@ -18,7 +24,10 @@ import type { PeriodType, SeriesMetric } from '@renderer/types/growth'
  * 주간·월간 지표 추이와 목표 로드맵을 함께 본다.
  *
  * 지표 세 개는 자릿수가 달라 한 차트에 겹칠 수 없어, 상단 KPI 카드가 곧 차트의 지표 선택기다.
- * 목표는 조회 전용이다 — 명세서에 생성 API가 없고 수정(PATCH)은 후속 과제로 미뤘다.
+ *
+ * 목표는 조회 세 개가 얽힌다 — 추이(`/growth-reports`)·AI 추천(`/growth-roadmap`)·채택된
+ * 목표(`/growth-goals`). 목표를 만드는 경로는 추천을 채택하는 것뿐이다. 무엇을 목표로 삼을지가
+ * 애초에 어려운 판단이라 빈 폼을 주는 대신 AI가 근거와 함께 제안한다.
  */
 
 /**
@@ -92,6 +101,88 @@ export default function GrowthReportPage(): React.JSX.Element {
     refetch: refetchGoals
   } = useAsyncData(goalsLoader)
 
+  /**
+   * AI 추천 목표. 채택된 목표(`goals`)와 별개 조회다 — 추천 생성이 실패해도 이미 채택한
+   * 목표의 달성률은 계속 봐야 한다.
+   */
+  const roadmapLoader = useCallback(() => fetchGrowthRoadmap(), [])
+  const {
+    data: roadmap,
+    loading: roadmapLoading,
+    error: roadmapError,
+    refetch: refetchRoadmap
+  } = useAsyncData(roadmapLoader)
+
+  const [pendingSuggestionId, setPendingSuggestionId] = useState<number | null>(null)
+  const [pendingGoalId, setPendingGoalId] = useState<number | null>(null)
+  const [regenerating, setRegenerating] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
+
+  /**
+   * 추천을 채택한다. 성공하면 추천 목록과 목표 목록을 함께 다시 읽어야 한다 — 추천은
+   * `ACCEPTED`로 바뀌고 새 목표가 아래 목록에 생기므로, 한쪽만 갱신하면 화면이 어긋난다.
+   */
+  const handleAccept = async (suggestionId: number): Promise<void> => {
+    setPendingSuggestionId(suggestionId)
+    setActionError(null)
+    try {
+      await acceptGoalSuggestion(suggestionId)
+      refetchRoadmap()
+      refetchGoals()
+    } catch (e) {
+      setActionError(e instanceof ApiError ? e.message : '목표로 채택하지 못했어요.')
+    } finally {
+      setPendingSuggestionId(null)
+    }
+  }
+
+  /**
+   * 목표를 달성으로 확정한다. `null`은 "유지"라 status 하나만 보내면 나머지 필드는 그대로다.
+   * 로드맵은 갱신하지 않는다 — 목표 상태만 바뀌고 추천 목록은 영향이 없다.
+   */
+  const handleAchieveGoal = async (growthGoalId: number): Promise<void> => {
+    setPendingGoalId(growthGoalId)
+    setActionError(null)
+    try {
+      await updateGrowthGoal(growthGoalId, { status: 'ACHIEVED' })
+      refetchGoals()
+    } catch (e) {
+      setActionError(e instanceof ApiError ? e.message : '목표를 달성 처리하지 못했어요.')
+    } finally {
+      setPendingGoalId(null)
+    }
+  }
+
+  const handleDismiss = async (suggestionId: number): Promise<void> => {
+    setPendingSuggestionId(suggestionId)
+    setActionError(null)
+    try {
+      await dismissGoalSuggestion(suggestionId)
+      refetchRoadmap()
+    } catch (e) {
+      setActionError(e instanceof ApiError ? e.message : '추천을 무시하지 못했어요.')
+    } finally {
+      setPendingSuggestionId(null)
+    }
+  }
+
+  /**
+   * 수동 재생성. 202로 큐에만 들어가고 실제 생성은 비동기라, 응답 직후 다시 조회해도
+   * 아직 PENDING·PROCESSING일 수 있다 — 그 상태를 패널이 안내 문구로 보여준다.
+   */
+  const handleRegenerate = async (): Promise<void> => {
+    setRegenerating(true)
+    setActionError(null)
+    try {
+      await regenerateGrowthRoadmap()
+      refetchRoadmap()
+    } catch (e) {
+      setActionError(e instanceof ApiError ? e.message : '다시 추천하지 못했어요.')
+    } finally {
+      setRegenerating(false)
+    }
+  }
+
   const summary = report?.summaryMetrics
   const series = report?.series ?? []
 
@@ -164,58 +255,47 @@ export default function GrowthReportPage(): React.JSX.Element {
         </div>
       )}
 
-      {/* 2열: 추이 차트 + 목표 로드맵 (design.md §2) */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="flex min-w-0 flex-col gap-6">
-          {reportLoading && <Skeleton className="h-[360px] w-full rounded-xl" />}
+      {/*
+        차트는 전체 폭, 목표 로드맵은 그 아래에 가로로 눕는다.
+        추천이 정확히 세 건이라 좁은 사이드바에 세로로 쌓으면 스크롤이 길어지는데, 가로로
+        놓으면 세 장을 한눈에 비교할 수 있다. 차트도 폭을 다 써서 막대가 넓어진다.
+      */}
+      <div className="flex min-w-0 flex-col gap-6">
+        {reportLoading && <Skeleton className="h-[360px] w-full rounded-xl" />}
 
-          {!reportLoading && reportError && (
-            <ErrorState message="성장 지표를 불러오지 못했습니다." onRetry={refetchReport} />
-          )}
+        {!reportLoading && reportError && (
+          <ErrorState message="성장 지표를 불러오지 못했습니다." onRetry={refetchReport} />
+        )}
 
-          {!reportLoading && !reportError && report && (
-            <GrowthTrendChart
-              series={report.series}
-              metric={metric}
-              periodType={periodType}
-              inProgressPeriodStart={inProgressPeriodStart}
-              bucketCount={bucketCount}
-            />
-          )}
-        </div>
-
-        <aside className="flex flex-col gap-4">
-          <h2 className="text-sm font-semibold">목표 로드맵</h2>
-
-          {goalsLoading && (
-            <>
-              <Skeleton className="h-[200px] w-full rounded-xl" />
-              <Skeleton className="h-[200px] w-full rounded-xl" />
-            </>
-          )}
-
-          {!goalsLoading && goalsError && (
-            <ErrorState message="목표를 불러오지 못했습니다." onRetry={refetchGoals} />
-          )}
-
-          {!goalsLoading && !goalsError && goals?.length === 0 && (
-            <Card>
-              <CardContent className="px-0">
-                {/* 목표 생성 API가 없어 안내만 두고 생성 버튼은 넣지 않는다 */}
-                <EmptyState
-                  icon={Target}
-                  title="아직 설정된 목표가 없어요"
-                  description="목표가 등록되면 달성률과 AI 제안이 여기에 표시됩니다."
-                />
-              </CardContent>
-            </Card>
-          )}
-
-          {!goalsLoading &&
-            !goalsError &&
-            goals?.map((goal) => <GoalCard key={goal.growthGoalId} goal={goal} />)}
-        </aside>
+        {!reportLoading && !reportError && report && (
+          <GrowthTrendChart
+            series={report.series}
+            metric={metric}
+            periodType={periodType}
+            inProgressPeriodStart={inProgressPeriodStart}
+            bucketCount={bucketCount}
+          />
+        )}
       </div>
+
+      <GoalRoadmapPanel
+        roadmap={roadmap}
+        roadmapLoading={roadmapLoading}
+        roadmapError={roadmapError}
+        onRetryRoadmap={refetchRoadmap}
+        goals={goals}
+        goalsLoading={goalsLoading}
+        goalsError={goalsError}
+        onRetryGoals={refetchGoals}
+        pendingSuggestionId={pendingSuggestionId}
+        onAccept={(suggestionId) => void handleAccept(suggestionId)}
+        onDismiss={(suggestionId) => void handleDismiss(suggestionId)}
+        pendingGoalId={pendingGoalId}
+        onAchieveGoal={(growthGoalId) => void handleAchieveGoal(growthGoalId)}
+        onRegenerate={() => void handleRegenerate()}
+        regenerating={regenerating}
+        actionError={actionError}
+      />
     </div>
   )
 }

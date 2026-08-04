@@ -159,11 +159,15 @@ public class CollectionIngestService {
         for (ChatMessageItem item : items) {
             seenByHash.merge(
                     item.viewerHash(),
-                    new ViewerSeen(item.viewerHash(), item.sentAt(), item.sentAt()),
+                    new ViewerSeen(item.viewerHash(), item.sentAt(), item.sentAt(),
+                            item.nickname(), item.userRole()),
                     (existing, candidate) -> new ViewerSeen(
                             existing.viewerHash(),
                             earlier(existing.firstSeenAt(), candidate.firstSeenAt()),
-                            later(existing.lastSeenAt(), candidate.lastSeenAt())
+                            later(existing.lastSeenAt(), candidate.lastSeenAt()),
+                            // 나중 항목의 값이 있으면 그것이 최신 닉네임이다
+                            candidate.nickname() != null ? candidate.nickname() : existing.nickname(),
+                            candidate.userRole() != null ? candidate.userRole() : existing.userRole()
                     )
             );
         }
