@@ -14,11 +14,14 @@ import { PATHS } from '@renderer/routes/paths'
 const TITLE_MAX = 100
 
 /**
- * 대시보드 "다음 방송" 카드 안의 치지직 방송 제목 섹션.
+ * 방송 콘솔의 치지직 방송 제목 섹션.
  *
  * 캘린더 일정 제목과 별개인 "치지직에 실제로 표시되는 제목"을 보여주고 즉석에서 수정한다.
  * 구 scope 토큰(방송 설정 권한 없음)이나 만료 토큰은 오류 코드로 구분해 재연동을 유도한다.
  * CHZZK 연동 자체가 없으면 아무것도 렌더하지 않는다 — 연동 유도는 GNB·연동 화면 몫이다.
+ *
+ * 대시보드가 아니라 콘솔에 둔다. 치지직에 실시간 반영되는 값이라 방송 중에 만지는 것이
+ * 정상이고, 방송을 조작하는 화면이 콘솔이라 여기가 제 자리다.
  */
 export default function ChzzkTitleSection(): React.JSX.Element | null {
   const { accounts } = usePlatformAccounts()
@@ -175,8 +178,13 @@ function TitleRow({
   )
 }
 
+/**
+ * 콘솔 우측 패널의 첫 블록이라 위쪽 구분선을 두지 않는다 — 대시보드 카드 안에 있을 때는
+ * 앞 내용과 나누는 `border-t`가 필요했지만, 지금은 위에 아무것도 없어 선만 떠 보인다.
+ * 아래 블록과의 간격은 패널의 `gap-4`가 맡는다.
+ */
 function SectionFrame({ children }: { children: React.ReactNode }): React.JSX.Element {
-  return <div className="mt-3 border-t pt-3">{children}</div>
+  return <div className="border-b pb-4">{children}</div>
 }
 
 function RelinkNotice({ message }: { message: string }): React.JSX.Element {

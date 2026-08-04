@@ -12,6 +12,7 @@ import { Skeleton } from '@renderer/components/ui/skeleton'
 import { cn } from '@renderer/lib/utils'
 import { PATHS } from '@renderer/routes/paths'
 import ConsoleStatusBar from './components/ConsoleStatusBar'
+import ChzzkTitleSection from './components/ChzzkTitleSection'
 import BriefingFeed from './components/BriefingFeed'
 import SentimentPanel from './components/SentimentPanel'
 import ChatSummaryButton from './components/ChatSummaryButton'
@@ -72,9 +73,17 @@ export default function BroadcastConsolePage(): React.JSX.Element {
   const obs = useObs()
   const getRecordStatus = obs.getRecordStatus
   useRecordingReporter(sid, obs.recording, getRecordStatus)
-  // 브리핑 병합 컷오버(마운트 시각 고정) — 이 시각 이후의 RISK·PROMISE는
-  // WS(useAudioStream)가 전담하고, 스냅샷에서는 이전 것만 히스토리로 받는다.
-  const [briefingCutoff] = useState(() => new Date().toISOString())
+  /**
+   * 브리핑 병합 컷오버. 음성 분석을 시작했다면 그 시각(`audio.startedAt`)이 기준이고,
+   * 아직 시작하지 않았다면 마운트 시각으로 둔다 — 그때는 WS 브리핑이 없어 스냅샷 히스토리를
+   * 그대로 다 보여주면 된다.
+   *
+   * 마운트 시각을 항상 쓰지 않는 이유는 스트림이 화면보다 오래 살기 때문이다. 방송 중에
+   * 나갔다 돌아오면 마운트 시각이 현재로 밀려, 그 사이 WS로 이미 받은 브리핑이 스냅샷에서도
+   * 히스토리로 들어와 두 번 보인다.
+   */
+  const [mountedAt] = useState(() => new Date().toISOString())
+  const briefingCutoff = audio.startedAt ?? mountedAt
 
   /**
    * 약속의 현재 상태. 브리핑 응답(`live_briefings`)에는 `promiseId`만 있고 상태가 없어서
@@ -141,8 +150,19 @@ export default function BroadcastConsolePage(): React.JSX.Element {
           onPromiseResolved={refetchPromises}
         />
 
-        {/* 우: 여론 · 반복 질문 · 연결 상태 */}
+        {/* 우: 치지직 방송 제목 · 여론 · 반복 질문 · 연결 상태 */}
         <aside className="flex w-[328px] shrink-0 flex-col gap-4 border-l bg-card p-5">
+          {/*
+            방송 중에만 보인다. 시작 전에는 시작 폼(BroadcastControl)의 제목 입력이 같은 값을
+            맡는다 — startSession의 title은 세션 제목이면서 BE가 치지직에도 그대로 반영하는
+            값이라(PlatformSessionPreparationRequestedHandler.syncBroadcastTitle), 둘이 같이
+            보이면 한 화면에 같은 값을 고치는 입력이 둘이 되고 프리필 출처가 달라 값도 어긋난다.
+
+            아래 스냅샷 분기와 따로 두는 이유는 `data`에 매달리지 않아야 해서다. 스냅샷 조회가
+            실패해도 제목 수정은 치지직 API만 쓰므로 그대로 동작한다.
+          */}
+          {sid !== null && <ChzzkTitleSection />}
+
           {data && sid !== null ? (
             <>
               <SentimentPanel sentiment={data.sentiment} />
