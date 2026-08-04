@@ -21,6 +21,8 @@ services:
       REDIS_PORT: "6379"
       REDIS_DATABASE: "0"
       UV_CACHE_DIR: /var/jenkins_home/.cache/uv
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     logging:
       driver: json-file
       options:

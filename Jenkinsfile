@@ -49,5 +49,22 @@ pipeline {
                 }
             }
         }
+
+        stage('Deploy Production') {
+            when {
+                expression {
+                    env.GIT_BRANCH == 'origin/master' || env.BRANCH_NAME == 'master'
+                }
+            }
+            steps {
+                sh '''
+                    ssh -i "$HOME/.ssh/laive_deploy" \
+                        -o BatchMode=yes \
+                        -o IdentitiesOnly=yes \
+                        -o StrictHostKeyChecking=yes \
+                        deploy@host.docker.internal
+                '''
+            }
+        }
     }
 }
