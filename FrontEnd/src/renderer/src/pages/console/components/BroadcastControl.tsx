@@ -57,8 +57,8 @@ interface BroadcastControlProps {
    * 확정되어 화면에 반영된 뒤에 불러야 전사·경고가 DB에 저장된다.
    */
   onStarted: (sessionId: number) => void
-  /** 방송 종료 시 음성 분석도 함께 멈춘다. */
-  onStop: () => void
+  /** 방송 종료 — 음성 분석을 멈추고 이 방송의 브리핑 기록을 정리한다. */
+  onEnd: () => void
 }
 
 /**
@@ -80,7 +80,7 @@ interface BroadcastControlProps {
 export default function BroadcastControl({
   sessionId,
   onStarted,
-  onStop
+  onEnd
 }: BroadcastControlProps): React.JSX.Element {
   const navigate = useNavigate()
   const obs = useObs()
@@ -265,7 +265,10 @@ export default function BroadcastControl({
         }).catch(() => undefined)
       }
     }
-    onStop()
+    onEnd()
+    // 미니 위젯은 방송 중 실시간 정보를 띄우는 창이라 방송이 끝나면 볼 것이 없다.
+    // 닫지 않으면 값이 멈춘 채 방송 화면 위에 계속 떠 있는다.
+    window.api.closeMiniWindow()
 
     try {
       await endSession(sessionId)

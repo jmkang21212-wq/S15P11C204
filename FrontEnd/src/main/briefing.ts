@@ -26,4 +26,13 @@ export function registerBriefingIpc(): void {
   })
 
   ipcMain.handle('briefing:recent', () => recentBriefings)
+
+  /**
+   * 방송이 끝나면 콘솔이 부른다. 버퍼는 "나중에 열린 창이 직전 브리핑을 볼 수 있게" 두는
+   * 것이라 방송 경계를 넘으면 의미가 없다 — 비우지 않으면 다음 방송에서 미니 창을 열 때
+   * 지난 방송의 위험 발언·약속이 히스토리로 뜬다.
+   */
+  ipcMain.on('briefing:clear', () => {
+    recentBriefings = []
+  })
 }

@@ -59,6 +59,7 @@ const api = {
   briefing: {
     publish: (briefing: unknown): void => ipcRenderer.send('briefing:publish', briefing),
     recent: (): Promise<unknown[]> => ipcRenderer.invoke('briefing:recent'),
+    clear: (): void => ipcRenderer.send('briefing:clear'),
     /** 중계된 브리핑 구독. 반환 함수를 호출하면 구독 해제. */
     onNew: (callback: (briefing: unknown) => void): (() => void) => {
       const listener = (_e: IpcRendererEvent, briefing: unknown): void => callback(briefing)
