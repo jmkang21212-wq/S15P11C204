@@ -89,16 +89,22 @@ def test_사전이_내보내는_모든_severity가_문서에_있다(matcher: Dic
     assert seen <= DOC_SEVERITY, seen
 
 
-def test_LLM_경고는_none만_걸러진다() -> None:
-    """등급은 '위험한지'가 아니라 '얼마나 심한지'다. 위험이 아니라는 판단은 none이 받는다."""
+def test_LLM_경고는_medium_이상만_나간다() -> None:
+    """LLM 판정은 LLM_ALERT_MIN_RISK(medium) 이상만 알림이 된다.
+
+    low가 프론트에 도착하는 경로는 사전뿐이다(`닥쳐`). FRONTEND_API.md의 severity 표에
+    같은 내용이 적혀 있으므로 둘을 함께 고쳐야 한다.
+    """
     def v(risk: str, category: str) -> Verdict:
         return Verdict(seq=0, text="", start_ts=0.0, end_ts=0.0,
                        risk=risk, category=category, reason="", latency=0.0)
 
     assert v("high", "profanity").is_risky
     assert v("medium", "insult").is_risky
-    assert v("low", "aggressive").is_risky
     assert v("high", "sexual").is_risky
+
+    # 판정 자체는 맞아도 임계값 아래라 알리지 않는다
+    assert not v("low", "aggressive").is_risky
 
     assert not v("none", "none").is_risky
     # category가 none이면 등급과 무관하게 위험이 아니다

@@ -25,14 +25,18 @@ def verdict(risk: str, category: str) -> Verdict:
     ("low", "none", "상대방을 피해"),
     ("medium", "none", "모순 판정"),
     ("high", "none", "모순 판정"),
+    # LLM_ALERT_MIN_RISK가 medium이라 low는 판정이 맞아도 알리지 않는다.
+    # 경고가 흔해지면 스트리머가 경고를 보지 않게 되는 쪽이 더 나쁘다(config.py).
+    # 사전 경로는 이 임계값과 무관하므로 `닥쳐`(terms.yaml에서 low)는 그대로 알림이 간다.
+    ("low", "aggressive", "닥쳐·꺼져 수준의 거친 말"),
+    ("low", "profanity", "가벼운 비속어"),
+    ("low", "threat", "때릴 거야 수준의 으름장"),
 ])
 def test_알림을_보내지_않는다(risk: str, category: str, note: str) -> None:
     assert not verdict(risk, category).is_risky, note
 
 
 @pytest.mark.parametrize("risk,category,note", [
-    ("low", "aggressive", "가벼운 거친 말"),
-    ("low", "profanity", "가벼운 비속어"),
     ("medium", "insult", "분명한 모욕"),
     ("medium", "profanity", "분명한 욕설"),
     ("medium", "sexual", "성드립"),
