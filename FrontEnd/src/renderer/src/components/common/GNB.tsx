@@ -50,6 +50,36 @@ interface GNBProps {
 }
 
 /**
+ * 접힘↔펼침 시 라벨 텍스트. grid-template-columns를 0fr↔1fr로 트랜지션해
+ * 텍스트 자체의 폭이 nav 폭 애니메이션과 같은 속도로 커지게 한다.
+ * 조건부 마운트/언마운트로 텍스트가 순간적으로 '팝인'하며 nav 폭보다 먼저
+ * 렌더되는 것을 막기 위함 — 항상 마운트해두고 폭만 트랜지션한다.
+ */
+function GnbLabel({
+  show,
+  children,
+  className,
+  wrapperClassName
+}: {
+  show: boolean
+  children: React.ReactNode
+  className?: string
+  wrapperClassName?: string
+}): React.JSX.Element {
+  return (
+    <span
+      className={cn(
+        'grid overflow-hidden transition-[grid-template-columns] duration-200 ease-out',
+        show ? 'grid-cols-[1fr]' : 'grid-cols-[0fr]',
+        wrapperClassName
+      )}
+    >
+      <span className={cn('overflow-hidden whitespace-nowrap', className)}>{children}</span>
+    </span>
+  )
+}
+
+/**
  * Global Navigation Bar — 로그인 후 앱 화면들이 공유하는 좌측 주 메뉴.
  * 펼침 232px / 접힘 60px. 화면이 아니라 사용자가 토글 버튼으로 직접 전환하며,
  * 상태는 앱 전체가 공유한다(useGnbCollapsed).
@@ -148,12 +178,15 @@ export default function GNB({ live = false, liveSessionId }: GNBProps): React.JS
             }
           }}
           className={cn(
-            'mx-2 mb-2 flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs font-semibold text-destructive',
-            collapsed && 'mx-1 justify-center px-0'
+            'mx-2 mb-2 flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs font-semibold text-destructive transition-all duration-200',
+            collapsed && 'mx-1 justify-center gap-0 px-0'
           )}
         >
-          <span className="size-2 rounded-full bg-destructive shadow-live-ring" aria-hidden />
-          {!collapsed && <span>LIVE · 콘솔 열기</span>}
+          <span
+            className="size-2 shrink-0 rounded-full bg-destructive shadow-live-ring"
+            aria-hidden
+          />
+          <GnbLabel show={!collapsed}>LIVE · 콘솔 열기</GnbLabel>
         </button>
       )}
 
@@ -166,45 +199,58 @@ export default function GNB({ live = false, liveSessionId }: GNBProps): React.JS
               title={collapsed ? label : undefined}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
+                  'flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-all duration-200',
                   isActive
                     ? 'bg-accent font-semibold text-accent-foreground'
                     : 'font-medium text-muted-foreground hover:bg-accent/50',
-                  collapsed && 'justify-center px-0'
+                  collapsed && 'justify-center gap-0 px-0'
                 )
               }
             >
               <Icon className="size-[18px] shrink-0" strokeWidth={1.8} aria-hidden />
-              {!collapsed && <span>{label}</span>}
+              <GnbLabel show={!collapsed}>{label}</GnbLabel>
             </NavLink>
           </li>
         ))}
       </ul>
 
       {/* 하단 — 플랫폼 연동 상태 + 계정. 만료·미연동이면 연동 화면으로 가는 CTA를 겸한다(design.md §6) */}
-      <div className={cn('flex flex-col gap-3 border-t p-4', collapsed && 'items-center p-2')}>
+      <div
+        className={cn(
+          'flex flex-col gap-3 border-t p-4 transition-all duration-200',
+          collapsed && 'items-center p-2'
+        )}
+      >
         {linkStatus === 'connected' ? (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="size-2 rounded-full bg-success" aria-hidden />
-            {!collapsed && <span>연동됨{primary && ` · ${primary.channelName}`}</span>}
+          <div
+            className={cn(
+              'flex items-center gap-2 text-xs text-muted-foreground transition-all duration-200',
+              collapsed && 'gap-0'
+            )}
+          >
+            <span className="size-2 shrink-0 rounded-full bg-success" aria-hidden />
+            <GnbLabel show={!collapsed}>연동됨{primary && ` · ${primary.channelName}`}</GnbLabel>
           </div>
         ) : (
           <button
             type="button"
             onClick={() => navigate(PATHS.platformConnect)}
             className={cn(
-              'flex items-center gap-2 text-xs font-medium',
-              linkStatus === 'reauth' ? 'text-warning' : 'text-muted-foreground'
+              'flex items-center gap-2 text-xs font-medium transition-all duration-200',
+              linkStatus === 'reauth' ? 'text-warning' : 'text-muted-foreground',
+              collapsed && 'gap-0'
             )}
           >
             <span
               className={cn(
-                'size-2 rounded-full',
+                'size-2 shrink-0 rounded-full',
                 linkStatus === 'reauth' ? 'bg-warning' : 'bg-muted-foreground'
               )}
               aria-hidden
             />
-            {!collapsed && <span>{linkStatus === 'reauth' ? '재연동 필요' : '미연동'}</span>}
+            <GnbLabel show={!collapsed}>
+              {linkStatus === 'reauth' ? '재연동 필요' : '미연동'}
+            </GnbLabel>
           </button>
         )}
         <div ref={accountRef} className="relative">
@@ -215,8 +261,8 @@ export default function GNB({ live = false, liveSessionId }: GNBProps): React.JS
             aria-expanded={menuOpen}
             title={collapsed ? (streamer?.nickname ?? '프로필') : undefined}
             className={cn(
-              'flex items-center gap-2 rounded-md p-1 transition-colors hover:bg-accent/50',
-              collapsed ? 'justify-center' : 'w-full'
+              'flex items-center gap-2 rounded-md p-1 transition-all duration-200 hover:bg-accent/50',
+              collapsed ? 'justify-center gap-0' : 'w-full'
             )}
           >
             <Avatar
@@ -224,11 +270,13 @@ export default function GNB({ live = false, liveSessionId }: GNBProps): React.JS
               alt={streamer?.nickname ?? '프로필'}
               size="size-7"
             />
-            {!collapsed && (
-              <span className="flex-1 truncate text-left text-sm font-medium">
-                {streamer?.nickname ?? '-'}
-              </span>
-            )}
+            <GnbLabel
+              show={!collapsed}
+              wrapperClassName="min-w-0 flex-1"
+              className="text-left text-sm font-medium"
+            >
+              {streamer?.nickname ?? '-'}
+            </GnbLabel>
           </button>
 
           {menuOpen && (
