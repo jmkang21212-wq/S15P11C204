@@ -84,7 +84,7 @@ assets/globals.css (@theme inline)      3층. 실제 클래스(text-title, bg-pr
 ## 2. 레이아웃
 
 - Electron 창: 최소 폭 1240px 기준으로 디자인하고, 그 이상 폭에서는 여백 또는 사이드바 확장으로 대응한다.
-- 좌측 GNB 232px 고정 폭 + 우측 콘텐츠는 유동 폭.
+- 좌측 GNB는 펼침 232px / 접힘 60px 두 폭을 사용자가 토글 버튼으로 직접 전환한다(상태는 앱 전체 공유, 세션 한정). 우측 콘텐츠는 유동 폭.
 - 콘텐츠는 2열(주 + 사이드 320~360px) 또는 카드 그리드.
 
 ## 3. 공용 컴포넌트 (`components/common/`)
@@ -93,7 +93,7 @@ assets/globals.css (@theme inline)      3층. 실제 클래스(text-title, bg-pr
 
 | 컴포넌트 | 용도 |
 |---|---|
-| `GNB` | 좌측 내비. props: `active`(8개 메뉴 키), `live`(boolean). 상단 로고 → LIVE 배너(`live`일 때만) → 메뉴 8개 → 하단 연동 상태. 활성 항목만 Primary Soft 배경 + 인디고 텍스트, 아이콘은 24 viewBox 스트로크 1.8. |
+| `GNB` | 좌측 내비. props: `live`(boolean), `liveSessionId`. 펼침/접힘은 `useGnbCollapsed` 훅으로 화면 간 공유하며 상단 토글 버튼(`->\|`/`\|<-`)으로 사용자가 전환한다. 상단 로고+토글 → LIVE 배너(`live`일 때만) → 메뉴 8개 → 하단 연동 상태 + 계정. 활성 항목만 Primary Soft 배경 + 인디고 텍스트, 아이콘은 24 viewBox 스트로크 1.8. |
 | `StateView` (`EmptyState`/`ErrorState`) | 빈/에러 상태 표준 컴포넌트. `EmptyState`는 `icon`/`title`/`description`/`action`, `ErrorState`는 `message`/`onRetry`를 받는다. 모든 화면이 이거 하나로 통일돼 있다. |
 | `StatusBadge` | 상태 배지. 도메인 상태 타입을 직접 받지 않고 `tone`(`success`/`warning`/`danger`/`neutral`) + `label`만 받는다 — 도메인→tone 매핑은 각 화면이 갖는다. |
 | `DeltaText` | 증감 표기 — §6 "Success/Danger 텍스트 + 화살표, 수치는 mono". `digits` prop으로 소수점 자리 조정. |
