@@ -8,7 +8,7 @@ import { EmptyState, ErrorState } from '@renderer/components/common/StateView'
 import BrowserChrome from '@renderer/components/common/BrowserChrome'
 import PerformanceSummary from './components/PerformanceSummary'
 import ProfileSummary from './components/ProfileSummary'
-import { fetchPublicPortfolio, PORTFOLIO_NOT_PUBLIC } from '@renderer/api/portfolio'
+import { fetchPublicPortfolio, isPortfolioNotPublic } from '@renderer/api/portfolio'
 import { useAsyncData } from '@renderer/hooks/useAsyncData'
 import { openExternal } from '@renderer/lib/desktopBridge'
 import { PATHS } from '@renderer/routes/paths'
@@ -56,7 +56,7 @@ export default function PortfolioPublicPage(): React.JSX.Element {
 
       {!loading && error && (
         <div className="flex h-full items-center justify-center p-8">
-          {error.message === PORTFOLIO_NOT_PUBLIC ? (
+          {isPortfolioNotPublic(error) ? (
             <EmptyState
               icon={EyeOff}
               title="비공개 포트폴리오예요"
