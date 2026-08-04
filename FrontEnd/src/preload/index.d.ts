@@ -22,6 +22,16 @@ export interface ObsCredentials {
   password: string
 }
 
+/**
+ * OBS에 설정된 송출 대상. 스트림 키는 담지 않는다 — 판별에 필요 없는 비밀값이다.
+ * `rtmp_common`이면 service에 서비스 이름이, `rtmp_custom`이면 server에 RTMP 주소가 온다.
+ */
+export interface ObsStreamService {
+  streamServiceType: string
+  service: string | null
+  server: string | null
+}
+
 export interface ObsBridge {
   connect: (url: string, password?: string) => Promise<ObsState>
   disconnect: () => Promise<void>
@@ -33,6 +43,8 @@ export interface ObsBridge {
   stopRecord: () => Promise<{ outputPath: string }>
   getRecordStatus: () => Promise<ObsRecordStatus>
   startStream: () => Promise<void>
+  /** OBS가 어디로 송출하도록 설정돼 있는지 읽는다. LAIVE 플랫폼 선택과 맞추는 데 쓴다. */
+  getStreamService: () => Promise<ObsStreamService>
   stopStream: () => Promise<void>
   /** 상태 변경 구독. 반환 함수 호출로 구독 해제. */
   onState: (callback: (state: ObsState) => void) => () => void

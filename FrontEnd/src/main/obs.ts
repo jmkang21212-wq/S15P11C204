@@ -146,6 +146,28 @@ export function registerObsIpc(): void {
 
   ipcMain.handle('obs:get-credentials', () => loadCredentials())
 
+  /**
+   * OBS에 설정된 송출 대상을 읽는다.
+   *
+   * LAIVE는 `StartStream`으로 송출을 켜기만 하고 목적지는 정하지 않는다 — 목적지는 OBS
+   * 설정이 소유한다. 그래서 LAIVE에서 고른 플랫폼과 OBS 설정이 어긋나면 그 플랫폼은
+   * 라이브가 되지 않고, 백엔드의 "진행 중 방송" 조회에서 빠져 세션이 조용히 실패한다.
+   * 시작 전에 미리 알려주려고 읽는다.
+   *
+   * 스트림 키(`settings.key`)는 렌더러로 넘기지 않는다 — 판별에 필요 없는 비밀값이다.
+   * `rtmp_common`이면 service에 서비스 이름이, `rtmp_custom`이면 server에 RTMP 주소가 온다.
+   */
+  ipcMain.handle('obs:get-stream-service', async () => {
+    if (!obs || state.status !== 'CONNECTED') throw new Error('OBS가 연결되어 있지 않아요')
+    const result = await obs.call('GetStreamServiceSettings')
+    const settings = result.streamServiceSettings as { service?: unknown; server?: unknown }
+    return {
+      streamServiceType: result.streamServiceType,
+      service: typeof settings.service === 'string' ? settings.service : null,
+      server: typeof settings.server === 'string' ? settings.server : null
+    }
+  })
+
   ipcMain.handle('obs:start-stream', async () => {
     if (!obs || state.status !== 'CONNECTED') throw new Error('OBS가 연결되어 있지 않아요')
     await obs.call('StartStream')

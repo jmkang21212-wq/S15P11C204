@@ -22,6 +22,7 @@ import { endSession, fetchCurrentSession, startSession } from '@renderer/api/bro
 import { getDashboard } from '@renderer/api/dashboard'
 import { finishRecording, startRecording } from '@renderer/api/recording'
 import { PATHS } from '@renderer/routes/paths'
+import { resolveStreamTarget, type ObsStreamTarget } from '@renderer/lib/obsStreamTarget'
 import type { ObsConnStatus } from '@renderer/types/obs'
 import { PLATFORM_LABEL } from '@renderer/types/platformAccount'
 
@@ -102,6 +103,11 @@ export default function BroadcastControl({
   const [title, setTitle] = useState('')
   const [calendarEventId, setCalendarEventId] = useState<number | null>(null)
   const [prefilled, setPrefilled] = useState(false)
+  /**
+   * OBS에 설정된 송출 대상. 읽지 못했으면 null(경고도 차단도 하지 않는다).
+   * 목적지는 OBS가 소유하므로 이 값이 실제로 라이브가 될 플랫폼이다.
+   */
+  const [streamTarget, setStreamTarget] = useState<ObsStreamTarget | null>(null)
 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -162,6 +168,40 @@ export default function BroadcastControl({
     }
   }, [showStartForm, prefilled])
 
+  /**
+   * 시작 폼을 열면 OBS 송출 대상을 읽어 그 플랫폼만 선택해 둔다.
+   *
+   * OBS는 출력이 하나라 한 번에 한 곳으로만 송출한다. 그래서 OBS가 유튜브로 설정돼 있는데
+   * 치지직을 선택하면 치지직은 라이브가 되지 않고, 백엔드가 "진행 중 방송"을 찾지 못해
+   * 2분 뒤 세션이 FAILED가 된다 — 화면에는 아무 설명도 없다. 그 상황을 미리 없앤다.
+   *
+   * 판별에 실패하면(낯선 서비스·읽기 실패) 아래 `openStartForm`이 넣어 둔 기본 선택을
+   * 그대로 남긴다. 확신 없이 사용자의 선택을 바꾸지 않는다.
+   */
+  useEffect(() => {
+    if (!showStartForm || !connected) return
+    let active = true
+    void window.api.obs
+      .getStreamService()
+      .then((settings) => {
+        if (!active) return
+        const target = resolveStreamTarget(settings)
+        setStreamTarget(target)
+        if (target.platform === null) return
+        const matched = (platformAccounts ?? []).filter(
+          (account) =>
+            account.connectionStatus === 'CONNECTED' && account.platform === target.platform
+        )
+        if (matched.length > 0) {
+          setSelectedAccountIds(matched.map((account) => account.platformAccountId))
+        }
+      })
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [showStartForm, connected, platformAccounts])
+
   /** 시작 폼을 열 때 연동된 계정을 기본으로 전부 선택한다. */
   const openStartForm = (): void => {
     setSelectedAccountIds(connectedAccounts.map((a) => a.platformAccountId))
@@ -173,6 +213,19 @@ export default function BroadcastControl({
       prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]
     )
   }
+
+  /**
+   * OBS 송출 대상과 다른 플랫폼이 선택에 섞여 있는지. OBS 출력이 하나라 그런 채널은
+   * 라이브가 되지 않으므로 시작을 막는다. 대상을 판별하지 못했으면 막지 않는다.
+   */
+  const targetPlatform = streamTarget?.platform ?? null
+  const mismatchedPlatform =
+    targetPlatform !== null &&
+    connectedAccounts.some(
+      (account) =>
+        selectedAccountIds.includes(account.platformAccountId) &&
+        account.platform !== targetPlatform
+    )
 
   const handleConnect = async (): Promise<void> => {
     setError(null)
@@ -398,6 +451,24 @@ export default function BroadcastControl({
             <p className="text-caption text-muted-foreground">연동 계정을 확인하는 중…</p>
           ) : connectedAccounts.length > 0 ? (
             <>
+              {/*
+                실제로 라이브가 될 플랫폼을 먼저 보여준다. 목적지는 LAIVE가 아니라 OBS 설정이
+                정하므로(LAIVE는 StartStream만 보낸다), 이 값이 결과를 좌우한다.
+              */}
+              {streamTarget !== null && (
+                <div className="flex flex-col gap-0.5 border-b pb-2">
+                  <span className="text-xs font-medium text-muted-foreground">OBS 송출 대상</span>
+                  <span className="text-xs">
+                    {targetPlatform !== null ? PLATFORM_LABEL[targetPlatform] : streamTarget.label}
+                  </span>
+                  <span className="text-micro leading-relaxed text-muted-foreground">
+                    {targetPlatform !== null
+                      ? 'OBS 설정에서 바꿀 수 있어요. 이 플랫폼만 실제로 라이브가 돼요.'
+                      : '어느 플랫폼인지 알 수 없어요. 채널 선택을 직접 확인해 주세요.'}
+                  </span>
+                </div>
+              )}
+
               {/* 연동 계정이 2개 이상일 때만 선택 목록을 보여준다 — 하나뿐이면 지금처럼 자동 선택 */}
               {connectedAccounts.length > 1 && (
                 <div className="flex flex-col gap-1.5 border-b pb-2">
@@ -437,11 +508,21 @@ export default function BroadcastControl({
                   : '예정된 일정과 연결해 시작해요.'}{' '}
                 치지직 채널 제목에도 함께 반영돼요. 유튜브는 이미 진행 중인 방송을 수집만 해요.
               </p>
+              {/*
+                불일치는 실패가 아니라 예방 대상이다 — 그대로 시작하면 아무 설명 없이
+                2분 뒤 세션이 FAILED가 되므로, 시작 자체를 막고 무엇을 고쳐야 하는지 알린다.
+              */}
+              {mismatchedPlatform && targetPlatform !== null && (
+                <p className="text-xs leading-relaxed text-warning">
+                  OBS는 {PLATFORM_LABEL[targetPlatform]}(으)로 송출하도록 설정돼 있어요. 선택한 다른
+                  채널은 라이브가 되지 않으니, OBS 설정을 바꾸거나 선택을 맞춰 주세요.
+                </p>
+              )}
               {error && <p className="text-xs text-destructive">{error}</p>}
               <Button
                 size="sm"
                 onClick={() => void handleStart()}
-                disabled={busy || selectedAccountIds.length === 0}
+                disabled={busy || selectedAccountIds.length === 0 || mismatchedPlatform}
               >
                 {busy ? '시작하는 중…' : '방송 시작'}
               </Button>

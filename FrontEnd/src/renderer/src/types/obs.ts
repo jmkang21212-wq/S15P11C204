@@ -12,3 +12,13 @@ export interface ObsRecordStatus {
   outputActive: boolean
   outputDuration: number
 }
+
+/**
+ * OBS에 설정된 송출 대상. 스트림 키는 main이 걸러내므로 여기 없다.
+ * `rtmp_common`이면 service에 서비스 이름이, `rtmp_custom`이면 server에 RTMP 주소가 온다.
+ */
+export interface ObsStreamService {
+  streamServiceType: string
+  service: string | null
+  server: string | null
+}
