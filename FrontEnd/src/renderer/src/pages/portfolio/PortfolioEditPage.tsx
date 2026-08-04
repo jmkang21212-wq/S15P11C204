@@ -1,19 +1,19 @@
 import { useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Check, Copy, ExternalLink, Save } from 'lucide-react'
+import { Check, Copy, ExternalLink, FileText, Save } from 'lucide-react'
 import { Button } from '@renderer/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@renderer/components/ui/card'
 import { Label } from '@renderer/components/ui/label'
 import { Skeleton } from '@renderer/components/ui/skeleton'
 import { Switch } from '@renderer/components/ui/switch'
-import { ErrorState } from '@renderer/components/common/StateView'
+import { EmptyState, ErrorState } from '@renderer/components/common/StateView'
 import PageHeader from '@renderer/components/common/PageHeader'
 import { MetricCardSkeleton } from '@renderer/components/common/MetricCard'
 import BasicInfoForm, { type BasicInfoValues } from './components/BasicInfoForm'
 import FeaturedHighlightsEditor from './components/FeaturedHighlightsEditor'
 import PerformanceSummary from './components/PerformanceSummary'
 import ProfileSummary from './components/ProfileSummary'
-import { fetchMyPortfolio, updateMyPortfolio } from '@renderer/api/portfolio'
+import { fetchMyPortfolio, portfolioAbsence, updateMyPortfolio } from '@renderer/api/portfolio'
 import { useAsyncData } from '@renderer/hooks/useAsyncData'
 import { formatDateTime } from '@renderer/lib/format'
 import { PATHS } from '@renderer/routes/paths'
@@ -113,9 +113,31 @@ export default function PortfolioEditPage(): React.JSX.Element {
   }
 
   if (error || !data || form === null) {
+    /*
+      BE는 포트폴리오가 없는 이유를 404 두 코드로 나눠 보낸다 — 아직 만들지 않았거나,
+      종료된 방송이 없어 만들 자격이 없거나. 둘 다 장애가 아니라 정상 상태이므로
+      "불러오지 못했습니다 + 재시도" 대신 다음에 할 일을 안내한다.
+    */
+    const absence = portfolioAbsence(error)
     return (
       <div className="mx-auto max-w-[1400px] p-8">
-        <ErrorState message="포트폴리오를 불러오지 못했습니다." onRetry={refetch} />
+        {absence === null ? (
+          <ErrorState message="포트폴리오를 불러오지 못했습니다." onRetry={refetch} />
+        ) : (
+          <EmptyState
+            icon={FileText}
+            title={
+              absence === 'NOT_ELIGIBLE'
+                ? '첫 방송을 마치면 만들 수 있어요'
+                : '아직 포트폴리오가 없어요'
+            }
+            description={
+              absence === 'NOT_ELIGIBLE'
+                ? '종료된 방송이 1개 이상 있어야 포트폴리오를 만들 수 있어요.'
+                : '방송 실적이 모여 만들 수 있는 상태예요. 생성 화면은 아직 준비 중이에요.'
+            }
+          />
+        )}
       </div>
     )
   }
