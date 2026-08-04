@@ -5,12 +5,13 @@ import { Button } from '@renderer/components/ui/button'
 import { Skeleton } from '@renderer/components/ui/skeleton'
 import ClipThumbnail from '@renderer/components/common/ClipThumbnail'
 import { EmptyState, ErrorState } from '@renderer/components/common/StateView'
-import BrowserChrome from '@renderer/components/common/BrowserChrome'
+import PublicPageShell from '@renderer/components/common/PublicPageShell'
 import PerformanceSummary from './components/PerformanceSummary'
 import ProfileSummary from './components/ProfileSummary'
 import { fetchPublicPortfolio, isPortfolioNotPublic } from '@renderer/api/portfolio'
 import { useAsyncData } from '@renderer/hooks/useAsyncData'
 import { openExternal } from '@renderer/lib/desktopBridge'
+import { PUBLIC_WEB_ORIGIN } from '@renderer/api/config'
 import { PATHS } from '@renderer/routes/paths'
 
 /**
@@ -22,7 +23,14 @@ import { PATHS } from '@renderer/routes/paths'
  * 명세서 §12.4대로 편집용 상태(isPublic·publishedAt)는 응답에도 화면에도 없다.
  * SC-11 비즈니스 매칭에서 이 경로로 넘어오게 된다.
  */
-export default function PortfolioPublicPage(): React.JSX.Element {
+interface PortfolioPublicPageProps {
+  /** 웹 빌드에서 true — 가짜 브라우저 크롬 없이 본문만 렌더한다. */
+  standalone?: boolean
+}
+
+export default function PortfolioPublicPage({
+  standalone = false
+}: PortfolioPublicPageProps): React.JSX.Element {
   const navigate = useNavigate()
   const { publicSlug = '' } = useParams<{ publicSlug: string }>()
 
@@ -45,7 +53,11 @@ export default function PortfolioPublicPage(): React.JSX.Element {
   }
 
   return (
-    <BrowserChrome url={`streampilot.tv/p/${publicSlug}`} onBack={goBackToApp}>
+    <PublicPageShell
+      standalone={standalone}
+      url={`${PUBLIC_WEB_ORIGIN}/p/${publicSlug}`}
+      onBack={goBackToApp}
+    >
       {loading && (
         <div className="flex flex-col gap-6 p-8">
           <Skeleton className="h-16 w-64" />
@@ -147,6 +159,6 @@ export default function PortfolioPublicPage(): React.JSX.Element {
           )}
         </article>
       )}
-    </BrowserChrome>
+    </PublicPageShell>
   )
 }

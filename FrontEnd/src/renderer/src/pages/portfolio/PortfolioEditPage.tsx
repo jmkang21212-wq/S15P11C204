@@ -17,6 +17,7 @@ import ProfileSummary from './components/ProfileSummary'
 import { fetchMyPortfolio, portfolioAbsence, updateMyPortfolio } from '@renderer/api/portfolio'
 import { useAsyncData } from '@renderer/hooks/useAsyncData'
 import { formatDateTime } from '@renderer/lib/format'
+import { PUBLIC_WEB_ORIGIN } from '@renderer/api/config'
 import { PATHS } from '@renderer/routes/paths'
 import type { FeaturedHighlight, Portfolio } from '@renderer/types/portfolio'
 
@@ -29,7 +30,7 @@ import type { FeaturedHighlight, Portfolio } from '@renderer/types/portfolio'
 
 /** 공개 주소는 편집할 수 없고 안내·복사 용도로만 쓴다. */
 function publicUrlOf(publicSlug: string): string {
-  return `streampilot.tv/p/${publicSlug}`
+  return `${PUBLIC_WEB_ORIGIN}/p/${publicSlug}`
 }
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
@@ -42,6 +43,13 @@ export default function PortfolioEditPage(): React.JSX.Element {
 
   const [form, setForm] = useState<BasicInfoValues | null>(null)
   const [isPublic, setIsPublic] = useState(false)
+  /**
+   * 공개 시작 시각. 서버 값을 그대로 쓰지 않고 상태로 들고 있는 이유는 공개 토글이
+   * 즉시 저장하기 때문이다 — PATCH 응답의 값으로 갱신해야, 방금 공개한 시각이 바로 보인다.
+   */
+  const [publishedAt, setPublishedAt] = useState<string | null>(null)
+  const [publicError, setPublicError] = useState<string | null>(null)
+  const [publicBusy, setPublicBusy] = useState(false)
   const [highlights, setHighlights] = useState<FeaturedHighlight[]>([])
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [copied, setCopied] = useState(false)
@@ -64,6 +72,7 @@ export default function PortfolioEditPage(): React.JSX.Element {
       contactUrl: data.contactUrl ?? ''
     })
     setIsPublic(data.isPublic)
+    setPublishedAt(data.publishedAt)
     setHighlights(data.featuredHighlights)
   }
 
@@ -72,6 +81,31 @@ export default function PortfolioEditPage(): React.JSX.Element {
     setSaveState('idle')
   }
 
+  /**
+   * 공개 여부는 `저장` 버튼을 기다리지 않고 즉시 저장한다.
+   *
+   * 스위치는 누르는 순간 적용되는 컨트롤로 읽힌다. 그래서 로컬 상태만 바꿔 두면 사용자가
+   * 저장했다고 믿고 화면을 떠나고, 돌아왔을 때 값이 되돌아가 있다. PATCH가 부분 수정이라
+   * 이 필드 하나만 보내면 되므로, 편집 중인 다른 입력에 영향을 주지 않는다.
+   *
+   * 화면을 먼저 바꾸고 실패하면 되돌린다 — 스위치가 손가락을 따라오지 않으면 고장으로 느껴진다.
+   */
+  const handleTogglePublic = async (next: boolean): Promise<void> => {
+    setIsPublic(next)
+    setPublicError(null)
+    setPublicBusy(true)
+    try {
+      const updated = await updateMyPortfolio({ isPublic: next })
+      setPublishedAt(updated.publishedAt)
+    } catch {
+      setIsPublic(!next)
+      setPublicError('공개 설정을 저장하지 못했어요.')
+    } finally {
+      setPublicBusy(false)
+    }
+  }
+
+  /** `저장`은 공개 여부를 건드리지 않는다 — 위 토글이 그 필드를 단독으로 소유한다. */
   const handleSave = async (): Promise<void> => {
     if (form === null) return
     setSaveState('saving')
@@ -82,7 +116,6 @@ export default function PortfolioEditPage(): React.JSX.Element {
         // 비워 두면 공개 뷰에 연락처를 표시하지 않도록 null로 보낸다.
         contactEmail: form.contactEmail.trim() === '' ? null : form.contactEmail.trim(),
         contactUrl: form.contactUrl.trim() === '' ? null : form.contactUrl.trim(),
-        isPublic,
         // displayOrder는 화면 순서대로 다시 매긴다.
         featuredHighlights: highlights.map((h, i) => ({
           highlightId: h.highlightId,
@@ -220,18 +253,19 @@ export default function PortfolioEditPage(): React.JSX.Element {
                 <Label htmlFor="portfolio-public" className="flex flex-col items-start gap-0.5">
                   <span className="text-body font-medium">포트폴리오 공개</span>
                   <span className="text-caption font-normal text-muted-foreground">
-                    끄면 링크로도 볼 수 없어요
+                    바꾸면 바로 저장돼요. 끄면 링크로도 볼 수 없어요
                   </span>
                 </Label>
+                {/* `저장` 버튼과 무관하게 이 스위치가 자기 값을 직접 저장한다 */}
                 <Switch
                   id="portfolio-public"
                   checked={isPublic}
-                  onCheckedChange={(next) => {
-                    setIsPublic(next)
-                    setSaveState('idle')
-                  }}
+                  disabled={publicBusy}
+                  onCheckedChange={(next) => void handleTogglePublic(next)}
                 />
               </div>
+
+              {publicError !== null && <p className="text-xs text-destructive">{publicError}</p>}
 
               <div className="flex flex-col gap-1.5">
                 <span className="text-caption font-medium text-muted-foreground">공개 주소</span>
@@ -256,9 +290,10 @@ export default function PortfolioEditPage(): React.JSX.Element {
                 <span className="text-caption text-muted-foreground">주소는 변경할 수 없어요.</span>
               </div>
 
-              {data.publishedAt !== null && (
+              {/* 서버 응답(data)이 아니라 상태를 쓴다 — 토글이 즉시 저장하므로 방금 값이 반영돼야 한다 */}
+              {publishedAt !== null && (
                 <p className="text-caption text-muted-foreground">
-                  공개 시작 <span className="font-mono">{formatDateTime(data.publishedAt)}</span>
+                  공개 시작 <span className="font-mono">{formatDateTime(publishedAt)}</span>
                 </p>
               )}
             </CardContent>

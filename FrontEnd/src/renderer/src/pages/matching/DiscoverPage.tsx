@@ -1,16 +1,22 @@
 import { useNavigate } from 'react-router-dom'
-import BrowserChrome from '@renderer/components/common/BrowserChrome'
+import PublicPageShell from '@renderer/components/common/PublicPageShell'
 import PortfolioSearchPanel from './components/PortfolioSearchPanel'
+import { PUBLIC_WEB_ORIGIN } from '@renderer/api/config'
 import { PATHS } from '@renderer/routes/paths'
 
 /**
- * SC-11 비즈니스 매칭 — 공개 디렉터리 (`streampilot.tv/discover`).
+ * SC-11 비즈니스 매칭 — 공개 디렉터리 (`/discover`, 배포 도메인은 PUBLIC_WEB_ORIGIN).
  *
  * GNB 없는 최상위 라우트이며, 인증 없이 광고주·타 스트리머가 접근한다는 걸 보여주려고
  * SC-10과 같은 브라우저 크롬으로 감싼다(design.md §5.2). 검색 로직은 `/matching`과
  * `PortfolioSearchPanel`을 그대로 공유한다.
  */
-export default function DiscoverPage(): React.JSX.Element {
+interface DiscoverPageProps {
+  /** 웹 빌드에서 true — 가짜 브라우저 크롬 없이 본문만 렌더한다. */
+  standalone?: boolean
+}
+
+export default function DiscoverPage({ standalone = false }: DiscoverPageProps): React.JSX.Element {
   const navigate = useNavigate()
 
   const openPortfolio = (publicSlug: string): void => {
@@ -23,7 +29,11 @@ export default function DiscoverPage(): React.JSX.Element {
   }
 
   return (
-    <BrowserChrome url="streampilot.tv/discover" onBack={goBackToApp}>
+    <PublicPageShell
+      standalone={standalone}
+      url={`${PUBLIC_WEB_ORIGIN}/discover`}
+      onBack={goBackToApp}
+    >
       <div className="mx-auto flex max-w-[1100px] flex-col gap-6 p-8">
         <header className="flex flex-col gap-1">
           <h1 className="text-display font-extrabold tracking-[-0.02em]">스트리머 디렉터리</h1>
@@ -34,6 +44,6 @@ export default function DiscoverPage(): React.JSX.Element {
 
         <PortfolioSearchPanel onSelectPortfolio={openPortfolio} />
       </div>
-    </BrowserChrome>
+    </PublicPageShell>
   )
 }
