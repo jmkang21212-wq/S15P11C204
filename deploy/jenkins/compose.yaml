@@ -1,6 +1,9 @@
 services:
   jenkins:
-    image: jenkins/jenkins:lts-jdk21
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: laive-jenkins:lts-jdk21-python
     container_name: laive-jenkins
     restart: unless-stopped
     ports:
@@ -17,6 +20,7 @@ services:
       REDIS_HOST: jenkins-redis
       REDIS_PORT: "6379"
       REDIS_DATABASE: "0"
+      UV_CACHE_DIR: /var/jenkins_home/.cache/uv
     logging:
       driver: json-file
       options:
