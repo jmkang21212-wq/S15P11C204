@@ -34,6 +34,7 @@
 
     chat:{bid}:q:idgen      HASH    questionId 발급기 (gen=집계 시작 epoch초, seq=세대 내 시퀀스)
     chat:{bid}:q:text       HASH    qid -> 대표 문장
+    chat:{bid}:q:tfrozen    HASH    qid -> 1 (노출선 도달 후 대표 문장 고정 — _refresh_text 참조)
     chat:{bid}:q:tc:{qid}   HASH    표현 -> 횟수 (대표 문장 산출용)
     chat:{bid}:q:msgs       HASH    qid -> 총 메시지 수
     chat:{bid}:q:first/last HASH    qid -> 최초/마지막 시각(ms)
@@ -406,13 +407,30 @@ class QuestionTracker:
         self._refresh_text(bid, qid)
 
     def _refresh_text(self, bid, qid):
-        """대표 문장 = 그 클러스터에서 가장 많이 쓰인 표현."""
+        """대표 문장 = 그 클러스터에서 가장 많이 쓰인 표현. 단, 노출선을 넘으면 고정한다.
+
+        고정하는 이유: 짧은 질문은 핵심 단어 하나만 달라도 임베딩이 못 가른다 —
+        실측(3-large)으로 '저녁 메뉴 뭐예요?'~'아침 메뉴 뭐 드셨어요?'가 0.559로
+        임계(0.50)를 넘는데, 진짜 같은 질문 쌍('몇 시까지'~'언제까지')이 0.591이라
+        임계 조정으로는 분리할 수 없다. 병합 자체는 수용하되, 화면에 이미 노출된
+        질문의 문구가 나중에 합류한 다수 표현으로 뒤바뀌는 것(스트리머 혼란)만 막는다.
+
+        고정 시점은 askers가 Q_MIN_ASKERS에 도달한 순간이다 — 노출 전에는 더 나은
+        표현으로 계속 개선되고, 노출 후에는 흔들리지 않는다.
+        """
+        if self.r.hexists(self._k(bid, 'tfrozen'), qid):
+            return
         tc = self.r.hgetall(self._k(bid, f'tc:{qid}'))
         if not tc:
             return
         best = max(tc.items(), key=lambda kv: int(kv[1]))[0]
         self.r.hset(self._k(bid, 'text'), qid, _s(best))
         self.r.expire(self._k(bid, 'text'), Q_TTL)
+
+        score = self.r.zscore(self._k(bid, 'rank'), qid)
+        if score is not None and int(score) >= Q_MIN_ASKERS:
+            self.r.hset(self._k(bid, 'tfrozen'), qid, 1)
+            self.r.expire(self._k(bid, 'tfrozen'), Q_TTL)
 
     def _msgs(self, bid, qid):
         v = self.r.hget(self._k(bid, 'msgs'), qid)
