@@ -125,7 +125,17 @@ class CollectorSession:
         self._chat: queue.Queue = queue.Queue(maxsize=CHAT_QUEUE_MAX)
 
         self._lock = threading.Lock()
-        self._state = STOPPED
+        # STOPPED로 시작해서는 안 된다. _heartbeat_loop의 첫 보고는 스레드를 띄운
+        # 직후 나가는데 RUNNING은 구독을 마친 뒤(_close_gap)에야 올라간다. 그
+        # 사이에 STOPPED가 나가면 Spring이 endPlatform으로 방송 세션을 그대로
+        # 닫는다(InternalPlatformCollectionController). 실측으로 시작 0.64초 뒤
+        # 세션이 ENDED가 되어 방송 내내 아무것도 기록되지 않았다.
+        #
+        # 첫 핸드셰이크 동안은 실제로 채팅을 받지 못하므로 RECONNECTING이 맞다.
+        # RUNNING으로 시작하면 인증이 거부돼도 다음 하트비트까지 콘솔이 초록불을
+        # 보여준다 — 수집 중단을 알리라는 CollectorState의 목적과 반대다.
+        # STOPPED를 보고하는 곳은 stop() 하나뿐이어야 한다.
+        self._state = RECONNECTING
         self._gap_started_at: Optional[float] = None
         self._gap_reason: Optional[str] = None
         self._sio: Optional[socketio.Client] = None
@@ -355,6 +365,9 @@ class CollectorSession:
                 'viewerHash': viewer_hash(event.sender_channel_id),
                 'message': event.content,
                 'sentAt': iso(self._sent_at(event.message_time_ms, received_at)),
+                # 열성 시청자 TOP5(FR-F-03) 표기용. 원본 채널 id는 위 해시로만 나간다.
+                'nickname': event.nickname,
+                'userRole': event.user_role_code,
             })
 
     def _sent_at(self, message_time_ms: int, received_at: float) -> float:
@@ -523,6 +536,16 @@ class CollectorSession:
             self._gap_started_at = None
             self._gap_reason = None
             self._state = RUNNING
+
+        # 하트비트 주기를 기다리지 않고 바로 알린다. 첫 구독 직후가 특히 중요하다 —
+        # 세션이 RECONNECTING으로 시작하므로 이 보고가 없으면 콘솔이 정상적인 방송
+        # 시작을 최대 HEARTBEAT_SEC 동안 "재연결 중"으로 보여준다.
+        #
+        # 종료 중에는 보내지 않는다. stop()의 join이 timeout으로 끝나면 핸드셰이크
+        # 도중이던 스레드가 살아남아 뒤늦게 여기까지 오고, stop()이 마지막으로 보낸
+        # STOPPED를 RUNNING으로 덮어쓴다.
+        if not self._stop.is_set():
+            self._report_status_safely()
 
         if started_at is None:
             return

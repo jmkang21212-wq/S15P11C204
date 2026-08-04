@@ -1,0 +1,36 @@
+# 빌드 컨텍스트에서 제외할 것.
+#
+# 여기 적힌 파일은 도커 데몬으로 전송조차 되지 않는다. build/와 .gradle/은
+# 수백 MB라 빼지 않으면 빌드가 시작하기도 전에 오래 걸리고, 호스트에서 만든
+# 산출물이 컨테이너 빌드에 섞여 들어가 재현성이 깨진다.
+
+.gradle/
+build/
+bin/
+out/
+
+# 비밀값. 이미지에 구워지면 이미지를 받는 누구나 읽을 수 있다.
+# 환경변수는 compose의 env_file로 실행 시점에 주입한다.
+.env
+.env.*
+!.env.example
+!.env.highlight.example
+
+# IDE·OS
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+.DS_Store
+Thumbs.db
+
+# 로그·크래시 리포트
+*.log
+logs/
+hs_err_pid*
+replay_pid*
+
+# 문서 — 이미지에 들어갈 이유가 없다
+*.md
+HELP.md

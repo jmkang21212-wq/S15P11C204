@@ -45,6 +45,9 @@ class ChatEvent:
     user_role_code: Optional[str]
     # 이모티콘 **사용 횟수**다. 종류 수가 아니다 — _count_emojis 주석 참고.
     emoji_count: int
+    # 화면 표시용 닉네임. 채널 원본 식별자는 여전히 해시로만 나가고(hashing.py),
+    # 닉네임은 열성 시청자 TOP5(FR-F-03) 표기를 위해 예외적으로 원문을 보낸다.
+    nickname: Optional[str] = None
 
 
 def request_session_url(access_token: str) -> str:
@@ -145,6 +148,7 @@ def _to_chat_event(raw: Any) -> Optional[ChatEvent]:
     # profile은 JSON 문자열로 오는 경우가 있어 한 번 더 푼다.
     profile = _as_json(raw.get('profile'))
     role = profile.get('userRoleCode') if isinstance(profile, dict) else None
+    nickname = profile.get('nickname') if isinstance(profile, dict) else None
 
     return ChatEvent(
         sender_channel_id=str(sender),
@@ -152,6 +156,7 @@ def _to_chat_event(raw: Any) -> Optional[ChatEvent]:
         message_time_ms=message_time,
         user_role_code=role,
         emoji_count=_count_emojis(str(content), raw.get('emojis')),
+        nickname=str(nickname) if nickname else None,
     )
 
 

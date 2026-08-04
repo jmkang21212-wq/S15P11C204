@@ -131,36 +131,36 @@ const HIGHLIGHTS: ReportHighlight[] = [
     triggerId: 402,
     startMs: 87 * MINUTE_MS,
     endMs: 87 * MINUTE_MS + 41_000,
-    clipUrl: 'https://cdn.example.com/clips/71.mp4',
-    thumbnailUrl: 'https://cdn.example.com/clips/71.jpg',
-    clipStatus: 'UPLOADED'
+    clipUrl: null,
+    thumbnailUrl: null,
+    clipStatus: 'PENDING'
   },
   {
     highlightId: 72,
     triggerId: 402,
     startMs: 89 * MINUTE_MS,
     endMs: 89 * MINUTE_MS + 55_000,
-    clipUrl: 'https://cdn.example.com/clips/72.mp4',
-    thumbnailUrl: 'https://cdn.example.com/clips/72.jpg',
-    clipStatus: 'UPLOADED'
+    clipUrl: null,
+    thumbnailUrl: null,
+    clipStatus: 'PENDING'
   },
   {
     highlightId: 73,
     triggerId: 404,
     startMs: 120 * MINUTE_MS,
     endMs: 120 * MINUTE_MS + 68_000,
-    clipUrl: 'https://cdn.example.com/clips/73.mp4',
-    thumbnailUrl: 'https://cdn.example.com/clips/73.jpg',
-    clipStatus: 'UPLOADED'
+    clipUrl: null,
+    thumbnailUrl: null,
+    clipStatus: 'PENDING'
   },
   {
     highlightId: 74,
     triggerId: 401,
     startMs: 62 * MINUTE_MS,
     endMs: 62 * MINUTE_MS + 52_000,
-    clipUrl: 'https://cdn.example.com/clips/74.mp4',
-    thumbnailUrl: 'https://cdn.example.com/clips/74.jpg',
-    clipStatus: 'UPLOADED'
+    clipUrl: null,
+    thumbnailUrl: null,
+    clipStatus: 'PENDING'
   }
 ]
 

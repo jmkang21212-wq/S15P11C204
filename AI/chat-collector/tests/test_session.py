@@ -14,6 +14,7 @@ from chatcollector.session import (
     GAP_AUTH_FAILED,
     RECONNECTING,
     RUNNING,
+    STOPPED,
     CollectorSession,
 )
 
@@ -85,7 +86,34 @@ def test_원본_식별자_대신_해시를_큐에_넣는다(session):
     assert item['viewerHash'].startswith('sha256:')
     assert 'raw-channel-id' not in item['viewerHash']
     assert item['message'] == 'ㅋㅋㅋ'
-    assert set(item) == {'viewerHash', 'message', 'sentAt'}
+    # 정확 일치 단정은 의도된 감지선이다 — 필드를 늘릴 때 이 목록도 함께 늘려서
+    # "원본 식별자가 새 필드로 새어 나가지 않는지"를 강제로 재검토하게 만든다.
+    assert set(item) == {'viewerHash', 'message', 'sentAt', 'nickname', 'userRole'}
+
+
+def test_닉네임과_역할은_원문으로_실린다(session):
+    session._on_chat({
+        'senderChannelId': 'raw-channel-id',
+        'content': '오늘도 왔어요',
+        'messageTime': int(time.time() * 1000),
+        'profile': {'nickname': '한별팬1호', 'userRoleCode': 'common_user'},
+    })
+
+    item = session._chat.get_nowait()
+    assert item['nickname'] == '한별팬1호'
+    assert item['userRole'] == 'common_user'
+
+
+def test_profile이_없으면_닉네임은_None이다(session):
+    session._on_chat({
+        'senderChannelId': 'raw-channel-id',
+        'content': '첫 채팅',
+        'messageTime': int(time.time() * 1000),
+    })
+
+    item = session._chat.get_nowait()
+    assert item['nickname'] is None
+    assert item['userRole'] is None
 
 
 def test_스트리머_채팅을_따로_센다(session):
@@ -158,6 +186,38 @@ def test_열린_공백이_없으면_닫아도_보고하지_않는다(session):
 
     assert session._spring.gaps == []
     assert session._state == RUNNING
+
+
+# --- 상태 보고 ---
+
+
+def test_시작_직후_보고는_STOPPED가_아니다(session):
+    # 하트비트의 첫 보고는 스레드를 띄운 직후 나가고 RUNNING은 구독을 마친
+    # 뒤에야 올라간다. 그 사이에 STOPPED가 나가면 Spring이 endPlatform으로
+    # 방송 세션을 닫아버린다(실측: 시작 0.64초 뒤 ENDED).
+    session._report_status_safely()
+
+    assert [status for _, status, _ in session._spring.statuses] == [RECONNECTING]
+
+
+def test_구독하면_하트비트를_기다리지_않고_RUNNING을_보고한다(session):
+    # 이 보고가 없으면 정상 방송이 최대 HEARTBEAT_SEC 동안 "재연결 중"으로 보인다.
+    session._close_gap()
+
+    assert [status for _, status, _ in session._spring.statuses] == [RUNNING]
+
+
+def test_STOPPED는_stop만_보고한다(session):
+    # Spring은 STOPPED 보고를 세션 종료 지시로 받는다. 다른 경로에서 새어 나가면
+    # 방송 중인 세션이 닫힌다.
+    session._close_gap()
+    session._open_gap(GAP_AUTH_FAILED)
+    session._close_gap()
+    assert STOPPED not in [status for _, status, _ in session._spring.statuses]
+
+    session.stop()
+
+    assert [status for _, status, _ in session._spring.statuses][-1] == STOPPED
 
 
 # --- 상태 스냅샷 ---

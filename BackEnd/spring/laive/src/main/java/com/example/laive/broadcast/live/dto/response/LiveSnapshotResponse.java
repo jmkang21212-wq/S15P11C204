@@ -19,6 +19,7 @@ public record LiveSnapshotResponse(
         List<Briefing> briefings,
         Sentiment sentiment,
         List<RepeatedQuestion> repeatedQuestions,
+        List<TopViewer> topViewers,
         String lastEventId
 ) {
 
@@ -94,6 +95,25 @@ public record LiveSnapshotResponse(
             boolean reasked,
             Instant firstAskedAt,
             Instant lastAskedAt
+    ) {
+    }
+
+    /**
+     * 열성 시청자 한 명이다 (FR-F-03, 총점 내림차순 최대 5명).
+     *
+     * <p>점수는 도배 방지 산식이다 — 분당 3개 캡 채팅 점수 + 참여 분 수×2 +
+     * 후원 로그 가중 (ViewerScoreMapper.xml 참고). 스트리머 본인·매니저는 제외돼 있다.
+     *
+     * @param nickname    표시용 닉네임. 아직 관측 전이면 null — 그때는 viewerAlias를 쓴다
+     * @param viewerAlias 해시에서 파생한 익명 별칭(viewer-a91c). 항상 채워진다
+     */
+    public record TopViewer(
+            long viewerId,
+            String nickname,
+            String viewerAlias,
+            int chatScore,
+            int watchScore,
+            double totalScore
     ) {
     }
 }

@@ -29,6 +29,7 @@ class ChzzkOAuthClientTest {
     private static final String TOKEN_URI = "https://openapi.chzzk.naver.com/auth/v1/token";
     private static final String REVOKE_URI = "https://openapi.chzzk.naver.com/auth/v1/token/revoke";
     private static final String USER_ME_URI = "https://openapi.chzzk.naver.com/open/v1/users/me";
+    private static final String LIVE_SETTING_URI = "https://openapi.chzzk.naver.com/open/v1/lives/setting";
 
     private static final String SCOPE = "채널 정보 조회 채널 관리자 조회 유저 조회";
 
@@ -54,6 +55,23 @@ class ChzzkOAuthClientTest {
                 "channelId": "a253006fe48c3ecbecd3723c8475c6f1",
                 "channelName": "폭주하는 레전드 820",
                 "nickname": "폭주하는 레전드 820"
+              }
+            }
+            """;
+
+    private static final String LIVE_SETTING_RESPONSE = """
+            {
+              "code": 200,
+              "message": null,
+              "content": {
+                "defaultLiveTitle": "오늘의 방송 제목",
+                "category": {
+                  "categoryType": "GAME",
+                  "categoryId": "League_of_Legends",
+                  "categoryValue": "리그 오브 레전드",
+                  "posterImageUrl": "https://example.com/poster.png"
+                },
+                "tags": ["태그1", "태그2"]
               }
             }
             """;
@@ -200,6 +218,95 @@ class ChzzkOAuthClientTest {
     }
 
     @Test
+    void sendsBearerTokenWhenFetchingLiveSetting() {
+        server.expect(requestTo(LIVE_SETTING_URI))
+                .andExpect(method(org.springframework.http.HttpMethod.GET))
+                .andExpect(header("Authorization", "Bearer access-token-value"))
+                .andRespond(withSuccess(LIVE_SETTING_RESPONSE, MediaType.APPLICATION_JSON));
+
+        ChzzkLiveSetting setting = client.fetchLiveSetting("access-token-value");
+
+        server.verify();
+        assertThat(setting.defaultLiveTitle()).isEqualTo("오늘의 방송 제목");
+        assertThat(setting.category().categoryType()).isEqualTo("GAME");
+        assertThat(setting.category().categoryValue()).isEqualTo("리그 오브 레전드");
+        assertThat(setting.tags()).containsExactly("태그1", "태그2");
+    }
+
+    @Test
+    void mapsForbiddenToScopeInsufficientWhenFetchingLiveSetting() {
+        // 방송 설정 권한이 앱에 추가되기 전에 발급된 토큰은 403을 받는다.
+        server.expect(requestTo(LIVE_SETTING_URI))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"code\":403,\"message\":\"FORBIDDEN\"}"));
+
+        assertThatThrownBy(() -> client.fetchLiveSetting("old-scope-token"))
+                .isInstanceOf(ChzzkScopeInsufficientException.class);
+    }
+
+    @Test
+    void mapsInvalidTokenToRejectionWhenFetchingLiveSetting() {
+        server.expect(requestTo(LIVE_SETTING_URI))
+                .andRespond(withStatus(HttpStatus.UNAUTHORIZED)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"code\":401,\"message\":\"INVALID_TOKEN\"}"));
+
+        assertThatThrownBy(() -> client.fetchLiveSetting("expired-access-token"))
+                .isInstanceOf(ChzzkTokenRejectedException.class);
+    }
+
+    @Test
+    void sendsPatchJsonWhenUpdatingLiveSetting() {
+        server.expect(requestTo(LIVE_SETTING_URI))
+                .andExpect(method(org.springframework.http.HttpMethod.PATCH))
+                .andExpect(header("Authorization", "Bearer access-token-value"))
+                .andExpect(header("Content-Type", MediaType.APPLICATION_JSON_VALUE))
+                .andExpect(jsonPath("$.defaultLiveTitle").value("새 방송 제목"))
+                // 변경 성공 응답에는 content가 없다.
+                .andRespond(withSuccess("{\"code\":200,\"message\":null}", MediaType.APPLICATION_JSON));
+
+        client.updateLiveSetting("access-token-value", "새 방송 제목");
+
+        server.verify();
+    }
+
+    @Test
+    void mapsForbiddenToScopeInsufficientWhenUpdatingLiveSetting() {
+        server.expect(requestTo(LIVE_SETTING_URI))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"code\":403,\"message\":\"FORBIDDEN\"}"));
+
+        assertThatThrownBy(() -> client.updateLiveSetting("old-scope-token", "새 방송 제목"))
+                .isInstanceOf(ChzzkScopeInsufficientException.class);
+    }
+
+    @Test
+    void mapsInvalidTokenToRejectionWhenUpdatingLiveSetting() {
+        server.expect(requestTo(LIVE_SETTING_URI))
+                .andRespond(withStatus(HttpStatus.UNAUTHORIZED)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"code\":401,\"message\":\"INVALID_TOKEN\"}"));
+
+        assertThatThrownBy(() -> client.updateLiveSetting("expired-access-token", "새 방송 제목"))
+                .isInstanceOf(ChzzkTokenRejectedException.class);
+    }
+
+    @Test
+    void mapsServerErrorToConnectionFailureWhenUpdatingLiveSetting() {
+        server.expect(requestTo(LIVE_SETTING_URI))
+                .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"code\":500,\"message\":\"INTERNAL_SERVER_ERROR\"}"));
+
+        assertThatThrownBy(() -> client.updateLiveSetting("access-token-value", "새 방송 제목"))
+                .isInstanceOf(PlatformException.class)
+                .extracting(exception -> ((PlatformException) exception).getStatus().value())
+                .isEqualTo(502);
+    }
+
+    @Test
     void failsBeforeCallingPlatformWhenNotConfigured() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer unusedServer = MockRestServiceServer.bindTo(builder).build();
@@ -221,7 +328,8 @@ class ChzzkOAuthClientTest {
                         "https://chzzk.naver.com/account-interlock",
                         TOKEN_URI,
                         REVOKE_URI,
-                        USER_ME_URI
+                        USER_ME_URI,
+                        LIVE_SETTING_URI
                 ),
                 "dGVzdC1rZXktMzItYnl0ZXMtZm9yLXVuaXQtdGVzdHMh",
                 Duration.ofMinutes(5),

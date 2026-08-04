@@ -209,9 +209,14 @@ const SEEDS: Seed[] = [
   }
 ]
 
-const PROFILE_IMAGE_BASE = 'https://cdn.example.com/profile'
-
-/** SEEDS를 실제 응답 모양으로 확장한다. id는 SC-10 목(61)과 겹치지 않게 200번대부터 매긴다. */
+/**
+ * SEEDS를 실제 응답 모양으로 확장한다. id는 SC-10 목(61)과 겹치지 않게 200번대부터 매긴다.
+ *
+ * 이미지 URL은 `null`로 둔다. 예전에는 `cdn.example.com`을 가리켰는데 존재하지 않는 도메인이라
+ * 목록을 열 때마다 `ERR_NAME_NOT_RESOLVED`가 항목 수만큼 콘솔에 쏟아져 실제 오류를 덮었다.
+ * `null`은 실제 응답에서도 정상 값이고(`profileImageUrl: string | null`), `Avatar`의 폴백
+ * 아이콘 경로를 함께 확인할 수 있다.
+ */
 export const MOCK_PORTFOLIO_DIRECTORY: PortfolioSearchItem[] = SEEDS.map((seed, index) => {
   const portfolioId = 200 + index
   const platformAccountId = 300 + index
@@ -219,7 +224,7 @@ export const MOCK_PORTFOLIO_DIRECTORY: PortfolioSearchItem[] = SEEDS.map((seed, 
     portfolioId,
     publicSlug: `streamer-${portfolioId}`,
     nickname: seed.nickname,
-    profileImageUrl: `${PROFILE_IMAGE_BASE}/${portfolioId}.jpg`,
+    profileImageUrl: null,
     platformAccounts: [
       {
         platformAccountId,

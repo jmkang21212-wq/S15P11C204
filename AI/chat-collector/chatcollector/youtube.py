@@ -141,6 +141,9 @@ class YouTubeCollectorSession:
                 'amount': self._amount(snippet),
                 'currency': (snippet.get('superChatDetails') or {}).get('currency'),
                 'providerEventType': snippet.get('type'),
+                # 열성 시청자 TOP5(FR-F-03) 표기용. 역할 어휘는 치지직과 맞춘다.
+                'nickname': author.get('displayName'),
+                'userRole': self._user_role(author),
             })
         self.received += len(result)
         return result
@@ -155,6 +158,15 @@ class YouTubeCollectorSession:
             'membershipGiftingEvent': 'GIFT',
             'giftMembershipReceivedEvent': 'GIFT',
         }.get(provider_type, 'TEXT')
+
+    @staticmethod
+    def _user_role(author: dict) -> str | None:
+        """치지직 역할 어휘(streamer/manager)로 통일한다. 열성 집계 제외 판정용."""
+        if author.get('isChatOwner'):
+            return 'streamer'
+        if author.get('isChatModerator'):
+            return 'manager'
+        return None
 
     @staticmethod
     def _amount(snippet: dict):

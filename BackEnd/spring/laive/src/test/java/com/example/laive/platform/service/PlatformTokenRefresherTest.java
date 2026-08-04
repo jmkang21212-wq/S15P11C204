@@ -153,7 +153,7 @@ class PlatformTokenRefresherTest {
 
     private PlatformProperties properties() {
         return new PlatformProperties(
-                new PlatformProperties.Chzzk("id", "secret", "uri", "auth", "token", "revoke", "me"),
+                new PlatformProperties.Chzzk("id", "secret", "uri", "auth", "token", "revoke", "me", "live-setting"),
                 KEY,
                 Duration.ofMinutes(5),
                 Duration.ofMinutes(5)
