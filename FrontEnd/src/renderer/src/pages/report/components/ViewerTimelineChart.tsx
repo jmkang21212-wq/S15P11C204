@@ -27,11 +27,10 @@ const SEGMENT_STYLE: Record<SegmentType, { label: string; color: string }> = {
 const CHART_CONFIG = {
   viewers: { label: '시청자', color: 'var(--chart-1)' }
 } satisfies ChartConfig
-
-/** 경과 분을 `1:27` 형태로. 축·툴팁에서 mono로 렌더한다. */
-function formatElapsed(minute: number): string {
-  const h = Math.floor(minute / 60)
+function formatElapsed(minute: number, totalMinutes: number): string {
   const m = Math.round(minute % 60)
+  if (totalMinutes < 60) return `${String(m)}분`
+  const h = Math.floor(minute / 60)
   return `${h}:${String(m).padStart(2, '0')}`
 }
 
@@ -106,7 +105,7 @@ export default function ViewerTimelineChart({
                 type="number"
                 domain={[0, lastOffset]}
                 tickCount={7}
-                tickFormatter={formatElapsed}
+                tickFormatter={(v: number) => formatElapsed(v, lastOffset)}
                 tickLine={false}
                 axisLine={false}
                 tickMargin={8}
@@ -147,7 +146,8 @@ export default function ViewerTimelineChart({
                       if (!item) return null
                       return (
                         <span className="font-mono">
-                          {formatElapsed(item.offsetMin)} · {formatTime(item.measuredAt)}
+                          {formatElapsed(item.offsetMin, lastOffset)} ·{' '}
+                          {formatTime(item.measuredAt)}
                         </span>
                       )
                     }}
