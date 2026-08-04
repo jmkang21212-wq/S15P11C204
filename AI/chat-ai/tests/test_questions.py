@@ -112,9 +112,9 @@ def test_spam_counts_one_asker():
 
 def test_min_askers_hides_rare():
     tr = make()
-    feed(tr, 'b', [('u1', '오늘 몇 시까지 하세요?'), ('u2', '오늘 몇 시까지 하세요?')])
-    assert tr.top('b', limit=5, exclude=())['questions'] == []   # 2명 < Q_MIN_ASKERS(3)
-    feed(tr, 'b', [('u3', '오늘 몇 시까지 하세요?')])
+    feed(tr, 'b', [('u1', '오늘 몇 시까지 하세요?')])
+    assert tr.top('b', limit=5, exclude=())['questions'] == []   # 1명 < Q_MIN_ASKERS(2)
+    feed(tr, 'b', [('u2', '오늘 몇 시까지 하세요?')])
     assert len(tr.top('b', limit=5, exclude=())['questions']) == 1
 
 
@@ -124,6 +124,43 @@ def test_representative_is_most_common_phrasing():
                    ('u3', '언제 끝나요?'), ('u4', '언제 하시나요?')])
     q = tr.top('b', limit=5, exclude=())['questions'][0]
     assert q['text'] == '언제 끝나요?', q
+
+
+def test_exposed_text_is_frozen():
+    """노출선(Q_MIN_ASKERS=2) 도달 후에는 다수 표현이 뒤바뀌어도 대표 문구가 고정된다.
+
+    실측 근거: '저녁 메뉴'와 '아침 메뉴' 질문은 임베딩 유사도 0.559로 병합을 피할 수
+    없다(진짜 같은 질문 쌍이 0.591이라 임계로 못 가름). 병합은 수용하되 화면에 이미
+    노출된 문구가 나중에 합류한 표현으로 뒤바뀌는 것을 막는다.
+    (가짜 임베딩은 첫 글자로 병합을 판정하므로 '저녁…'과 '저녁이 아니라…'가 한 묶음이 된다)
+    """
+    tr = make()
+    feed(tr, 'b', [('u1', '저녁 메뉴 뭐예요?'), ('u2', '저녁 메뉴 뭐예요?')])  # 2명 → 노출·고정
+    assert tr.top('b', limit=5, exclude=())['questions'][0]['text'] == '저녁 메뉴 뭐예요?'
+
+    feed(tr, 'b', [('u3', '저녁이 아니라 아침 메뉴는요?'),
+                   ('u4', '저녁이 아니라 아침 메뉴는요?'),
+                   ('u5', '저녁이 아니라 아침 메뉴는요?')])   # 3 > 2로 다수 역전
+
+    q = tr.top('b', limit=5, exclude=())['questions'][0]
+    assert q['askers'] == 5, '병합 자체는 유지되어야 한다'
+    assert q['text'] == '저녁 메뉴 뭐예요?', '노출 후 문구는 고정되어야 한다'
+
+
+def test_text_improves_before_exposure():
+    """노출선 도달 전(askers < 2)에는 대표 문구가 다수 표현으로 계속 개선된다.
+
+    2명째가 오는 순간 동결되므로, 개선 구간은 같은 사람이 표현을 바꿔 다시 묻는
+    1명 상태다. 1명짜리는 top에 안 나오므로 Redis에서 직접 읽는다.
+    """
+    tr = make()
+    feed(tr, 'b', [('u1', '저녁 메뉴 궁금해요?')])
+    feed(tr, 'b', [('u1', '저녁 메뉴 뭐예요?'), ('u1', '저녁 메뉴 뭐예요?')])
+
+    qid = next(iter(tr.r.hkeys('chat:b:q:text')))
+    assert tr.r.hget('chat:b:q:text', qid).decode() == '저녁 메뉴 뭐예요?', \
+        '노출 전에는 다수 표현이 대표가 된다'
+    assert not tr.r.hexists('chat:b:q:tfrozen', qid), '1명 상태에서는 동결되지 않는다'
 
 
 # ---------------------------------------------------------------- questionId
