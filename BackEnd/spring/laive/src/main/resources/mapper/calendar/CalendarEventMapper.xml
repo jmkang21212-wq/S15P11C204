@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.laive.calendar.repository.mybatis.CalendarEventMapper">
+
+    <!--
+      CalendarEvent record의 생성자 인자 순서와 컬럼 순서를 일치시킨다.
+      MyBatis는 record를 생성자로 매핑하므로 순서가 어긋나면 조용히 잘못 채워진다.
+    -->
+    <sql id="eventColumns">
+        id AS calendar_event_id,
+        streamer_id,
+        platform_account_id,
+        event_type,
+        title,
+        memo,
+        start_at,
+        end_at,
+        status,
+        promise_id
+    </sql>
+
+    <select id="findOwnedPlatformAccount"
+            resultType="com.example.laive.calendar.repository.PlatformAccountReference">
+        SELECT id AS platform_account_id,
+               streamer_id,
+               CASE
+                   WHEN connection_status = 'CONNECTED'
+                        AND refresh_token_expires_at IS NOT NULL
+                        AND refresh_token_expires_at &lt;= now()
+                   THEN 'REAUTH_REQUIRED'
+                   ELSE connection_status
+               END AS connection_status
+          FROM platform_accounts
+         WHERE id = #{platformAccountId}
+           AND streamer_id = #{streamerId}
+    </select>
+
+    <!--
+      캘린더 화면에 그릴 일정이라 포함이 아니라 겹침으로 찾는다.
+      경계를 걸치는 여러 날짜짜리 휴방이 조회 범위에서 빠지면 안 되기 때문이다.
+      start_at 조건이 ix_calendar_events_streamer_start의 범위 스캔을 유지한다.
+    -->
+    <select id="findRange" resultType="com.example.laive.calendar.domain.CalendarEvent">
+        SELECT <include refid="eventColumns"/>
+          FROM calendar_events
+         WHERE streamer_id = #{streamerId}
+           AND start_at &lt; #{to}
+           AND end_at &gt; #{from}
+         ORDER BY start_at, id
+    </select>
+
+    <select id="findDetail" resultType="com.example.laive.calendar.domain.CalendarEvent">
+        SELECT <include refid="eventColumns"/>
+          FROM calendar_events
+         WHERE id = #{calendarEventId}
+           AND streamer_id = #{streamerId}
+    </select>
+
+    <select id="findForUpdate" resultType="com.example.laive.calendar.domain.CalendarEvent">
+        SELECT <include refid="eventColumns"/>
+          FROM calendar_events
+         WHERE id = #{calendarEventId}
+           AND streamer_id = #{streamerId}
+         FOR UPDATE
+    </select>
+
+    <select id="existsLinkedSession" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1
+              FROM broadcast_sessions
+             WHERE calendar_event_id = #{calendarEventId}
+        )
+    </select>
+
+    <select id="findLinkedPlatformAccounts"
+            resultType="com.example.laive.calendar.repository.CalendarEventPlatformAccountLink">
+        SELECT calendar_event_id,
+               platform_account_id
+          FROM calendar_event_platform_accounts
+         WHERE calendar_event_id IN
+         <foreach collection="calendarEventIds" item="id" open="(" separator="," close=")">
+             #{id}
+         </foreach>
+         ORDER BY calendar_event_id, platform_account_id
+    </select>
+
+    <delete id="deleteLinkedPlatformAccounts">
+        DELETE FROM calendar_event_platform_accounts
+         WHERE calendar_event_id = #{calendarEventId}
+    </delete>
+
+    <insert id="insertLinkedPlatformAccounts">
+        INSERT INTO calendar_event_platform_accounts (calendar_event_id, platform_account_id)
+        VALUES
+        <foreach collection="platformAccountIds" item="platformAccountId" separator=",">
+            (#{calendarEventId}, #{platformAccountId})
+        </foreach>
+        ON CONFLICT DO NOTHING
+    </insert>
+
+    <!--
+      약속에서 전환된 일정을 두 번 만들려 하면 ux_calendar_events_promise가
+      DuplicateKeyException으로 막는다. 서비스가 먼저 확인하지만, 같은 약속에 대한
+      동시 요청은 DB 제약만이 최종적으로 막을 수 있다.
+    -->
+    <select id="insertEvent" resultType="long" affectData="true" flushCache="true">
+        INSERT INTO calendar_events (
+            streamer_id,
+            platform_account_id,
+            event_type,
+            title,
+            memo,
+            start_at,
+            end_at,
+            status,
+            promise_id
+        ) VALUES (
+            #{event.streamerId},
+            #{event.platformAccountId},
+            #{event.eventType},
+            #{event.title},
+            #{event.memo},
+            #{event.startAt},
+            #{event.endAt},
+            #{event.status},
+            #{event.promiseId}
+        )
+        RETURNING id
+    </select>
+
+    <!--
+      약속에 연결된 활성 일정을 찾는다. 전환 중복 검사와 응답의 calendarEventId 역참조에
+      함께 쓴다. 취소된 일정을 제외하는 조건이 ux_calendar_events_promise와 같아야 한다 —
+      어긋나면 "취소했는데 다시 못 잡는" 상태가 생긴다.
+    -->
+    <select id="findActivePromiseEventId" resultType="java.lang.Long">
+        SELECT id
+          FROM calendar_events
+         WHERE promise_id = #{promiseId}
+           AND status &lt;&gt; 'CANCELLED'
+    </select>
+
+    <!--
+      약속 전환용 방송 일정에 붙일 플랫폼 계정을 고른다. 요청 본문에 계정이 없으므로
+      서버가 정하며, 계정이 여럿일 수 있어 연결 순서로 고정한다(재현 가능한 선택).
+      refresh_token이 만료된 계정은 findOwnedPlatformAccount과 같은 규칙으로 걸러낸다.
+    -->
+    <select id="findPrimaryConnectedPlatformAccountId" resultType="java.lang.Long">
+        SELECT id
+          FROM platform_accounts
+         WHERE streamer_id = #{streamerId}
+           AND connection_status = 'CONNECTED'
+           AND (refresh_token_expires_at IS NULL OR refresh_token_expires_at &gt; now())
+         ORDER BY connected_at, id
+         LIMIT 1
+    </select>
+
+    <!--
+      applyPatch가 현재 값과 병합해 완전한 일정을 만들어 오므로 동적 SET이 필요 없다.
+      같은 트랜잭션에서 FOR UPDATE로 읽은 행만 갱신하니 덮어쓰기 문제도 생기지 않는다.
+    -->
+    <update id="updateEvent">
+        UPDATE calendar_events
+           SET platform_account_id = #{event.platformAccountId},
+               event_type          = #{event.eventType},
+               title               = #{event.title},
+               memo                = #{event.memo},
+               start_at            = #{event.startAt},
+               end_at              = #{event.endAt},
+               status              = #{event.status}
+         WHERE id = #{event.calendarEventId}
+           AND streamer_id = #{event.streamerId}
+    </update>
+
+</mapper>

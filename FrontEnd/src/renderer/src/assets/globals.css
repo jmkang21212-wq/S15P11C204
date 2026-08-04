@@ -1,0 +1,98 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import './fonts/WantedSansVariable.css';
+@import './theme/palette-studio-light.css';
+@import './theme/semantic.css';
+
+/*
+ * LAIVE — 3층: 유틸리티 매핑
+ *
+ * 토큰은 3층 구조다: palette(원시값) → semantic(역할, [data-theme]) → 여기(유틸리티 클래스).
+ * 디자인 시스템을 바꾸려면 위 두 파일만 손대면 되고, 이 파일과 화면 코드는 그대로 둔다.
+ */
+
+@custom-variant dark (&:is([data-theme='dark'] *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  /* 방송 오버레이(미니 위젯·OBS) 전용 — [data-surface='overlay']에서만 값이 채워진다 */
+  --color-briefing-risk: var(--briefing-risk);
+  --color-briefing-chat: var(--briefing-chat);
+  --color-briefing-faq: var(--briefing-faq);
+  --color-briefing-promise: var(--briefing-promise);
+  --color-overlay-icon: var(--overlay-icon);
+  --color-gauge-from: var(--gauge-from);
+  --color-gauge-to: var(--gauge-to);
+  --color-overlay-backdrop: var(--overlay-backdrop);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* 타이포: 본문 Wanted Sans / 수치·ID JetBrains Mono */
+  --font-sans: 'Wanted Sans Variable', 'Pretendard', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* 타이포 스케일 — design.md §1 (text-title/body/caption/metric로 사용) */
+  --text-title: 1.125rem; /* 18px 화면 제목 */
+  --text-body: 0.8125rem; /* 13px 본문 */
+  --text-caption: 0.6875rem; /* 11px 캡션. design.md가 11~12px를 캡션으로 묶어 12·12.5px도 여기 흡수 */
+  --text-metric: 1.75rem; /* 28px 지표 숫자 */
+
+  /*
+   * 스케일 밖 임의값을 기계적으로 흡수하며 커밋 6에서 추가한 보조 단계.
+   * design.md에 명시된 4단계(title/body/caption/metric)로는 못 덮는 지점만 넣었다.
+   */
+  --text-micro: 0.625rem; /* 10px — 뱃지·미니 위젯처럼 캡션보다도 더 작은 지점 (9~10.5px 흡수) */
+  --text-subtitle: 0.875rem; /* 14px — 카드·프로필 이름 헤딩 (본문보다 굵고 크게, 15px 흡수) */
+  --text-display: 1.5rem; /* 24px — 공개 뷰(비인증 웹) 히어로 제목, 앱 내부 title과 구분 (22·26px 흡수) */
+  --text-metric-sm: 1.25rem; /* 20px — 카드 안에 작게 들어가는 보조 지표 숫자 */
+
+  /* elevation — design.md §1 카드 그림자 (shadow-card로 사용) */
+  --shadow-card: 0 10px 34px rgba(0, 0, 0, 0.09);
+  /* LIVE 표시 점 둘레 링 — design.md §6 "레드 도트 + box-shadow 링" */
+  --shadow-live-ring: 0 0 0 3px rgba(225, 29, 72, 0.25);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+}

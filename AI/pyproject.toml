@@ -1,0 +1,72 @@
+[project]
+name = "laive-ai"
+version = "0.1.0"
+description = "실시간 위험 발언 감지 서버 (VAD -> STT -> 사전매칭/LLM 판정)"
+requires-python = ">=3.12"
+
+dependencies = [
+    # 서버
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "websockets>=13",
+    "httpx>=0.27",          # Spring 전송
+    "python-dotenv>=1.0",
+
+    # 음성 처리
+    "numpy>=2.0",
+    "silero-vad>=6.0",      # torch, torchaudio를 함께 설치한다
+    "onnxruntime>=1.20",    # VAD를 ONNX로 실행 (CPU에서 PyTorch보다 가볍다)
+    # torch는 silero-vad의 전이 의존성이지만 여기서 직접 선언한다.
+    # tool.uv.sources(맨 아래)는 직접 의존성에만 적용되기 때문 — 선언하지 않으면
+    # CPU 인덱스 지정이 무시되고 Linux에서 CUDA 빌드를 받는다.
+    "torch>=2.0",
+    "torchaudio>=2.0",
+
+    # 판정
+    "groq>=1.6",            # Whisper STT
+    "openai>=2.0",          # SSAFY GMS(OpenAI 호환 프록시) 경유 LLM 판정
+    "pyahocorasick>=2.1",   # 사전매칭
+    "pyyaml>=6.0",          # 사전 파일 로드
+
+    # 채팅 감정 분류 (chat-ai/) — fastapi·uvicorn·onnxruntime·numpy는 위와 공유
+    "transformers>=4.46,<5",  # KcELECTRA 토크나이저
+    "requests>=2.31",         # fetch_model.py 모델 다운로드
+    "redis>=5",               # 슬라이딩 윈도우 (팀 Redis의 DB 1 사용)
+    # 리플레이 시뮬레이터 (chat-ai/replay/)
+    "aiohttp>=3.10",
+    "websocket-client>=1.7",
+
+    # 치지직 채팅 수집기 (chat-collector/) — httpx·fastapi·uvicorn은 위와 공유
+    "python-socketio[client]>=5.11",  # 치지직 채팅 socket.io 연결
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",            # chat-ai/tests, chat-collector/tests 실행기
+    "fakeredis[lua]>=2.26",   # [lua] = lupa, Lua 스크립트(락 해제) 테스트에 필요
+]
+
+[tool.uv]
+package = false
+
+# torch를 CPU 전용 인덱스에서 받는다.
+#
+# 왜 필요한가: PyPI 기본 torch는 **Linux에서 GPU(CUDA) 빌드**다. 우리는 GPU를
+# 쓰지 않는데도 nvidia-cudnn·nccl·cublas 등 15개 휠 4~5GB가 딸려온다.
+# Windows/macOS 기본은 CPU판이라 개발 PC에서는 이 문제가 보이지 않고,
+# Linux에서 처음 설치할 때(= Docker 빌드, EC2 배포) 비로소 드러난다.
+#
+# torch가 필요한 이유는 어댑터 한 줄뿐이다 — VAD 추론 자체는 ONNX로 돈다:
+#   app/audio/segmenter.py:76  load_silero_vad(onnx=True)
+#   app/audio/segmenter.py:97  self._vad(torch.from_numpy(samples), ...)
+#
+# explicit = true: 이 인덱스는 아래 sources에 명시한 패키지만 가져온다.
+# (빼면 다른 의존성까지 이 인덱스에서 찾다가 엉뚱한 버전을 잡을 수 있다)
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchaudio = { index = "pytorch-cpu" }

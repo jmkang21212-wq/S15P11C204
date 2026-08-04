@@ -1,0 +1,60 @@
+appId: com.example.laive
+productName: LAIVE
+directories:
+  buildResources: build
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  # ffmpeg 바이너리는 extraResources로 별도 복사한다(asar 안 파일은 실행 권한이 없어
+  # spawn이 안 먹는다). node_modules 안의 사본까지 그대로 두면 82MB가 앱에 중복으로 들어간다.
+  - '!node_modules/ffmpeg-static/ffmpeg*'
+asarUnpack:
+  - resources/**
+extraResources:
+  # FFmpeg(GPLv3, libx264 포함 — gyan.dev release-essentials 빌드) 실행 파일과
+  # 라이선스·빌드 출처 정보를 그대로 함께 배포한다. filter가 플랫폼별 파일명
+  # (win: ffmpeg.exe / mac·linux: ffmpeg)과 그 옆의 .LICENSE·.README를 함께 잡는다.
+  - from: node_modules/ffmpeg-static
+    to: .
+    filter:
+      - 'ffmpeg*'
+  - from: resources/FFMPEG-NOTICE.txt
+    to: FFMPEG-NOTICE.txt
+win:
+  executableName: laive-client
+nsis:
+  artifactName: ${name}-${version}-setup.${ext}
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: always
+mac:
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    - NSCameraUsageDescription: Application requests access to the device's camera.
+    - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
+    - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
+    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+  notarize: false
+dmg:
+  artifactName: ${name}-${version}.${ext}
+linux:
+  target:
+    - AppImage
+    - snap
+    - deb
+  maintainer: electronjs.org
+  category: Utility
+appImage:
+  artifactName: ${name}-${version}.${ext}
+npmRebuild: false
+# 자동 업데이트 배포처. nginx가 /download/를 정적 서빙한다(deploy/nginx/laive.conf).
+# electron-updater가 이 주소의 latest.yml을 보고 새 버전을 판단하므로, 빌드
+# 산출물(.exe와 latest.yml)을 함께 올려야 갱신이 걸린다. .exe만 올리면 이미
+# 설치한 사용자에게는 새 버전이 보이지 않는다.
+publish:
+  provider: generic
+  url: https://i15c204.p.ssafy.io/download

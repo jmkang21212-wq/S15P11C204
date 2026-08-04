@@ -1,0 +1,541 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.laive.growth.repository.mybatis.GrowthMapper">
+
+    <resultMap id="growthGoalMap" type="com.example.laive.growth.domain.GrowthGoal">
+        <constructor>
+            <idArg column="id" javaType="_long"/>
+            <arg column="streamer_id" javaType="_long"/>
+            <arg column="metric_type" javaType="com.example.laive.growth.domain.GrowthMetricType"/>
+            <arg column="target_value" javaType="java.math.BigDecimal"/>
+            <arg column="unit" javaType="com.example.laive.growth.domain.GrowthMetricUnit"/>
+            <arg column="period_start" javaType="java.time.LocalDate"/>
+            <arg column="period_end" javaType="java.time.LocalDate"/>
+            <arg column="status" javaType="com.example.laive.growth.domain.GrowthGoalStatus"/>
+            <arg column="revision" javaType="_long"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="growthActionGenerationMap"
+               type="com.example.laive.growth.domain.GrowthActionGeneration">
+        <constructor>
+            <idArg column="id" javaType="_long"/>
+            <arg column="growth_goal_id" javaType="_long"/>
+            <arg column="source_report_id" javaType="java.lang.Long"/>
+            <arg column="goal_revision" javaType="_long"/>
+            <arg column="trigger_type" javaType="com.example.laive.growth.domain.GrowthActionTriggerType"/>
+            <arg column="status" javaType="com.example.laive.growth.domain.GrowthActionJobStatus"/>
+            <arg column="prompt_version" javaType="java.lang.String"/>
+            <arg column="idempotency_key" javaType="java.lang.String"/>
+            <arg column="input_fingerprint" javaType="java.lang.String"/>
+            <arg column="requested_at" javaType="java.time.Instant"/>
+            <arg column="started_at" javaType="java.time.Instant"/>
+            <arg column="completed_at" javaType="java.time.Instant"/>
+            <arg column="error_code" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findSeries" resultType="com.example.laive.growth.domain.GrowthSeriesPoint">
+        WITH buckets AS (
+            SELECT gs::date AS period_start,
+                   LEAST(
+                   <choose>
+                       <when test="periodType.name() == 'WEEKLY'">
+                           gs::date + 7
+                       </when>
+                       <otherwise>
+                           (gs::date + interval '1 month')::date
+                       </otherwise>
+                   </choose>,
+                   cast(#{to} as date) + 1
+                   ) AS period_end_exclusive
+              FROM generate_series(
+                    cast(#{from} as date)::timestamp,
+                    cast(#{to} as date)::timestamp,
+                    <choose>
+                        <when test="periodType.name() == 'WEEKLY'">interval '7 days'</when>
+                        <otherwise>interval '1 month'</otherwise>
+                    </choose>
+              ) gs
+        ),
+        eligible AS (
+            <choose>
+                <when test="platformCode == null or platformCode == 'ALL'">
+                    SELECT s.started_at,
+                           s.ended_at,
+                           r.avg_viewers,
+                           r.total_chat
+                      FROM broadcast_sessions s
+                      JOIN reports r ON r.session_id = s.id
+                     WHERE s.streamer_id = #{streamerId}
+                       AND s.status = 'ENDED'
+                       AND r.status IN ('COMPLETED', 'PARTIAL')
+                       AND s.ended_at &gt; (
+                           cast(#{from} as date)::timestamp AT TIME ZONE 'UTC'
+                       )
+                       AND s.started_at &lt; (
+                           (cast(#{to} as date) + 1)::timestamp AT TIME ZONE 'UTC'
+                       )
+                </when>
+                <otherwise>
+                    SELECT ps.started_at,
+                           ps.ended_at,
+                           rpm.avg_viewers,
+                           rpm.total_chat
+                      FROM broadcast_sessions s
+                      JOIN reports r ON r.session_id = s.id
+                      JOIN report_platform_metrics rpm ON rpm.report_id = r.id
+                      JOIN broadcast_platform_sessions ps ON ps.id = rpm.platform_session_id
+                      JOIN platform_accounts pa ON pa.id = ps.platform_account_id
+                     WHERE s.streamer_id = #{streamerId}
+                       AND s.status = 'ENDED'
+                       AND ps.status = 'ENDED'
+                       AND r.status IN ('COMPLETED', 'PARTIAL')
+                       AND pa.platform = #{platformCode}
+                       AND ps.ended_at &gt; (
+                           cast(#{from} as date)::timestamp AT TIME ZONE 'UTC'
+                       )
+                       AND ps.started_at &lt; (
+                           (cast(#{to} as date) + 1)::timestamp AT TIME ZONE 'UTC'
+                       )
+                </otherwise>
+            </choose>
+        ),
+        bucket_session_overlaps AS (
+            SELECT b.period_start,
+                   b.period_end_exclusive,
+                   e.started_at,
+                   e.avg_viewers,
+                   e.total_chat,
+                   CASE
+                       WHEN e.started_at IS NULL OR e.ended_at IS NULL THEN 0
+                       ELSE GREATEST(
+                           extract(epoch FROM
+                               LEAST(
+                                   e.ended_at,
+                                   b.period_end_exclusive::timestamp AT TIME ZONE 'UTC'
+                               )
+                               - GREATEST(
+                                   e.started_at,
+                                   b.period_start::timestamp AT TIME ZONE 'UTC'
+                               )
+                           ),
+                           0
+                       )
+                   END AS overlap_seconds
+              FROM buckets b
+              LEFT JOIN eligible e
+                ON e.started_at &lt; (
+                       b.period_end_exclusive::timestamp AT TIME ZONE 'UTC'
+                   )
+               AND e.ended_at &gt; (
+                       b.period_start::timestamp AT TIME ZONE 'UTC'
+                   )
+        )
+        SELECT period_start,
+               (period_end_exclusive::date - 1) AS period_end,
+               round(
+                   sum(avg_viewers * overlap_seconds)
+                       FILTER (WHERE avg_viewers IS NOT NULL)
+                   / nullif(
+                       sum(overlap_seconds) FILTER (WHERE avg_viewers IS NOT NULL),
+                       0
+                   )
+               )::int AS average_viewers,
+               coalesce(sum(total_chat) FILTER (
+                   WHERE started_at &gt;= (
+                             period_start::timestamp AT TIME ZONE 'UTC'
+                         )
+                     AND started_at &lt; (
+                             period_end_exclusive::timestamp AT TIME ZONE 'UTC'
+                         )
+               ), 0)::bigint AS total_chat,
+               round(coalesce(sum(overlap_seconds), 0) / 60.0)::bigint AS broadcast_minutes
+          FROM bucket_session_overlaps
+         GROUP BY period_start, period_end_exclusive
+         ORDER BY period_start
+    </select>
+
+    <sql id="goalColumns">
+        id, streamer_id, metric_type, target_value, unit, period_start, period_end, status, revision
+    </sql>
+
+    <select id="findGoals" resultMap="growthGoalMap">
+        SELECT <include refid="goalColumns"/>
+          FROM growth_goals
+         WHERE streamer_id = #{streamerId}
+        <if test="status != null">
+           AND status = #{status}
+        </if>
+         ORDER BY period_end, id
+    </select>
+
+    <select id="findOwned" resultMap="growthGoalMap">
+        SELECT <include refid="goalColumns"/>
+          FROM growth_goals
+         WHERE streamer_id = #{streamerId}
+           AND id = #{goalId}
+    </select>
+
+    <select id="findOwnedForUpdate" resultMap="growthGoalMap">
+        SELECT <include refid="goalColumns"/>
+          FROM growth_goals
+         WHERE streamer_id = #{streamerId}
+           AND id = #{goalId}
+         FOR UPDATE
+    </select>
+
+    <select id="findActions" resultType="com.example.laive.growth.domain.GrowthAction">
+        SELECT id,
+               growth_goal_id,
+               generation_id,
+               title,
+               content
+          FROM growth_actions
+         WHERE growth_goal_id IN
+        <foreach collection="goalIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+         ORDER BY growth_goal_id, id
+    </select>
+
+    <select id="findGoalMetrics" resultType="com.example.laive.growth.domain.GrowthGoalMetrics">
+        WITH selected_goals AS (
+            SELECT *
+              FROM growth_goals
+             WHERE streamer_id = #{streamerId}
+               AND id IN
+            <foreach collection="goalIds" item="id" open="(" separator="," close=")">
+                #{id}
+            </foreach>
+        ),
+        eligible AS (
+            SELECT s.streamer_id,
+                   s.started_at,
+                   s.ended_at,
+                   r.avg_viewers,
+                   r.total_chat
+              FROM broadcast_sessions s
+              JOIN reports r ON r.session_id = s.id
+             WHERE s.streamer_id = #{streamerId}
+               AND s.status = 'ENDED'
+               AND r.status IN ('COMPLETED', 'PARTIAL')
+        ),
+        per_goal AS (
+            SELECT g.id AS growth_goal_id,
+                   g.period_start,
+                   g.period_end,
+                   e.started_at,
+                   e.avg_viewers,
+                   e.total_chat,
+                   CASE
+                       WHEN e.started_at IS NULL OR e.ended_at IS NULL THEN 0
+                       ELSE GREATEST(
+                           extract(epoch FROM
+                               LEAST(
+                                   e.ended_at,
+                                   (g.period_end + 1)::timestamp AT TIME ZONE 'UTC'
+                               )
+                               - GREATEST(
+                                   e.started_at,
+                                   g.period_start::timestamp AT TIME ZONE 'UTC'
+                               )
+                           ),
+                           0
+                       )
+                   END AS overlap_seconds
+              FROM selected_goals g
+              LEFT JOIN eligible e
+                ON e.started_at &lt; (
+                       (g.period_end + 1)::timestamp AT TIME ZONE 'UTC'
+                   )
+               AND e.ended_at &gt; (
+                       g.period_start::timestamp AT TIME ZONE 'UTC'
+                   )
+        )
+        SELECT growth_goal_id,
+               round((
+                   sum(avg_viewers * overlap_seconds)
+                       FILTER (WHERE avg_viewers IS NOT NULL)
+                   / nullif(
+                       sum(overlap_seconds) FILTER (WHERE avg_viewers IS NOT NULL),
+                       0
+                   )
+               )::numeric,
+                   2
+               ) AS average_viewers,
+               coalesce(sum(total_chat) FILTER (
+                   WHERE started_at &gt;= (
+                             period_start::timestamp AT TIME ZONE 'UTC'
+                         )
+                     AND started_at &lt; (
+                             (period_end + 1)::timestamp AT TIME ZONE 'UTC'
+                         )
+               ), 0)::numeric AS total_chat,
+               round(
+                   (coalesce(sum(overlap_seconds), 0) / 60.0)::numeric,
+                   2
+               ) AS broadcast_minutes,
+               round(
+                   count(started_at) FILTER (
+                       WHERE started_at &gt;= (
+                                 period_start::timestamp AT TIME ZONE 'UTC'
+                             )
+                         AND started_at &lt; (
+                                 (period_end + 1)::timestamp AT TIME ZONE 'UTC'
+                             )
+                   )::numeric
+                   / ((period_end - period_start + 1)::numeric / 7),
+                   2
+               ) AS broadcasts_per_week
+          FROM per_goal
+         GROUP BY growth_goal_id, period_start, period_end
+         ORDER BY growth_goal_id
+    </select>
+
+    <select id="lockScope" resultType="int">
+        SELECT 1
+          FROM (
+                SELECT pg_advisory_xact_lock(
+                    hashtextextended(
+                        concat(#{streamerId}::text, ':', #{metricType}::text),
+                        0
+                    )
+                )
+          ) locked
+    </select>
+
+    <select id="existsOverlappingActive" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1
+              FROM growth_goals
+             WHERE streamer_id = #{streamerId}
+               AND metric_type = #{metricType}
+               AND status = 'ACTIVE'
+               AND period_start &lt;= #{periodEnd}
+               AND period_end &gt;= #{periodStart}
+            <if test="excludedGoalId != null">
+               AND id &lt;&gt; #{excludedGoalId}
+            </if>
+        )
+    </select>
+
+    <select id="insertGoal" resultType="long">
+        INSERT INTO growth_goals (
+            streamer_id, metric_type, target_value, unit,
+            period_start, period_end, status
+        ) VALUES (
+            #{goal.streamerId},
+            #{goal.metricType},
+            #{goal.targetValue},
+            #{goal.unit},
+            #{goal.periodStart},
+            #{goal.periodEnd},
+            #{goal.status}
+        )
+        RETURNING id
+    </select>
+
+    <update id="updateGoal">
+        UPDATE growth_goals
+           SET metric_type = #{goal.metricType},
+               target_value = #{goal.targetValue},
+               unit = #{goal.unit},
+               period_start = #{goal.periodStart},
+               period_end = #{goal.periodEnd},
+               status = #{goal.status},
+               revision = #{goal.revision}
+         WHERE id = #{goal.id}
+           AND streamer_id = #{goal.streamerId}
+    </update>
+
+    <sql id="generationColumns">
+        id, growth_goal_id, source_report_id, goal_revision, trigger_type, status,
+        prompt_version, idempotency_key, input_fingerprint, requested_at,
+        started_at, completed_at, error_code
+    </sql>
+
+    <select id="findGoal" resultMap="growthGoalMap">
+        SELECT <include refid="goalColumns"/>
+          FROM growth_goals
+         WHERE id = #{goalId}
+    </select>
+
+    <select id="findGeneration" resultMap="growthActionGenerationMap">
+        SELECT <include refid="generationColumns"/>
+          FROM growth_action_generations
+         WHERE id = #{generationId}
+    </select>
+
+    <select id="findGenerationForUpdate" resultMap="growthActionGenerationMap">
+        SELECT <include refid="generationColumns"/>
+          FROM growth_action_generations
+         WHERE id = #{generationId}
+         FOR UPDATE
+    </select>
+
+    <select id="findLatestGenerations" resultMap="growthActionGenerationMap">
+        SELECT DISTINCT ON (growth_goal_id)
+               <include refid="generationColumns"/>
+          FROM growth_action_generations
+         WHERE growth_goal_id IN
+        <foreach collection="goalIds" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+         ORDER BY growth_goal_id, requested_at DESC, id DESC
+    </select>
+
+    <select id="findRunningGeneration" resultMap="growthActionGenerationMap">
+        SELECT <include refid="generationColumns"/>
+          FROM growth_action_generations
+         WHERE growth_goal_id = #{goalId}
+           AND status IN ('PENDING', 'PROCESSING')
+         ORDER BY requested_at DESC, id DESC
+         LIMIT 1
+    </select>
+
+    <select id="hasEligibleReport" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1
+              FROM growth_goals g
+              JOIN broadcast_sessions s
+                ON s.streamer_id = g.streamer_id
+               AND (s.started_at AT TIME ZONE 'UTC')::date
+                   BETWEEN g.period_start AND g.period_end
+              JOIN reports r ON r.session_id = s.id
+             WHERE g.id = #{goalId}
+               AND s.status = 'ENDED'
+               AND r.status IN ('COMPLETED', 'PARTIAL')
+        )
+    </select>
+
+    <select id="findRecentReports"
+            resultType="com.example.laive.growth.ai.RecentGrowthReport">
+        SELECT r.id AS report_id,
+               s.title,
+               s.ended_at,
+               r.status,
+               r.avg_viewers,
+               r.peak_viewers,
+               coalesce(r.total_chat, 0)::bigint AS total_chat,
+               round(extract(epoch FROM (s.ended_at - s.started_at)) / 60.0)::bigint
+                   AS broadcast_minutes,
+               coalesce(r.summary, '') AS summary,
+               coalesce((
+                   SELECT string_agg(
+                              concat(pa.platform,
+                                     ':avg=', coalesce(rpm.avg_viewers::text, 'unknown'),
+                                     ',peak=', coalesce(rpm.peak_viewers::text, 'unknown'),
+                                     ',chat=', rpm.total_chat,
+                                     ',minutes=', round(rpm.broadcast_seconds / 60.0),
+                                     ',coverage=', coalesce(rpm.viewer_coverage::text, 'unsupported'),
+                                     ',quality=', rpm.data_quality),
+                              E'\n' ORDER BY pa.platform, rpm.platform_session_id
+                          )
+                     FROM report_platform_metrics rpm
+                     JOIN broadcast_platform_sessions ps ON ps.id = rpm.platform_session_id
+                     JOIN platform_accounts pa ON pa.id = ps.platform_account_id
+                    WHERE rpm.report_id = r.id
+               ), '') AS platform_breakdown
+          FROM growth_goals g
+          JOIN broadcast_sessions s
+            ON s.streamer_id = g.streamer_id
+           AND (s.started_at AT TIME ZONE 'UTC')::date
+               BETWEEN g.period_start AND g.period_end
+          JOIN reports r ON r.session_id = s.id
+         WHERE g.id = #{goalId}
+           AND s.status = 'ENDED'
+           AND r.status IN ('COMPLETED', 'PARTIAL')
+         ORDER BY s.ended_at DESC, r.id DESC
+         LIMIT #{limit}
+    </select>
+
+    <select id="findActiveGoalsAffectedByReport" resultMap="growthGoalMap">
+        SELECT g.id, g.streamer_id, g.metric_type, g.target_value, g.unit,
+               g.period_start, g.period_end, g.status, g.revision
+          FROM reports r
+          JOIN broadcast_sessions s ON s.id = r.session_id
+          JOIN growth_goals g
+            ON g.streamer_id = s.streamer_id
+           AND (s.started_at AT TIME ZONE 'UTC')::date
+               BETWEEN g.period_start AND g.period_end
+         WHERE r.id = #{reportId}
+           AND r.status IN ('COMPLETED', 'PARTIAL')
+           AND g.status = 'ACTIVE'
+         ORDER BY g.id
+    </select>
+
+    <select id="insertGeneration" resultType="long">
+        INSERT INTO growth_action_generations (
+            growth_goal_id, source_report_id, goal_revision, trigger_type,
+            status, prompt_version, idempotency_key, requested_at
+        ) VALUES (
+            #{goalId}, #{sourceReportId}, #{revision}, #{triggerType},
+            #{status}, #{promptVersion}, #{idempotencyKey}, #{requestedAt}
+        )
+        ON CONFLICT (idempotency_key)
+        DO UPDATE SET idempotency_key = EXCLUDED.idempotency_key
+        RETURNING id
+    </select>
+
+    <update id="supersedeOlder">
+        UPDATE growth_action_generations
+           SET status = 'SUPERSEDED', completed_at = now()
+         WHERE growth_goal_id = #{goalId}
+           AND goal_revision &lt; #{revision}
+           AND status IN ('WAITING_FOR_DATA', 'PENDING', 'PROCESSING')
+    </update>
+
+    <update id="supersedeCompeting">
+        UPDATE growth_action_generations
+           SET status = 'SUPERSEDED', completed_at = now()
+         WHERE growth_goal_id = #{goalId}
+           AND id &lt;&gt; #{generationId}
+           AND status IN ('WAITING_FOR_DATA', 'PENDING', 'PROCESSING')
+    </update>
+
+    <update id="markGenerationProcessing">
+        UPDATE growth_action_generations
+           SET status = 'PROCESSING', started_at = #{startedAt}, error_code = NULL
+         WHERE id = #{generationId}
+           AND status = 'PENDING'
+    </update>
+
+    <update id="markGenerationPending">
+        UPDATE growth_action_generations
+           SET status = 'PENDING', error_code = #{errorCode}
+         WHERE id = #{generationId}
+           AND status = 'PROCESSING'
+    </update>
+
+    <update id="markGenerationFailed">
+        UPDATE growth_action_generations
+           SET status = 'FAILED', completed_at = #{completedAt}, error_code = #{errorCode}
+         WHERE id = #{generationId}
+           AND status IN ('PENDING', 'PROCESSING')
+    </update>
+
+    <update id="markGenerationCompleted">
+        UPDATE growth_action_generations
+           SET status = 'COMPLETED',
+               input_fingerprint = #{fingerprint},
+               completed_at = #{completedAt},
+               error_code = NULL
+         WHERE id = #{generationId}
+           AND status = 'PROCESSING'
+    </update>
+
+    <delete id="deleteActions">
+        DELETE FROM growth_actions WHERE growth_goal_id = #{goalId}
+    </delete>
+
+    <insert id="insertActions">
+        INSERT INTO growth_actions (growth_goal_id, generation_id, title, content)
+        VALUES
+        <foreach collection="actions" item="action" separator=",">
+            (#{goalId}, #{generationId}, #{action.title}, #{action.content})
+        </foreach>
+    </insert>
+</mapper>

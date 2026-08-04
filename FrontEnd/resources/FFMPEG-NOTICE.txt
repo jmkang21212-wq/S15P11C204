@@ -1,0 +1,16 @@
+This application bundles FFmpeg (https://ffmpeg.org), used to cut highlight
+clips and generate thumbnails from local OBS recordings.
+
+FFmpeg is invoked as a separate command-line process (child_process.spawn) —
+it is not linked into this application's binary or source.
+
+The bundled build is licensed under the GNU General Public License v3
+(GPLv3), because it includes libx264/libx265. See the files next to this one:
+
+  ffmpeg(.exe).LICENSE  — full GPLv3 license text
+  ffmpeg(.exe).README   — exact build version and upstream source location
+
+Windows builds are produced by gyan.dev (https://www.gyan.dev/ffmpeg/builds/).
+macOS and Linux builds are produced by evermeet.cx, osxexperts.net, and
+johnvansickle.com respectively — see ffmpeg-static's own README for the full
+list: https://github.com/eugeneware/ffmpeg-static.

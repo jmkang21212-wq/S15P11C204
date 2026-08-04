@@ -1,0 +1,114 @@
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# --- 로깅 ---
+# 로그 파일 경로. 빈 문자열이면 콘솔에만 남긴다.
+# 기본은 AI/logs/voice.log (실행 위치와 무관하게 패키지 기준으로 잡는다).
+LOG_FILE = os.getenv("VOICE_LOG_FILE",
+                     str(Path(__file__).resolve().parents[1] / "logs" / "voice.log"))
+
+# --- WebSocket 접속 인증 ---
+# Spring이 발급한 일회용 티켓을 조회할 Redis.
+# ⚠ Spring이 쓰는 DB(기본 0)여야 한다. 채팅 감정 서버가 쓰는 DB 1이 아니다.
+VOICE_REDIS_URL = os.getenv("VOICE_REDIS_URL", "redis://127.0.0.1:6379/0")
+# 1이면 티켓 없이도 접속을 허용한다. static/client.html 같은 개발 도구용이며
+# 기동 시·접속 시마다 경고를 남긴다. 배포 환경에서는 절대 켜지 말 것.
+VOICE_AUTH_DEV_BYPASS = os.getenv("VOICE_AUTH_DEV_BYPASS", "0") == "1"
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+if not GROQ_API_KEY:
+    raise RuntimeError(".env에 GROQ_API_KEY가 없습니다. .env.example을 복사해서 채우세요.")
+
+# SSAFY GMS. OpenAI 호환 프록시라 openai SDK에 base_url만 바꿔 끼우면 된다.
+GMS_KEY = os.getenv("GMS_KEY")
+GMS_BASE_URL = "https://gms.ssafy.io/gmsapi/api.openai.com/v1"
+LLM_MODEL = "gpt-5-mini"
+
+LLM_REASONING_EFFORT = "minimal"
+LLM_WORKERS = 2
+LLM_QUEUE_MAX = 16      
+LLM_MAX_RETRIES = 1
+LLM_CONTEXT_SEC = 10.0
+LLM_MIN_TEXT_LEN = 2
+
+# LLM 판정이 이 등급 이상일 때만 알린다.
+#
+# ⚠ 사전 경로에는 걸리지 않는다. 사전 히트는 severity와 무관하게 전부 알린다
+# (server.py의 `if hits:`). 스트리머가 금칙어로 "이건 무조건 잡아"라고 등록한 것이
+# 임계값에 걸러지면 안 되기 때문이다.
+#
+# 등급은 '위험한지'가 아니라 '얼마나 심한지'를 뜻한다. 위험이 아니라는 판단은
+# none이 받고, low부터는 실제로 비속어가 있다는 뜻이다(프롬프트에 그렇게 명시했다).
+#
+# medium인 이유: low는 "닥쳐·꺼져·재수없어·때릴 거야" 수준이다. 이걸 알림으로 띄우면
+# 경고가 흔해지고, 흔해진 경고는 스트리머가 보지 않게 된다 — 그 순간 정작 잡아야 할
+# 발언까지 같이 묻힌다(RISK_POLICY_SPEC.md §0과 같은 문제의식이다).
+#
+# low였던 시절의 근거는 "none만 걸러내면 된다"였는데, 그건 LLM이 low를 "위험도 낮음
+# (= 위험 아님)"으로 쓰던 것을 막으려던 맥락이었다. 그 방어는 지금 category=none 검사
+# (llm_judge.py의 `is_risky`)가 따로 하고 있어 임계값이 겸할 필요가 없다.
+LLM_ALERT_MIN_RISK = "medium"
+
+# --- 오디오 ---
+SAMPLE_RATE = 16000
+CHUNK = 512        
+
+# --- STT ---
+STT_MODEL = "whisper-large-v3"
+STT_LANGUAGE = "ko"
+
+STT_WORKERS = 2      
+STT_QUEUE_MAX = 32     
+STT_MAX_RETRIES = 2
+
+# 환각 필터. Whisper는 무음/잡음에 "감사합니다" 같은 문장을 지어낸다.
+STT_FILTER_ENABLED = True
+NO_SPEECH_MAX = 0.6         
+AVG_LOGPROB_MIN = -1.8       
+HALLUCINATION_NS_MIN = 0.35  
+
+# --- VAD / 발화 분할 ---
+VAD_THRESHOLD = 0.5
+SILENCE_MS = 500
+MIN_SPEECH_MS = 250
+MAX_UTTERANCE_MS = 6000
+PRE_ROLL_MS = 300
+
+# --- 약속 추적 ---
+# 위험 감지와 반대로 LLM이 주력이다. "2주 안으로 공포게임 할게요"는 사전으로 못 잡는다.
+# 대신 모든 발화를 LLM에 보내면 레이트리밋이 터지므로, 값싼 어미 게이트로 후보만 추린다.
+PROMISE_ENABLED = True
+PROMISE_WORKERS = 1        # 실시간성이 덜 중요해 1개면 충분하다
+PROMISE_QUEUE_MAX = 32
+PROMISE_MIN_CONFIDENCE = 0.6   # 이보다 낮으면 버린다
+PROMISE_DEDUP_SEC = 900        # 같은 약속을 15분 내에 반복하면 한 번만 보낸다
+
+# --- Spring 전송 ---
+# 기본값은 로컬 Spring. 수집기(chat-collector/config.py)와 같은 규칙이다 —
+# "비우면 로컬"로 통일해서 .env를 안 채워도 개발이 되게 한다.
+# 배포에서는 compose가 SPRING_BASE_URL을 항상 넣어주므로 이 값은 쓰이지 않는다.
+#
+# 예전에는 기본값이 ""(전송 안 함)이었다. Spring 연동 규약이 정해지기 전에
+# 만들어져 붙일 곳이 없었기 때문인데, 그 조건은 이미 해소됐다(S15P11C204-183).
+#
+# getenv의 두 번째 인자가 아니라 'or'를 쓰는 이유:
+# getenv는 "없음"과 "있지만 빈 값"을 구분한다. .env.example에 'SPRING_BASE_URL='
+# 줄이 있으므로 복사해 쓰면 전자가 아니라 후자가 되어 기본값이 영영 안 먹는다.
+SPRING_BASE_URL = (os.getenv("SPRING_BASE_URL") or "http://127.0.0.1:8080").rstrip("/")
+SPRING_TOKEN = os.getenv("SPRING_TOKEN", "")   # 서버간 인증용
+# Spring의 내부 API 규약(명세 13.1)을 따른다. {sessionId}는 broadcast_sessions.id다.
+# 프론트가 핸드셰이크에 실어 보낸 번호를 그대로 넣는다.
+SPRING_TRANSCRIPT_PATH = "/internal/v1/sessions/{session_id}/transcripts:batch"
+SPRING_ALERT_PATH = "/internal/v1/sessions/{session_id}/risk-events"
+SPRING_PROMISE_PATH = "/internal/v1/sessions/{session_id}/promises"
+
+# 전사는 양이 많고 지연이 상관없어 묶어 보낸다. 경고는 즉시 개별 전송한다.
+SPRING_BATCH_SIZE = 10    # 이만큼 모이면 보낸다
+SPRING_BATCH_SEC = 2.0    # 덜 모여도 이 시간이 지나면 보낸다
+SPRING_TIMEOUT = 5.0
+SPRING_MAX_RETRIES = 3
+SPRING_QUEUE_MAX = 500    # Spring이 죽어 있는 동안 버틸 양

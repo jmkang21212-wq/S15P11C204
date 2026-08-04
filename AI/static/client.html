@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LAIVE 실시간 감지 테스트</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, "Malgun Gothic", sans-serif; margin: 0;
+         padding: 24px; max-width: 900px; margin-inline: auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: #888; font-size: 13px; margin-bottom: 20px; }
+  .bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+         margin-bottom: 16px; }
+  button { padding: 9px 18px; font-size: 14px; border-radius: 7px;
+           border: 1px solid #8884; cursor: pointer; background: #4a7cf7;
+           color: #fff; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.stop { background: #d9534f; }
+  input { padding: 8px 10px; border-radius: 7px; border: 1px solid #8886;
+          background: transparent; color: inherit; font-size: 14px; }
+  #status { font-size: 13px; color: #888; }
+  #log { border: 1px solid #8883; border-radius: 10px; padding: 14px;
+         min-height: 320px; max-height: 65vh; overflow-y: auto; }
+  .row { padding: 9px 0; border-bottom: 1px solid #8882; }
+  .row:last-child { border-bottom: none; }
+  .meta { font-size: 11px; color: #999; font-variant-numeric: tabular-nums; }
+  .text { margin-top: 3px; }
+  .alert { margin-top: 6px; padding: 8px 11px; border-radius: 7px;
+           font-size: 13px; border-left: 3px solid; }
+  .alert.dict { background: #d9534f22; border-color: #d9534f; }
+  .alert.llm { background: #e8a13322; border-color: #e8a133; }
+  .alert.promise { background: #3aa67c22; border-color: #3aa67c; }
+  .meta2 { color: #999; margin-top: 3px; font-size: 12px; }
+  .tag { font-weight: 700; letter-spacing: .3px; }
+  .reason { color: #999; margin-top: 3px; }
+</style>
+</head>
+<body>
+<h1>LAIVE 실시간 감지</h1>
+<div class="sub">마이크 → WebSocket → VAD → STT → 위험 발언 감지 · 약속 추적</div>
+
+<div class="bar">
+  <input id="sid" value="test-session-1" size="18" placeholder="세션 ID">
+  <button id="start">시작</button>
+  <button id="stop" class="stop" disabled>중지</button>
+  <span id="status">대기 중</span>
+</div>
+
+<div id="log"></div>
+
+<script>
+const workletSrc = `
+class PCMWorklet extends AudioWorkletProcessor {
+  process(inputs) {
+    const ch = inputs[0][0];
+    if (ch) {
+      const out = new Int16Array(ch.length);
+      for (let i = 0; i < ch.length; i++) {
+        const s = Math.max(-1, Math.min(1, ch[i]));
+        out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+      }
+      this.port.postMessage(out.buffer, [out.buffer]);
+    }
+    return true;
+  }
+}
+registerProcessor('pcm-worklet', PCMWorklet);
+`;
+
+const $ = (id) => document.getElementById(id);
+const logEl = $('log'), statusEl = $('status');
+const rows = new Map();
+let ws, ctx, stream, node;
+
+function setStatus(t) { statusEl.textContent = t; }
+
+function rowFor(seq) {
+  let el = rows.get(seq);
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'row';
+    el.innerHTML = '<div class="meta"></div><div class="text"></div>';
+    logEl.appendChild(el);
+    rows.set(seq, el);
+  }
+  logEl.scrollTop = logEl.scrollHeight;
+  return el;
+}
+
+function onTranscript(m) {
+  const el = rowFor(m.seq);
+  const dur = (m.end_ts - m.start_ts).toFixed(1);
+  el.querySelector('.meta').textContent =
+    `#${m.seq}  ${dur}초${m.forced ? '  [강제분할]' : ''}`;
+  el.querySelector('.text').textContent = m.text;
+}
+
+function onAlert(m) {
+  const el = rowFor(m.seq);
+  const div = document.createElement('div');
+  if (m.source === 'dictionary') {
+    div.className = 'alert dict';
+    const words = m.hits.map(h => `"${h.matched}"`).join(', ');
+    div.innerHTML = `<span class="tag">사전 · ${m.severity.toUpperCase()}</span>
+      · ${m.category} · ${words}`;
+  } else {
+    div.className = 'alert llm';
+    div.innerHTML = `<span class="tag">LLM · ${m.severity.toUpperCase()}</span>
+      · ${m.category}<div class="reason">${m.reason}</div>`;
+  }
+  el.appendChild(div);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function onPromise(m) {
+  const el = rowFor(m.seq);
+  const div = document.createElement('div');
+  div.className = 'alert promise';
+
+  const bits = [];
+  if (m.deadline_at) {
+    const d = new Date(m.deadline_at * 1000);
+    bits.push(`기한 ${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-`
+              + `${String(d.getDate()).padStart(2,'0')}`
+              + (m.deadline_text ? ` (${m.deadline_text})` : ''));
+  } else if (m.condition) {
+    bits.push(`조건 ${m.condition}`);
+  } else {
+    bits.push('기한 없음');
+  }
+  bits.push(`확신 ${Math.round(m.confidence * 100)}%`);
+
+  div.innerHTML = `<span class="tag">약속</span> · ${m.content}`
+    + `<div class="meta2">${bits.join(' · ')}</div>`;
+  el.appendChild(div);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+async function start() {
+  $('start').disabled = true;
+  logEl.innerHTML = ''; rows.clear();
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true }
+    });
+  } catch (e) {
+    setStatus('마이크 권한 거부됨'); $('start').disabled = false; return;
+  }
+
+  // 서버의 Silero VAD가 16kHz 고정이라 여기서 반드시 맞춰야 한다.
+  ctx = new AudioContext({ sampleRate: 16000 });
+  if (ctx.sampleRate !== 16000) {
+    setStatus(`경고: 샘플레이트가 ${ctx.sampleRate}Hz입니다 (16000 필요)`);
+  }
+
+  await ctx.audioWorklet.addModule(
+    URL.createObjectURL(new Blob([workletSrc], { type: 'application/javascript' })));
+
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/ws/audio`);
+  ws.binaryType = 'arraybuffer';
+
+  ws.onopen = () => {
+    // transcripts:true 는 개발용이다. 실제 프론트는 경고만 받으면 된다.
+    ws.send(JSON.stringify({
+      session_id: $('sid').value, token: 'dev', transcripts: true
+    }));
+  };
+
+  ws.onmessage = (ev) => {
+    const m = JSON.parse(ev.data);
+    if (m.type === 'ready') {
+      setStatus('녹음 중 · 말씀하세요');
+      $('stop').disabled = false;
+      node = new AudioWorkletNode(ctx, 'pcm-worklet');
+      node.port.onmessage = (e) => {
+        if (ws.readyState === WebSocket.OPEN) ws.send(e.data);
+      };
+      ctx.createMediaStreamSource(stream).connect(node);
+      node.connect(ctx.destination);   // 크롬에서 워클릿이 멈추지 않게 연결만 해둔다
+    } else if (m.type === 'transcript') {
+      onTranscript(m);
+    } else if (m.type === 'alert') {
+      onAlert(m);
+    } else if (m.type === 'promise') {
+      onPromise(m);
+    }
+  };
+
+  ws.onclose = () => { setStatus('연결 종료'); cleanup(); };
+  ws.onerror = () => setStatus('연결 오류');
+}
+
+function cleanup() {
+  if (node) { node.disconnect(); node = null; }
+  if (ctx) { ctx.close(); ctx = null; }
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  $('start').disabled = false;
+  $('stop').disabled = true;
+}
+
+$('start').onclick = start;
+$('stop').onclick = () => { if (ws) ws.close(); cleanup(); setStatus('중지됨'); };
+</script>
+</body>
+</html>

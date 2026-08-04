@@ -1,0 +1,411 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.laive.broadcast.session.repository.mybatis.BroadcastSessionMapper">
+
+    <select id="findOwnedPlatformAccount"
+            resultType="com.example.laive.broadcast.session.repository.PlatformAccountReference">
+        SELECT id AS platform_account_id,
+               streamer_id,
+               platform,
+               CASE
+                   WHEN connection_status = 'CONNECTED'
+                        AND refresh_token_expires_at IS NOT NULL
+                        AND refresh_token_expires_at &lt;= now()
+                   THEN 'REAUTH_REQUIRED'
+                   ELSE connection_status
+               END AS connection_status
+          FROM platform_accounts
+         WHERE id = #{platformAccountId}
+           AND streamer_id = #{streamerId}
+    </select>
+
+    <select id="findOwnedCalendarEvent"
+            resultType="com.example.laive.broadcast.session.repository.CalendarEventReference">
+        SELECT id AS calendar_event_id,
+               streamer_id,
+               platform_account_id,
+               event_type,
+               status
+          FROM calendar_events
+         WHERE id = #{calendarEventId}
+           AND streamer_id = #{streamerId}
+    </select>
+
+    <select id="existsActive" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1
+              FROM broadcast_sessions
+             WHERE streamer_id = #{streamerId}
+               AND status IN ('PREPARING', 'LIVE')
+        )
+    </select>
+
+    <select id="insertSession" resultType="long" affectData="true" flushCache="true">
+        INSERT INTO broadcast_sessions (
+            streamer_id,
+            platform_account_id,
+            calendar_event_id,
+            title,
+            category,
+            language,
+            status,
+            started_at
+        ) VALUES (
+            #{session.streamerId},
+            #{session.platformAccountId},
+            #{session.calendarEventId},
+            #{session.title},
+            #{session.category},
+            #{session.language},
+            'PREPARING',
+            #{session.startedAt}
+        )
+        RETURNING id
+    </select>
+
+    <sql id="sessionColumns">
+        id,
+        streamer_id,
+        platform_account_id,
+        calendar_event_id,
+        title,
+        category,
+        language,
+        thumbnail_url,
+        vod_url,
+        status,
+        started_at,
+        ended_at,
+        created_at,
+        updated_at
+    </sql>
+
+    <select id="findByIdForUpdate"
+            resultType="com.example.laive.broadcast.session.repository.mybatis.BroadcastSessionRow">
+        SELECT <include refid="sessionColumns"/>
+          FROM broadcast_sessions
+         WHERE id = #{sessionId}
+           AND streamer_id = #{streamerId}
+         FOR UPDATE
+    </select>
+
+    <select id="findById"
+            resultType="com.example.laive.broadcast.session.repository.mybatis.BroadcastSessionRow">
+        SELECT <include refid="sessionColumns"/>
+          FROM broadcast_sessions
+         WHERE id = #{sessionId}
+    </select>
+
+    <update id="markLive">
+        UPDATE broadcast_sessions
+           SET status = 'LIVE'
+         WHERE id = #{sessionId}
+           AND status = 'PREPARING'
+    </update>
+
+    <update id="markEnded">
+        UPDATE broadcast_sessions
+           SET status = 'ENDED',
+               ended_at = #{endedAt}
+         WHERE id = #{sessionId}
+           AND status IN ('PREPARING', 'LIVE')
+    </update>
+
+    <update id="markFailed">
+        UPDATE broadcast_sessions
+           SET status = 'FAILED',
+               ended_at = #{failedAt}
+         WHERE id = #{sessionId}
+           AND status IN ('PREPARING', 'LIVE')
+    </update>
+
+    <update id="completeCalendarEvent">
+        UPDATE calendar_events
+           SET status = 'COMPLETED'
+         WHERE id = #{calendarEventId}
+           AND streamer_id = #{streamerId}
+           AND event_type = 'BROADCAST'
+           AND status = 'SCHEDULED'
+    </update>
+
+    <select id="createProcessingReport" resultType="long" affectData="true" flushCache="true">
+        INSERT INTO reports (session_id, status)
+        VALUES (#{sessionId}, 'PROCESSING')
+        ON CONFLICT (session_id) DO UPDATE
+            SET session_id = EXCLUDED.session_id
+        RETURNING id
+    </select>
+
+    <sql id="detailColumns">
+        s.id AS session_id,
+        s.platform_account_id,
+        s.calendar_event_id,
+        s.title,
+        s.category,
+        s.language,
+        s.thumbnail_url,
+        s.vod_url,
+        s.status,
+        s.started_at,
+        s.ended_at
+    </sql>
+
+    <select id="findCurrent"
+            resultType="com.example.laive.broadcast.session.domain.BroadcastSessionDetail">
+        SELECT <include refid="detailColumns"/>
+          FROM broadcast_sessions s
+         WHERE s.streamer_id = #{streamerId}
+           AND s.status IN ('PREPARING', 'LIVE')
+         ORDER BY s.started_at DESC, s.id DESC
+         LIMIT 1
+    </select>
+
+    <select id="findDetail"
+            resultType="com.example.laive.broadcast.session.domain.BroadcastSessionDetail">
+        SELECT <include refid="detailColumns"/>
+          FROM broadcast_sessions s
+         WHERE s.id = #{sessionId}
+           AND s.streamer_id = #{streamerId}
+    </select>
+
+    <select id="findPage"
+            resultType="com.example.laive.broadcast.session.domain.BroadcastSessionListItem">
+        SELECT s.id AS session_id,
+               s.title,
+               s.category,
+               s.thumbnail_url,
+               s.status,
+               s.started_at,
+               s.ended_at,
+               r.status AS report_status
+          FROM broadcast_sessions s
+          LEFT JOIN reports r ON r.session_id = s.id
+         WHERE s.streamer_id = #{streamerId}
+        <if test="status != null">
+           AND s.status = #{status}
+        </if>
+         ORDER BY s.started_at DESC, s.id DESC
+         LIMIT #{limit}
+        OFFSET #{offset}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT count(*)
+          FROM broadcast_sessions
+         WHERE streamer_id = #{streamerId}
+        <if test="status != null">
+           AND status = #{status}
+        </if>
+    </select>
+
+    <!--
+      감정은 chat_messages의 건별 라벨을 세어 확정한다 (API 명세 13.7).
+      비율이 아니라 건수를 저장하므로 반올림 잔차가 생기지 않고, 건별로 세는
+      것 자체가 채팅량 가중이라 윈도우 가중치를 따로 둘 필요가 없다.
+
+      count(sentiment_label)은 NULL을 세지 않으므로 그대로 analyzed_chat이 된다.
+      total_chat과의 차이가 방송 중 분류 호출이 실패한 분량이다.
+
+      채팅이 없으면 여덟 건수와 analyzed_chat이 모두 0이고, 시청자 지표가
+      없으면 average_viewers·peak_viewers만 NULL이 된다 (명세 1.5).
+    -->
+    <select id="calculateStatistics"
+            resultType="com.example.laive.broadcast.session.domain.SessionStatistics">
+        WITH viewer AS (
+            WITH raw_statistics AS (
+                SELECT round(avg(viewer_count))::int AS average_viewers,
+                       max(viewer_count)::int        AS peak_viewers
+                  FROM viewer_metrics
+                 WHERE session_id = #{sessionId}
+            ), platform_count AS (
+                SELECT count(DISTINCT coalesce(platform_session_id, -1)) AS value
+                  FROM viewer_metrics
+                 WHERE session_id = #{sessionId}
+            ), latest_by_platform_minute AS (
+                SELECT platform_session_id,
+                       date_trunc('minute', measured_at) AS minute,
+                       (array_agg(viewer_count ORDER BY measured_at DESC))[1] AS viewer_count
+                  FROM viewer_metrics
+                 WHERE session_id = #{sessionId}
+                 GROUP BY platform_session_id, date_trunc('minute', measured_at)
+            ), combined AS (
+                SELECT minute, sum(viewer_count) AS viewer_count
+                  FROM latest_by_platform_minute
+                 GROUP BY minute
+            ), combined_statistics AS (
+                SELECT round(avg(viewer_count))::int AS average_viewers,
+                       max(viewer_count)::int        AS peak_viewers
+                  FROM combined
+            )
+            SELECT CASE WHEN p.value &lt;= 1 THEN r.average_viewers ELSE c.average_viewers END
+                       AS average_viewers,
+                   CASE WHEN p.value &lt;= 1 THEN r.peak_viewers ELSE c.peak_viewers END
+                       AS peak_viewers
+              FROM raw_statistics r
+             CROSS JOIN platform_count p
+             CROSS JOIN combined_statistics c
+        ),
+        chat AS (
+            SELECT count(*)                                               AS total_chat,
+                   count(sentiment_label)                                 AS analyzed_chat,
+                   count(*) FILTER (WHERE sentiment_label = 'JOY')        AS joy_count,
+                   count(*) FILTER (WHERE sentiment_label = 'EXCITEMENT') AS excitement_count,
+                   count(*) FILTER (WHERE sentiment_label = 'SUPPORT')    AS support_count,
+                   count(*) FILTER (WHERE sentiment_label = 'SURPRISE')   AS surprise_count,
+                   count(*) FILTER (WHERE sentiment_label = 'SADNESS')    AS sadness_count,
+                   count(*) FILTER (WHERE sentiment_label = 'ANGER')      AS anger_count,
+                   count(*) FILTER (WHERE sentiment_label = 'CONFUSION')  AS confusion_count,
+                   count(*) FILTER (WHERE sentiment_label = 'NEUTRAL')    AS neutral_count
+              FROM chat_messages
+             WHERE session_id = #{sessionId}
+        )
+        SELECT v.average_viewers,
+               v.peak_viewers,
+               c.total_chat,
+               c.analyzed_chat,
+               c.joy_count,
+               c.excitement_count,
+               c.support_count,
+               c.surprise_count,
+               c.sadness_count,
+               c.anger_count,
+               c.confusion_count,
+               c.neutral_count
+          FROM viewer v
+         CROSS JOIN chat c
+    </select>
+
+    <update id="updateReportStatistics">
+        UPDATE reports
+           SET avg_viewers      = #{statistics.averageViewers},
+               peak_viewers     = #{statistics.peakViewers},
+               total_chat       = #{statistics.totalChat},
+               analyzed_chat    = #{statistics.analyzedChat},
+               joy_count        = #{statistics.joyCount},
+               excitement_count = #{statistics.excitementCount},
+               support_count    = #{statistics.supportCount},
+               surprise_count   = #{statistics.surpriseCount},
+               sadness_count    = #{statistics.sadnessCount},
+               anger_count      = #{statistics.angerCount},
+               confusion_count  = #{statistics.confusionCount},
+               neutral_count    = #{statistics.neutralCount}
+         WHERE id = #{reportId}
+           AND status = 'PROCESSING'
+    </update>
+
+    <insert id="replaceReportPlatformMetrics">
+        INSERT INTO report_platform_metrics (
+            report_id, platform_session_id, avg_viewers, peak_viewers,
+            total_chat, analyzed_chat,
+            joy_count, excitement_count, support_count, surprise_count,
+            sadness_count, anger_count, confusion_count, neutral_count,
+            broadcast_seconds, viewer_coverage, data_quality
+        )
+        WITH viewer AS (
+            SELECT platform_session_id,
+                   round(avg(viewer_count))::int AS avg_viewers,
+                   max(viewer_count)::int AS peak_viewers,
+                   count(DISTINCT date_trunc('minute', measured_at)) AS observed_minutes
+              FROM viewer_metrics
+             WHERE session_id = #{sessionId}
+             GROUP BY platform_session_id
+        ), chat AS (
+            SELECT platform_session_id,
+                   count(*) AS total_chat,
+                   count(sentiment_label) AS analyzed_chat,
+                   count(*) FILTER (WHERE sentiment_label = 'JOY') AS joy_count,
+                   count(*) FILTER (WHERE sentiment_label = 'EXCITEMENT') AS excitement_count,
+                   count(*) FILTER (WHERE sentiment_label = 'SUPPORT') AS support_count,
+                   count(*) FILTER (WHERE sentiment_label = 'SURPRISE') AS surprise_count,
+                   count(*) FILTER (WHERE sentiment_label = 'SADNESS') AS sadness_count,
+                   count(*) FILTER (WHERE sentiment_label = 'ANGER') AS anger_count,
+                   count(*) FILTER (WHERE sentiment_label = 'CONFUSION') AS confusion_count,
+                   count(*) FILTER (WHERE sentiment_label = 'NEUTRAL') AS neutral_count
+              FROM chat_messages
+             WHERE session_id = #{sessionId}
+             GROUP BY platform_session_id
+        ), source AS (
+            SELECT ps.id AS platform_session_id,
+                   greatest(0, extract(epoch FROM (
+                       coalesce(ps.ended_at, bs.ended_at, now())
+                       - coalesce(ps.started_at, bs.started_at)
+                   )))::bigint AS broadcast_seconds,
+                   coalesce(cap.support_status, 'SUPPORTED') AS viewer_support,
+                   ps.status
+              FROM broadcast_platform_sessions ps
+              JOIN broadcast_sessions bs ON bs.id = ps.broadcast_session_id
+              LEFT JOIN platform_session_capability_runs cap
+                ON cap.platform_session_id = ps.id
+               AND cap.capability_code = 'VIEWER_METRICS'
+             WHERE ps.broadcast_session_id = #{sessionId}
+        ), calculated AS (
+            SELECT s.*,
+                   v.avg_viewers,
+                   v.peak_viewers,
+                   coalesce(v.observed_minutes, 0) AS observed_minutes,
+                   greatest(1, ceil(s.broadcast_seconds / 60.0)) AS expected_minutes,
+                   coalesce(c.total_chat, 0) AS total_chat,
+                   coalesce(c.analyzed_chat, 0) AS analyzed_chat,
+                   coalesce(c.joy_count, 0) AS joy_count,
+                   coalesce(c.excitement_count, 0) AS excitement_count,
+                   coalesce(c.support_count, 0) AS support_count,
+                   coalesce(c.surprise_count, 0) AS surprise_count,
+                   coalesce(c.sadness_count, 0) AS sadness_count,
+                   coalesce(c.anger_count, 0) AS anger_count,
+                   coalesce(c.confusion_count, 0) AS confusion_count,
+                   coalesce(c.neutral_count, 0) AS neutral_count
+              FROM source s
+              LEFT JOIN viewer v ON v.platform_session_id = s.platform_session_id
+              LEFT JOIN chat c ON c.platform_session_id = s.platform_session_id
+        )
+        SELECT #{reportId}, platform_session_id, avg_viewers, peak_viewers,
+               total_chat, analyzed_chat,
+               joy_count, excitement_count, support_count, surprise_count,
+               sadness_count, anger_count, confusion_count, neutral_count,
+               broadcast_seconds,
+               CASE WHEN viewer_support = 'UNSUPPORTED' THEN NULL
+                    ELSE least(1, observed_minutes / expected_minutes)::numeric(5,4)
+                END,
+               CASE WHEN status = 'FAILED' THEN 'PARTIAL'
+                    WHEN viewer_support = 'SUPPORTED'
+                         AND observed_minutes / expected_minutes &lt; 0.8 THEN 'PARTIAL'
+                    ELSE 'COMPLETE'
+                END
+          FROM calculated
+        ON CONFLICT (report_id, platform_session_id) DO UPDATE
+           SET avg_viewers = EXCLUDED.avg_viewers,
+               peak_viewers = EXCLUDED.peak_viewers,
+               total_chat = EXCLUDED.total_chat,
+               analyzed_chat = EXCLUDED.analyzed_chat,
+               joy_count = EXCLUDED.joy_count,
+               excitement_count = EXCLUDED.excitement_count,
+               support_count = EXCLUDED.support_count,
+               surprise_count = EXCLUDED.surprise_count,
+               sadness_count = EXCLUDED.sadness_count,
+               anger_count = EXCLUDED.anger_count,
+               confusion_count = EXCLUDED.confusion_count,
+               neutral_count = EXCLUDED.neutral_count,
+               broadcast_seconds = EXCLUDED.broadcast_seconds,
+               viewer_coverage = EXCLUDED.viewer_coverage,
+               data_quality = EXCLUDED.data_quality
+    </insert>
+
+    <update id="markReportPartial">
+        UPDATE reports
+           SET status = 'PARTIAL',
+               generated_at = #{generatedAt}
+         WHERE id = #{reportId}
+           AND status = 'PROCESSING'
+    </update>
+
+    <update id="markReportFailed">
+        UPDATE reports
+           SET status = 'FAILED'
+         WHERE id = #{reportId}
+           AND status = 'PROCESSING'
+    </update>
+
+</mapper>
+

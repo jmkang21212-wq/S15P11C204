@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.laive.broadcast.realtime.repository.mybatis.TriggerMapper">
+
+    <select id="findActiveSessionStartedAt" resultType="java.time.Instant">
+        SELECT started_at
+          FROM broadcast_sessions
+         WHERE id = #{sessionId}
+           AND status IN ('PREPARING', 'LIVE')
+    </select>
+
+    <!--
+        구간 내 통계를 단일 SELECT로 집계해 INSERT한다.
+
+        인메모리 누적 대신 여기서 집계하는 이유: 확정 시 시작점이 30초
+        소급되므로(리드), 인메모리로 하려면 진입 전 라벨 이력을 계속 들고
+        있어야 한다. 저장된 원본을 한 번 읽으면 그 복잡함이 없고, 같은
+        스냅샷에서 세므로 ck_triggers_sentiment_sum(8종 합 == analyzed_chat)이
+        어긋날 수 없다.
+
+        시각 기준: 원본 조회는 sent_at(치지직 시각)이다. 판정은 서버 수신
+        시각으로 했지만(가드 8), 저장된 행에는 수신 시각이 없고 두 시계의
+        차이는 전송 지연 수준이라 구간 요약 통계에는 무시할 수 있다.
+
+        avg_viewers가 NOT NULL이라 구간에 측정이 없으면 0으로 둔다.
+        리포트 재생성은 narrative UPDATE로 하므로(명세 13.7) 같은 구간의
+        재삽입은 DO NOTHING이 막는다.
+    -->
+    <insert id="insertChatSurgeTrigger">
+        INSERT INTO triggers (session_id, trigger_type, start_ms, end_ms, started_at, ended_at,
+                              peak_z, peak_engagement, avg_viewers, chat_count, unique_chatters,
+                              analyzed_chat, joy_count, excitement_count, support_count,
+                              surprise_count, sadness_count, anger_count, confusion_count,
+                              neutral_count)
+        SELECT #{sessionId},
+               'CHAT_SURGE',
+               #{startMs},
+               #{endMs},
+               #{startedAt},
+               #{endedAt},
+               #{peakZ},
+               #{peakEngagement},
+               COALESCE((SELECT ROUND(AVG(viewer_count))::INT
+                           FROM viewer_metrics
+                          WHERE session_id = #{sessionId}
+                            AND measured_at BETWEEN #{startedAt} AND #{endedAt}), 0),
+               COUNT(*)::INT,
+               COUNT(DISTINCT viewer_id)::INT,
+               COUNT(sentiment_label)::INT,
+               (COUNT(*) FILTER (WHERE sentiment_label = 'JOY'))::INT,
+               (COUNT(*) FILTER (WHERE sentiment_label = 'EXCITEMENT'))::INT,
+               (COUNT(*) FILTER (WHERE sentiment_label = 'SUPPORT'))::INT,
+               (COUNT(*) FILTER (WHERE sentiment_label = 'SURPRISE'))::INT,
+               (COUNT(*) FILTER (WHERE sentiment_label = 'SADNESS'))::INT,
+               (COUNT(*) FILTER (WHERE sentiment_label = 'ANGER'))::INT,
+               (COUNT(*) FILTER (WHERE sentiment_label = 'CONFUSION'))::INT,
+               (COUNT(*) FILTER (WHERE sentiment_label = 'NEUTRAL'))::INT
+          FROM chat_messages
+         WHERE session_id = #{sessionId}
+           AND sent_at BETWEEN #{startedAt} AND #{endedAt}
+        ON CONFLICT (session_id, start_ms) DO NOTHING
+    </insert>
+
+</mapper>

@@ -1,0 +1,352 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.laive.portfolio.repository.mybatis.PortfolioMapper">
+
+    <!--
+      Portfolio record의 생성자 인자 순서와 컬럼 순서를 일치시킨다.
+      MyBatis는 record를 생성자로 매핑하므로 순서가 어긋나면 조용히 잘못 채워진다.
+      실적 5컬럼은 여기 없다 — PerformanceSnapshot으로 따로 읽는다.
+    -->
+    <sql id="portfolioColumns">
+        p.id AS portfolio_id,
+        p.streamer_id,
+        p.public_slug,
+        p.title,
+        p.introduction,
+        p.contact_email,
+        p.contact_url,
+        p.is_public,
+        p.published_at
+    </sql>
+
+    <!-- 생성 자격 게이트 (콜드스타트 규칙). LIVE·FAILED만 있으면 아직 자격이 아니다. -->
+    <select id="existsEndedSession" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1
+              FROM broadcast_sessions
+             WHERE streamer_id = #{streamerId}
+               AND status = 'ENDED'
+        )
+    </select>
+
+    <select id="findByStreamerId" resultType="com.example.laive.portfolio.domain.Portfolio">
+        SELECT <include refid="portfolioColumns"/>
+          FROM portfolios p
+         WHERE p.streamer_id = #{streamerId}
+    </select>
+
+    <!-- 수정 검증과 UPDATE가 한 트랜잭션 안에서 일관되도록 행을 잠근다. -->
+    <select id="findByStreamerIdForUpdate" resultType="com.example.laive.portfolio.domain.Portfolio">
+        SELECT <include refid="portfolioColumns"/>
+          FROM portfolios p
+         WHERE p.streamer_id = #{streamerId}
+           FOR UPDATE
+    </select>
+
+    <!-- 공개 행만. 미존재와 비공개가 같은 빈 결과가 되는 것이 의도다 (API 12.4). -->
+    <select id="findPublicBySlug" resultType="com.example.laive.portfolio.domain.Portfolio">
+        SELECT <include refid="portfolioColumns"/>
+          FROM portfolios p
+         WHERE p.public_slug = #{publicSlug}
+           AND p.is_public
+    </select>
+
+    <!--
+      record는 불변이라 useGeneratedKeys로 id를 되돌려 받을 수 없다.
+      Postgres의 INSERT ... RETURNING을 select로 실행해 발급 id를 바로 받는다.
+    -->
+    <select id="insert" resultType="long">
+        INSERT INTO portfolios
+            (streamer_id, public_slug, title, introduction,
+             contact_email, contact_url, is_public, published_at)
+        VALUES
+            (#{p.streamerId}, #{p.publicSlug}, #{p.title}, #{p.introduction},
+             #{p.contactEmail}, #{p.contactUrl}, #{p.isPublic}, #{p.publishedAt})
+        RETURNING id
+    </select>
+
+    <update id="update">
+        UPDATE portfolios
+           SET title         = #{p.title},
+               introduction  = #{p.introduction},
+               contact_email = #{p.contactEmail},
+               contact_url   = #{p.contactUrl},
+               is_public     = #{p.isPublic},
+               published_at  = #{p.publishedAt}
+         WHERE id = #{p.portfolioId}
+           AND streamer_id = #{p.streamerId}
+    </update>
+
+    <!--
+      실적 스냅샷 재계산 (DDL 주석의 "배치로 갱신한다"의 실체).
+      - 지표(평균·최고 시청자, 누적 채팅)는 세션 리포트가 원천이다. COMPLETED 외에
+        PARTIAL도 포함한다 — AI 요약만 실패하고 집계 지표는 있는 상태다 (API 11.1).
+      - 총방송수는 리포트 유무와 무관하게 종료된 세션 수다.
+      - 주당 방송은 최근 28일 종료 세션 수를 4주로 나눈 값이다.
+      종료 세션이 0개면 부질의가 비어 UPDATE가 no-op이 된다(기본값 0 유지).
+    -->
+    <sql id="performanceAggregate">
+        SELECT bs.streamer_id,
+               COALESCE(ROUND(AVG(r.avg_viewers)), 0)::int AS avg_viewers,
+               COALESCE(MAX(r.peak_viewers), 0)            AS peak_viewers,
+               COALESCE(SUM(r.total_chat), 0)::bigint      AS total_chat,
+               COUNT(*)                                    AS total_broadcast_count,
+               ROUND(COUNT(*) FILTER (
+                   WHERE bs.started_at >= now() - INTERVAL '28 days') / 4.0)::int
+                                                           AS broadcasts_per_week
+          FROM broadcast_sessions bs
+          LEFT JOIN reports r
+            ON r.session_id = bs.id
+           AND r.status IN ('COMPLETED', 'PARTIAL')
+         WHERE bs.status = 'ENDED'
+    </sql>
+
+    <update id="refreshPerformance">
+        UPDATE portfolios p
+           SET avg_viewers           = m.avg_viewers,
+               peak_viewers          = m.peak_viewers,
+               total_chat            = m.total_chat,
+               total_broadcast_count = m.total_broadcast_count,
+               broadcasts_per_week   = m.broadcasts_per_week
+          FROM (
+               <include refid="performanceAggregate"/>
+                 AND bs.streamer_id = #{streamerId}
+               GROUP BY bs.streamer_id
+               ) m
+         WHERE p.streamer_id = m.streamer_id
+    </update>
+
+    <!-- 일 배치용 전체 갱신. 포트폴리오가 없는 스트리머는 조인에서 자연히 빠진다. -->
+    <update id="refreshAllPerformance">
+        UPDATE portfolios p
+           SET avg_viewers           = m.avg_viewers,
+               peak_viewers          = m.peak_viewers,
+               total_chat            = m.total_chat,
+               total_broadcast_count = m.total_broadcast_count,
+               broadcasts_per_week   = m.broadcasts_per_week
+          FROM (
+               <include refid="performanceAggregate"/>
+               GROUP BY bs.streamer_id
+               ) m
+         WHERE p.streamer_id = m.streamer_id
+    </update>
+
+    <select id="findPerformanceSnapshot"
+            resultType="com.example.laive.portfolio.domain.PerformanceSnapshot">
+        SELECT avg_viewers,
+               peak_viewers,
+               broadcasts_per_week,
+               total_broadcast_count,
+               total_chat
+          FROM portfolios
+         WHERE streamer_id = #{streamerId}
+    </select>
+
+    <!--
+      primaryTimeRange 계산 재료. ix_broadcast_sessions_streamer_started
+      (streamer_id, started_at DESC)를 그대로 탄다.
+    -->
+    <select id="findRecentEndedSessions" resultType="com.example.laive.portfolio.domain.SessionWindow">
+        SELECT started_at,
+               ended_at
+          FROM broadcast_sessions
+         WHERE streamer_id = #{streamerId}
+           AND status = 'ENDED'
+           AND started_at >= now() - INTERVAL '90 days'
+         ORDER BY started_at DESC
+         LIMIT 30
+    </select>
+
+    <!--
+      하이라이트 소유권 판정 경로: highlights → reports → broadcast_sessions.streamer_id.
+      요청 id 중 본인 것만 돌아오므로, 개수가 다르면 남의 것이 섞인 것이다
+      (오류코드 PORTFOLIO_HIGHLIGHT_INVALID). clip·thumbnail은 응답 에코에 쓴다.
+    -->
+    <select id="findOwnedHighlights" resultType="com.example.laive.portfolio.domain.OwnedHighlight">
+        SELECT h.id AS highlight_id,
+               h.clip_url,
+               h.thumbnail_url
+          FROM highlights h
+          JOIN reports r             ON r.id = h.report_id
+          JOIN broadcast_sessions bs ON bs.id = r.session_id
+         WHERE bs.streamer_id = #{streamerId}
+           AND h.id IN
+        <foreach collection="highlightIds" item="highlightId" open="(" separator="," close=")">
+            #{highlightId}
+        </foreach>
+    </select>
+
+    <delete id="deleteFeaturedHighlights">
+        DELETE FROM portfolio_highlights
+         WHERE portfolio_id = #{portfolioId}
+    </delete>
+
+    <!--
+      순서 재배치는 삭제 후 재삽입으로 한다. uq_portfolio_highlights_order가
+      DEFERRABLE(커밋 시점 검사)이라 한 트랜잭션 안의 중간 상태 충돌이 없다 —
+      DDL이 이 사용 방식을 위해 그렇게 선언돼 있다.
+    -->
+    <insert id="insertFeaturedHighlights">
+        INSERT INTO portfolio_highlights (portfolio_id, highlight_id, display_order)
+        VALUES
+        <foreach collection="selections" item="s" separator=",">
+            (#{portfolioId}, #{s.highlightId}, #{s.displayOrder})
+        </foreach>
+    </insert>
+
+    <select id="findFeaturedHighlights"
+            resultType="com.example.laive.portfolio.domain.FeaturedHighlightView">
+        SELECT ph.highlight_id,
+               ph.display_order,
+               h.clip_url,
+               h.thumbnail_url
+          FROM portfolio_highlights ph
+          JOIN highlights h ON h.id = ph.highlight_id
+         WHERE ph.portfolio_id = #{portfolioId}
+         ORDER BY ph.display_order
+    </select>
+
+    <select id="findStreamerBasics" resultType="com.example.laive.portfolio.domain.StreamerBasics">
+        SELECT nickname,
+               profile_image_url
+          FROM streamers
+         WHERE id = #{streamerId}
+    </select>
+
+    <!-- 공개 응답에 안전한 4필드만 뽑는다. 토큰·연결 상태 컬럼은 SELECT 자체에 없다. -->
+    <select id="findPlatformAccounts" resultType="com.example.laive.portfolio.domain.PlatformAccountView">
+        SELECT id AS platform_account_id,
+               platform,
+               channel_id,
+               channel_name
+          FROM platform_accounts
+         WHERE streamer_id = #{streamerId}
+         ORDER BY id
+    </select>
+
+    <select id="findTags" resultType="com.example.laive.streamer.domain.StreamerTag">
+        SELECT t.id AS tag_id,
+               t.name,
+               t.tag_type
+          FROM streamer_tags st
+          JOIN tags t ON t.id = st.tag_id
+         WHERE st.streamer_id = #{streamerId}
+         ORDER BY st.display_order, t.id
+    </select>
+
+    <!--
+      검색 필터 (API 12.3). 공개 행만, 로그인 시 본인 제외.
+      keyword의 채널명·태그명 부분 일치는 V1의 trgm GIN 인덱스
+      (ix_platform_accounts_channel_name_trgm, ix_tags_name_trgm)가 받친다.
+    -->
+    <sql id="searchFilters">
+        WHERE p.is_public
+        <if test="excludeStreamerId != null">
+            AND p.streamer_id != #{excludeStreamerId}
+        </if>
+        <if test="condition.minAvgViewers != null">
+            AND p.avg_viewers >= #{condition.minAvgViewers}
+        </if>
+        <if test="condition.maxAvgViewers != null">
+            AND #{condition.maxAvgViewers} >= p.avg_viewers
+        </if>
+        <if test="condition.platform != null">
+            AND EXISTS (
+                SELECT 1
+                  FROM platform_accounts pa
+                 WHERE pa.streamer_id = p.streamer_id
+                   AND pa.platform = #{condition.platform}
+            )
+        </if>
+        <if test="condition.tag != null">
+            AND EXISTS (
+                SELECT 1
+                  FROM streamer_tags st
+                  JOIN tags t ON t.id = st.tag_id
+                 WHERE st.streamer_id = p.streamer_id
+                   AND t.name = #{condition.tag}
+            )
+        </if>
+        <if test="condition.keyword != null">
+            AND (
+                EXISTS (
+                    SELECT 1
+                      FROM platform_accounts pa
+                     WHERE pa.streamer_id = p.streamer_id
+                       AND pa.channel_name ILIKE '%' || #{condition.keyword} || '%'
+                )
+                OR EXISTS (
+                    SELECT 1
+                      FROM streamer_tags st
+                      JOIN tags t ON t.id = st.tag_id
+                     WHERE st.streamer_id = p.streamer_id
+                       AND t.name ILIKE '%' || #{condition.keyword} || '%'
+                )
+            )
+        </if>
+    </sql>
+
+    <!--
+      1단계: 페이지에 들어갈 행의 스칼라만 뽑는다. 배열 필드는 2단계 일괄 조회.
+      RECENT 정렬이 published_at을 쓸 수 있는 이유: is_public=true면 published_at이
+      NOT NULL임을 DB CHECK가 보장한다. id 타이브레이크는 페이지 경계 중복 방지.
+    -->
+    <select id="searchPage" resultType="com.example.laive.portfolio.domain.PortfolioSearchRow">
+        SELECT p.id AS portfolio_id,
+               p.public_slug,
+               p.streamer_id,
+               s.nickname,
+               s.profile_image_url,
+               p.avg_viewers,
+               p.broadcasts_per_week
+          FROM portfolios p
+          JOIN streamers s ON s.id = p.streamer_id
+        <include refid="searchFilters"/>
+         ORDER BY
+        <choose>
+            <when test="condition.sort.name() == 'AVG_VIEWERS_DESC'">p.avg_viewers DESC,</when>
+            <when test="condition.sort.name() == 'BROADCASTS_DESC'">p.broadcasts_per_week DESC,</when>
+            <otherwise>p.published_at DESC,</otherwise>
+        </choose>
+               p.id DESC
+         LIMIT #{limit}
+        OFFSET #{offset}
+    </select>
+
+    <select id="countSearch" resultType="long">
+        SELECT count(*)
+          FROM portfolios p
+        <include refid="searchFilters"/>
+    </select>
+
+    <select id="findPlatformAccountsByStreamerIds"
+            resultType="com.example.laive.portfolio.domain.PlatformAccountRow">
+        SELECT streamer_id,
+               id AS platform_account_id,
+               platform,
+               channel_id,
+               channel_name
+          FROM platform_accounts
+         WHERE streamer_id IN
+        <foreach collection="streamerIds" item="streamerId" open="(" separator="," close=")">
+            #{streamerId}
+        </foreach>
+         ORDER BY streamer_id, id
+    </select>
+
+    <select id="findTagNamesByStreamerIds"
+            resultType="com.example.laive.portfolio.domain.TagNameRow">
+        SELECT st.streamer_id,
+               t.name
+          FROM streamer_tags st
+          JOIN tags t ON t.id = st.tag_id
+         WHERE st.streamer_id IN
+        <foreach collection="streamerIds" item="streamerId" open="(" separator="," close=")">
+            #{streamerId}
+        </foreach>
+         ORDER BY st.streamer_id, st.display_order
+    </select>
+
+</mapper>

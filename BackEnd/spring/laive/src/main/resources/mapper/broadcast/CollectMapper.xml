@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.laive.broadcast.collect.repository.mybatis.CollectMapper">
+
+    <select id="findSessionRef"
+            resultType="com.example.laive.broadcast.collect.repository.mybatis.SessionCollectionRef">
+        SELECT streamer_id,
+               platform_account_id
+          FROM broadcast_sessions
+         WHERE id = #{sessionId}
+    </select>
+
+    <select id="findPlatformSessionRef"
+            resultType="com.example.laive.broadcast.collect.repository.mybatis.PlatformSessionCollectionRef">
+        SELECT ps.id AS platform_session_id,
+               ps.broadcast_session_id AS session_id,
+               bs.streamer_id,
+               ps.platform_account_id,
+               pa.platform AS platform_code
+          FROM broadcast_platform_sessions ps
+          JOIN broadcast_sessions bs ON bs.id = ps.broadcast_session_id
+          JOIN platform_accounts pa ON pa.id = ps.platform_account_id
+         WHERE ps.id = #{platformSessionId}
+    </select>
+
+    <select id="findPlatformCollectorSpec"
+            resultType="com.example.laive.broadcast.collect.repository.mybatis.PlatformCollectorSpecRow">
+        SELECT ps.id AS platform_session_id,
+               ps.broadcast_session_id AS session_id,
+               bs.streamer_id,
+               ps.platform_account_id,
+               pa.platform AS platform_code,
+               pa.channel_id AS external_account_id,
+               pa.channel_name,
+               broadcast.external_id AS external_broadcast_id,
+               live_chat.external_id AS live_chat_id,
+               broadcast.url AS watch_url
+          FROM broadcast_platform_sessions ps
+          JOIN broadcast_sessions bs ON bs.id = ps.broadcast_session_id
+          JOIN platform_accounts pa ON pa.id = ps.platform_account_id
+          LEFT JOIN LATERAL (
+                SELECT external_id, url
+                  FROM platform_session_resources
+                 WHERE platform_session_id = ps.id
+                   AND resource_type = 'BROADCAST'
+                 ORDER BY id DESC
+                 LIMIT 1
+          ) broadcast ON TRUE
+          LEFT JOIN LATERAL (
+                SELECT external_id
+                  FROM platform_session_resources
+                 WHERE platform_session_id = ps.id
+                   AND resource_type = 'LIVE_CHAT'
+                 ORDER BY id DESC
+                 LIMIT 1
+          ) live_chat ON TRUE
+         WHERE ps.id = #{platformSessionId}
+    </select>
+
+    <!--
+        시청자 프로필을 한 번에 Upsert하고 해시 → id 대응을 돌려받는다.
+
+        ON CONFLICT DO UPDATE를 쓰는 이유: DO NOTHING은 충돌한 행을 RETURNING에
+        포함시키지 않아 "이미 있던 시청자"의 id를 못 받는다. 그러면 다시 SELECT를
+        돌려야 하고 그 사이 다른 배치가 끼면 경합이 생긴다.
+
+        first_seen/last_seen을 LEAST/GREATEST로 합치는 이유: 재시도나 지연 Flush로
+        과거 배치가 늦게 도착할 수 있어 도착 순서가 곧 시간 순서가 아니다.
+
+        호출 전에 해시가 중복 제거되어 있어야 한다. 같은 명령에서 같은 충돌
+        대상을 두 번 건드리면 PostgreSQL이 "cannot affect row a second time"으로
+        거부한다.
+    -->
+    <select id="upsertViewerProfiles"
+            resultType="com.example.laive.broadcast.collect.repository.mybatis.ViewerProfileRef"
+            affectData="true"
+            flushCache="true">
+        INSERT INTO viewer_profiles
+            (platform_account_id, viewer_hash, first_seen_at, last_seen_at, nickname, user_role)
+        VALUES
+        <foreach collection="seen" item="row" separator=",">
+            (#{platformAccountId}, #{row.viewerHash}, #{row.firstSeenAt}, #{row.lastSeenAt},
+             #{row.nickname,jdbcType=VARCHAR}, #{row.userRole,jdbcType=VARCHAR})
+        </foreach>
+        ON CONFLICT (platform_account_id, viewer_hash) DO UPDATE
+           SET first_seen_at = LEAST(viewer_profiles.first_seen_at, EXCLUDED.first_seen_at),
+               last_seen_at  = GREATEST(viewer_profiles.last_seen_at, EXCLUDED.last_seen_at),
+               <!-- 닉변은 최신 값으로 따라가고, 닉네임 없는 배치가 기존 값을 지우지 않는다 -->
+               nickname      = COALESCE(EXCLUDED.nickname,  viewer_profiles.nickname),
+               user_role     = COALESCE(EXCLUDED.user_role, viewer_profiles.user_role)
+        RETURNING id AS viewer_id,
+                  viewer_hash
+    </select>
+
+    <!--
+        chat_messages에는 자연키가 없어 DB 수준 중복 제거가 불가능하다.
+        같은 배치의 재전송은 X-Request-Id 멱등 가드가 막는다(명세 13.1).
+    -->
+    <insert id="insertChatMessages">
+        INSERT INTO chat_messages (
+            session_id, platform_session_id, viewer_id, message, sent_at, sentiment_label
+        )
+        VALUES
+        <foreach collection="items" item="item" separator=",">
+            (#{sessionId},
+             (SELECT ps.id
+                FROM broadcast_platform_sessions ps
+                JOIN broadcast_sessions bs ON bs.id = ps.broadcast_session_id
+               WHERE ps.broadcast_session_id = #{sessionId}
+                 AND ps.platform_account_id = bs.platform_account_id
+               ORDER BY ps.id
+               LIMIT 1),
+             #{item.viewerId}, #{item.message}, #{item.sentAt},
+             #{item.sentimentLabel,jdbcType=VARCHAR})
+        </foreach>
+    </insert>
+
+    <insert id="insertPlatformChatMessages">
+        INSERT INTO chat_messages (
+            session_id, platform_session_id, viewer_id, message, sent_at, sentiment_label,
+            platform_message_id, message_type, amount, currency, provider_event_type
+        )
+        VALUES
+        <foreach collection="items" item="item" separator=",">
+            (#{sessionId}, #{platformSessionId}, #{item.viewerId}, #{item.message},
+             #{item.sentAt}, #{item.sentimentLabel,jdbcType=VARCHAR},
+             #{item.platformMessageId,jdbcType=VARCHAR}, #{item.messageType,jdbcType=VARCHAR},
+             #{item.amount,jdbcType=NUMERIC}, #{item.currency,jdbcType=VARCHAR},
+             #{item.providerEventType,jdbcType=VARCHAR})
+        </foreach>
+        ON CONFLICT (platform_session_id, platform_message_id, sent_at)
+        WHERE platform_session_id IS NOT NULL AND platform_message_id IS NOT NULL
+        DO NOTHING
+    </insert>
+
+    <!--
+        (session_id, measured_at) Unique가 재시도 중복을 흡수한다(V1).
+        반환값은 실제로 삽입된 행 수이며, 호출자가 요청 건수와의 차이를
+        duplicateCount로 계산한다.
+    -->
+    <insert id="insertViewerMetrics">
+        INSERT INTO viewer_metrics (session_id, platform_session_id, measured_at, viewer_count)
+        VALUES
+        <foreach collection="items" item="item" separator=",">
+            (#{sessionId},
+             (SELECT ps.id
+                FROM broadcast_platform_sessions ps
+                JOIN broadcast_sessions bs ON bs.id = ps.broadcast_session_id
+               WHERE ps.broadcast_session_id = #{sessionId}
+                 AND ps.platform_account_id = bs.platform_account_id
+               ORDER BY ps.id
+               LIMIT 1),
+             #{item.measuredAt}, #{item.viewerCount})
+        </foreach>
+        ON CONFLICT (platform_session_id, measured_at)
+        WHERE platform_session_id IS NOT NULL DO NOTHING
+    </insert>
+
+    <insert id="insertPlatformViewerMetrics">
+        INSERT INTO viewer_metrics (session_id, platform_session_id, measured_at, viewer_count)
+        VALUES
+        <foreach collection="items" item="item" separator=",">
+            (#{sessionId}, #{platformSessionId}, #{item.measuredAt}, #{item.viewerCount})
+        </foreach>
+        ON CONFLICT (platform_session_id, measured_at)
+        WHERE platform_session_id IS NOT NULL DO NOTHING
+    </insert>
+
+    <!--
+        수집기는 끊김을 감지하면 ended_at 없이 먼저 보고하고, 복구한 뒤 같은
+        started_at으로 다시 보내 구간을 닫는다. 보고 자체도 재시도되므로
+        started_at 기준 Upsert로 둔다.
+
+        COALESCE로 감싸는 이유: 이미 닫힌 구간에 열린 보고(ended_at = NULL)가
+        늦게 도착해도 닫힌 값을 지우지 않는다.
+    -->
+    <insert id="upsertCollectionGap">
+        INSERT INTO collection_gaps (
+            session_id, platform_session_id, started_at, ended_at, reason
+        )
+        VALUES (
+            #{sessionId},
+            (SELECT ps.id
+               FROM broadcast_platform_sessions ps
+               JOIN broadcast_sessions bs ON bs.id = ps.broadcast_session_id
+              WHERE ps.broadcast_session_id = #{sessionId}
+                AND ps.platform_account_id = bs.platform_account_id
+              ORDER BY ps.id
+              LIMIT 1),
+            #{gap.startedAt}, #{gap.endedAt}, #{gap.reason}
+        )
+        ON CONFLICT (platform_session_id, started_at)
+        WHERE platform_session_id IS NOT NULL DO UPDATE
+           SET ended_at = COALESCE(EXCLUDED.ended_at, collection_gaps.ended_at)
+    </insert>
+
+    <insert id="upsertPlatformCollectionGap">
+        INSERT INTO collection_gaps (
+            session_id, platform_session_id, started_at, ended_at, reason
+        ) VALUES (
+            #{sessionId}, #{platformSessionId}, #{gap.startedAt}, #{gap.endedAt}, #{gap.reason}
+        )
+        ON CONFLICT (platform_session_id, started_at)
+        WHERE platform_session_id IS NOT NULL DO UPDATE
+           SET ended_at = COALESCE(EXCLUDED.ended_at, collection_gaps.ended_at)
+    </insert>
+
+    <update id="closeOpenPlatformCollectionGaps">
+        UPDATE collection_gaps
+           SET ended_at = #{endedAt}
+         WHERE platform_session_id = #{platformSessionId}
+           AND ended_at IS NULL
+           AND started_at &lt;= #{endedAt}
+    </update>
+
+    <!--
+        수집기가 공백 도중에 죽으면 그 구간은 영원히 닫히지 않는다.
+        세션 종료가 마지막 방어선이다.
+    -->
+    <update id="closeOpenCollectionGaps">
+        UPDATE collection_gaps
+           SET ended_at = #{endedAt}
+         WHERE session_id = #{sessionId}
+           AND ended_at IS NULL
+           AND started_at &lt;= #{endedAt}
+    </update>
+
+    <select id="sumLatestPlatformViewerCounts" resultType="java.lang.Integer">
+        WITH latest AS (
+            SELECT DISTINCT ON (platform_session_id)
+                   platform_session_id, viewer_count
+              FROM viewer_metrics
+             WHERE session_id = #{sessionId}
+               AND measured_at &lt;= #{measuredAt}
+               AND measured_at &gt; #{measuredAt} - interval '5 minutes'
+               AND platform_session_id IS NOT NULL
+             ORDER BY platform_session_id, measured_at DESC
+        )
+        SELECT sum(viewer_count)::int FROM latest
+    </select>
+
+</mapper>

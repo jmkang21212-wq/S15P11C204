@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+out/
+release/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+# 배포 빌드 설정은 커밋한다. 비밀값이 아니라 공개 주소뿐이고, 이 파일이 없으면
+# config.ts의 기본값(localhost)으로 조용히 빌드되어 서버에 못 붙는 .exe가 나온다.
+!.env.production
+
+# Cache and logs
+.vite/
+.eslintcache
+*.tsbuildinfo
+*.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/

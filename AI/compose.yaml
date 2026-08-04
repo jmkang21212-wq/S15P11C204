@@ -1,0 +1,113 @@
+# AI 서버 3종 (8000 음성 / 8001 채팅감정 / 8002 채팅수집)
+#
+#   docker compose up -d       # 로컬 개발 (compose.override.yaml이 자동 적용됨)
+#   docker compose logs -f     # 로그 보기
+#   docker compose down        # 중지
+#
+# 배포에서는 개발용 오버라이드를 제외하고 이 파일만 쓴다:
+#   docker compose -f compose.yaml up -d
+#
+# ⚠ 백엔드 compose(BackEnd/spring/laive)를 먼저 띄워야 한다.
+#    Redis·PostgreSQL과 laive_default 네트워크가 거기서 만들어진다.
+
+x-ai-common: &ai-common
+  build:
+    context: .
+    args:
+      # 개발은 false(가벼운 이미지, 첫 실행 시 모델 다운로드).
+      # 배포용 이미지는 --build-arg BAKE_MODEL=true 로 따로 굽는다.
+      BAKE_MODEL: "false"
+  image: laive-ai:latest      # 3서비스가 같은 이미지를 공유한다 (빌드 1회)
+  env_file: .env
+  restart: unless-stopped     # 크래시·OOM·재부팅 시 자동 복구
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }   # 컨테이너 로그 무한 증식 방지
+
+services:
+  # ── 음성 위험 발언 감지 ──────────────────────────────────────
+  voice:
+    <<: *ai-common
+    container_name: laive-voice
+    command: ["uvicorn", "app.server:app", "--host", "0.0.0.0", "--port", "8000"]
+    # 127.0.0.1에만 바인딩한다. 배포 서버에서 호스트의 nginx가 여기로 프록시하고,
+    # 외부에서는 nginx의 443을 통해서만 닿는다.
+    #
+    # ⚠ 앞의 "127.0.0.1:"을 빼면 안 된다. 도커는 포트를 publish할 때 iptables에
+    #   자기 규칙을 UFW보다 앞에 꽂기 때문에, 0.0.0.0으로 열면 `ufw status`가
+    #   차단으로 보여도 실제로는 전 세계에 열린다(EC2 보안그룹이 1024~65535를
+    #   전부 허용하고 있다). STT·위험발화 API와 Swagger가 그대로 공개된다.
+    ports: ["127.0.0.1:8000:8000"]
+    environment:
+      # .env에 값이 있으면 그걸 쓰고, 없으면 로컬 기본값.
+      # 배포 서버에서는 .env에 SPRING_BASE_URL=http://spring:8080 만 적으면
+      # 이 파일을 고치지 않아도 된다(고쳤다 되돌리다 실수로 커밋되는 것을 막는다).
+      SPRING_BASE_URL: "${SPRING_BASE_URL:-http://host.docker.internal:8080}"
+      VOICE_LOG_FILE: "/app/logs/voice.log"
+      # WS 인증 티켓은 Spring이 발급하고 여기서 읽는다 → Spring과 같은 DB 0.
+      # (chat-ai의 DB 1과 달리 공유가 목적이라 분리하면 안 된다)
+      # 컨테이너 안에서 127.0.0.1은 자기 자신이라 기본값으로는 붙지 않는다.
+      VOICE_REDIS_URL: "redis://redis:6379/0"
+    volumes:
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request;urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 40s      # 모델·사전 로딩 시간을 준다 (그전 실패는 무시)
+
+  # ── 채팅 감정 분류 ───────────────────────────────────────────
+  chat-ai:
+    <<: *ai-common
+    container_name: laive-chat-ai
+    command: ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8001",
+              "--app-dir", "chat-ai"]
+    ports: ["127.0.0.1:8001:8001"]   # 외부 노출 금지 — 이유는 voice의 주석 참고
+    environment:
+      CHATAI_NEEDS_MODEL: "1"        # entrypoint가 모델을 확인·다운로드하게 한다
+      CHATAI_MODEL_DIR: "/app/chat-ai/models/kcelectra-chat-8emo-onnx"
+      CHATAI_LOG_FILE: "/app/logs/chatai.log"
+      # 컨테이너 안에서 localhost는 자기 자신이다. 백엔드 Redis는 서비스 이름으로 부른다
+      CHATAI_REDIS_URL: "redis://redis:6379/1"
+      # 4 vCPU를 Spring·DB와 나눠 쓴다. 자세한 근거는 chatai/config.py 참고
+      CHATAI_ORT_THREADS: "2"
+    volumes:
+      - chatai-models:/app/chat-ai/models    # 모델은 컨테이너 밖에 남긴다
+      - ./logs:/app/logs
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"        # 앱 설정(ORT_THREADS)이 빠져도 커널이 막아준다
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request;urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 300s     # 최초 실행은 모델 641MB 다운로드가 있어 길게 잡는다
+
+  # ── 치지직 채팅 수집기 ───────────────────────────────────────
+  collector:
+    <<: *ai-common
+    container_name: laive-collector
+    command: ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8002",
+              "--app-dir", "chat-collector"]
+    ports: ["127.0.0.1:8002:8002"]   # 외부 노출 금지 — 이유는 voice의 주석 참고
+    environment:
+      SPRING_BASE_URL: "${SPRING_BASE_URL:-http://host.docker.internal:8080}"
+    volumes:
+      - ./logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request;urllib.request.urlopen('http://localhost:8002/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+
+volumes:
+  chatai-models:      # 641MB. 컨테이너를 지웠다 만들어도 재다운로드하지 않는다
+
+networks:
+  default:
+    name: laive_default
+    external: true    # 백엔드 compose가 만든 네트워크에 합류 (먼저 띄워야 함)

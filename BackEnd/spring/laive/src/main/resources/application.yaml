@@ -1,0 +1,248 @@
+spring:
+  application:
+    name: laive
+
+  config:
+    import: "optional:file:.env[.properties]"
+
+  datasource:
+    url: "jdbc:postgresql://${POSTGRES_HOST:127.0.0.1}:${POSTGRES_PORT:5432}/${POSTGRES_DB:laive}"
+    username: "${POSTGRES_USER:laive}"
+    password: "${POSTGRES_PASSWORD}"
+    driver-class-name: org.postgresql.Driver
+
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+
+  servlet:
+    multipart:
+      # 클립 업로드(laive.clip.max-upload-bytes)를 받기 위한 값이다. 기본 1MB로는
+      # 전부 거부된다. nginx의 client_max_body_size도 함께 올려야 한다 —
+      # 그쪽이 낮으면 요청이 여기 도달조차 하지 않아 로그에 아무것도 남지 않는다.
+      max-file-size: 200MB
+      max-request-size: 220MB
+
+  data:
+    redis:
+      host: "${REDIS_HOST:127.0.0.1}"
+      port: "${REDIS_PORT:6379}"
+      database: "${REDIS_DATABASE:0}"
+      connect-timeout: 2s
+      timeout: 2s
+
+  ai:
+    model:
+      chat: "${REPORT_AI_MODEL_ENABLED:none}"
+    openai:
+      api-key: "${REPORT_AI_API_KEY:disabled}"
+      base-url: "${REPORT_AI_BASE_URL:https://api.openai.com}"
+      # chat.options.* 는 Spring AI 2.0에서 deprecated다. chat.* 바로 아래에 둔다.
+      chat:
+        model: "${REPORT_AI_MODEL:gpt-4.1-mini}"
+        # gpt-5 계열(추론 모델)은 temperature를 기본값 1만 허용한다 — 0.2를 실으면
+        # OpenAI가 unsupported_value 400으로 거부한다. 모델을 그쪽으로 바꾸려면
+        # REPORT_AI_TEMPERATURE=1로 같이 올리고, 생성 성향은 reasoning-effort로 조절한다.
+        temperature: "${REPORT_AI_TEMPERATURE:0.2}"
+
+# Swagger UI / OpenAPI 문서. 개발에서는 켜 두고 배포에서는 SWAGGER_ENABLED=false로 끈다.
+# nginx가 /api/·/clips/·/ws/audio·/download/ 만 프록시해 외부에서 닿지 않지만,
+# 방화벽·프록시 설정 실수 한 번으로 API 전체 구조가 공개되는 것을 막는 두 번째 잠금이다.
+springdoc:
+  api-docs:
+    enabled: "${SWAGGER_ENABLED:true}"
+  swagger-ui:
+    enabled: "${SWAGGER_ENABLED:true}"
+
+mybatis:
+  mapper-locations: classpath:/mapper/**/*.xml
+  type-aliases-package: com.example.laive.domain
+  configuration:
+    map-underscore-to-camel-case: true
+    default-fetch-size: 100
+    default-statement-timeout: 30
+
+laive:
+  auth:
+    naver:
+      client-id: "${NAVER_CLIENT_ID:}"
+      client-secret: "${NAVER_CLIENT_SECRET:}"
+      redirect-uri: "${NAVER_REDIRECT_URI:http://localhost:8080/api/v1/auth/oauth/naver/callback}"
+      authorization-uri: "https://nid.naver.com/oauth2.0/authorize"
+      token-uri: "https://nid.naver.com/oauth2.0/token"
+      user-info-uri: "https://openapi.naver.com/v1/nid/me"
+    jwt:
+      secret: "${JWT_SECRET}"
+      access-token-ttl: 30m
+      issuer: laive
+    refresh-cookie:
+      name: laive_refresh
+      ttl: 14d
+      secure: "${AUTH_COOKIE_SECURE:false}"
+      # 회전(폐기) 직후 이 시간 안에 온 이전 토큰 재사용은 허용한다.
+      # 메인 창과 미니 모드 창이 같은 쿠키로 동시에 refresh할 때 한쪽이 로그아웃되는 것을 막는다.
+      rotation-grace: 60s
+    allowed-return-uris: "${OAUTH_ALLOWED_RETURN_URIS:http://localhost:5173/oauth/callback}"
+    oauth-state-ttl: 5m
+    # 개발용 로그인(POST /api/v1/auth/dev/login). 로컬 개발에서만 true로 켠다.
+    dev-login-enabled: "${DEV_LOGIN_ENABLED:false}"
+
+  platform:
+    chzzk:
+      client-id: "${CHZZK_CLIENT_ID:}"
+      client-secret: "${CHZZK_CLIENT_SECRET:}"
+      redirect-uri: "${CHZZK_REDIRECT_URI:http://localhost:8080/api/v1/platform-accounts/chzzk/callback}"
+      # 인증 화면만 OPEN API와 다른 도메인을 사용한다.
+      authorization-uri: "https://chzzk.naver.com/account-interlock"
+      token-uri: "https://openapi.chzzk.naver.com/auth/v1/token"
+      revoke-uri: "https://openapi.chzzk.naver.com/auth/v1/token/revoke"
+      user-me-uri: "https://openapi.chzzk.naver.com/open/v1/users/me"
+      live-setting-uri: "https://openapi.chzzk.naver.com/open/v1/lives/setting"
+    youtube:
+      client-id: "${YOUTUBE_CLIENT_ID:}"
+      client-secret: "${YOUTUBE_CLIENT_SECRET:}"
+      redirect-uri: "${YOUTUBE_REDIRECT_URI:http://localhost:8080/api/v1/platform-accounts/youtube/callback}"
+      authorization-uri: "https://accounts.google.com/o/oauth2/v2/auth"
+      token-uri: "https://oauth2.googleapis.com/token"
+      revoke-uri: "https://oauth2.googleapis.com/revoke"
+      api-base-url: "https://www.googleapis.com"
+    # NFR-S-03: 플랫폼 토큰은 이 키로 암호화해서 저장한다. Base64로 인코딩한 32바이트.
+    token-encryption-key: "${PLATFORM_TOKEN_KEY:}"
+    link-state-ttl: 5m
+    access-token-refresh-threshold: 5m
+
+  broadcast-session:
+    # Redis Lock은 짧은 DB 트랜잭션만 감싸며 DB 제약이 최종 정합성을 보장한다.
+    lifecycle-lock-ttl: 10s
+    # 실제 수집기 Adapter는 종료 시각 이전의 지연 Batch를 이 기간 동안 Flush한다.
+    finalization-grace-period: 30s
+    # 종료된 실시간 콘솔 Stream은 재연결을 위해 잠시 유지한다.
+    stream-ttl-after-end: 30m
+    # 음성 AI WebSocket 접속 티켓. 발급 직후 바로 쓰이고 재연결마다 새로 받는다.
+    voice-ticket-ttl: 60s
+    outbox:
+      poll-delay-ms: 500
+      batch-size: 50
+      lease: 30s
+      max-attempts: 8
+      max-backoff: 5m
+
+  # 수집기·AI 서버가 호출하는 /internal/** 수신 설정 (API 명세 13.1)
+  internal:
+    # 비어 있으면 /internal/**를 전부 401로 막는다. 설정 누락이 내부 API를
+    # 여는 방향으로 실패하지 않게 한 의도적 선택이다.
+    service-token: "${INTERNAL_SERVICE_TOKEN:}"
+    # X-Request-Id 멱등 기록 보관 기간. 수집기 재시도 백오프(최대 수십 초)보다
+    # 충분히 길고, 키가 무한정 쌓이지 않을 만큼 짧게 잡는다.
+    request-id-ttl: 10m
+    # 채팅 1초 배치가 이 수를 넘는 일은 없다. 사고성 대량 요청의 상한이다.
+    max-batch-items: 1000
+
+  # 채팅 감정 분류 AI(chat-ai, 기본 포트 8001) 호출 설정 (계약: AI/CHAT_AI_API.md)
+  chat-ai:
+    # 비어 있으면 AI를 연결하지 않는다(no-op). 채팅은 sentiment_label 없이 저장된다.
+    base-url: "${CHATAI_BASE_URL:}"
+    token: "${CHATAI_TOKEN:}"
+    # 계약 권장 2초. 이 대기는 수집기 배치 응답 지연에 그대로 더해지므로,
+    # 늘릴 때는 수집기 쪽 HTTP Timeout도 함께 조정해야 한다.
+    ingest-timeout: 2s
+    # 여론 요약(POST /summary) 전용. LLM 생성이 수 초 걸려 ingest의 2초와 분리한다.
+    summary-timeout: 15s
+
+  # LLM 여론 요약 AUTO 스케줄러 (계약: AI/CHAT_AI_API.md §2, 명세 13.6)
+  chat-summary:
+    # 계약의 "3분 주기". chat-ai 쪽 쿨다운(60초)·최소 채팅(30건) 가드가 있어
+    # 짧게 잡아도 LLM 비용이 새지 않지만, 화면 갱신 리듬은 이 값이 결정한다.
+    auto-interval: 180s
+
+  # 반복 질문 폴링·재질문 감지 (계약: AI/CHAT_AI_API.md §3)
+  repeated-questions:
+    # 계약 권장 10~30초. 변경분만 UPSERT라 짧게 잡아도 쓰기 부담이 없지만,
+    # 질문 목록 자체가 임베딩 배치(최대 30초 지연) 주기로 천천히 변한다.
+    poll-interval: 15s
+    # 계약 최대치. exclude 없이 전량 받는다 — 답변 완료(dismissed)는 DB가 기억하고
+    # 노출 단계에서 거른다. exclude로 걸러 받으면 세션 리포트에서 그 질문이 사라진다.
+    limit: 50
+    # 답변 직후에는 재질문 판정 기준(baseline)을 잡지 않는다: 송출 지연 4~5초에
+    # 시청자 인지·타이핑 중이던 사람들의 관성 유입까지 흡수하는 유예다.
+    dismiss-grace: 60s
+    # 재노출 임계 = clamp(⌈시청자 × ratio⌉, min, max). 고정값은 규모를 못 따라간다:
+    # "+10명"이 소규모 채널에서는 영영 안 오고 대형 채널에서는 관성 유입만으로 넘는다.
+    # ratio 0.005는 시청자 2,000명에서 기존 고정 임계 +10과 같아지는 값(실측 연속성).
+    reexpose:
+      ratio: 0.005
+      min: 5
+      max: 50
+      # 시청자 수를 모를 때(수신 5분 초과·재시작 직후·종료 마감 폴링) 쓰는 값.
+      fallback: 10
+
+  # CHAT_SURGE 하이라이트 판정 파라미터 (알고리즘: AI/chat-ai/HIGHLIGHT_SPEC.md)
+  # 전부 백테스트 미검증 초기값이다. 실방송 DEBUG 로그(ts, engagement, z, state)가 튜닝 근거다.
+  # 명세가 튜닝을 전제하는 값들이라 재배포 없이 조정할 수 있게 환경변수 훅을 걸어 둔다.
+  highlight:
+    engage-window: "${HIGHLIGHT_ENGAGE_WINDOW:60s}"   # 유니크 채터 윈도우. ingest의 180초와 다른 이유는 스펙 §0
+    baseline-size: "${HIGHLIGHT_BASELINE_SIZE:900}"   # 900틱 = 15분
+    z-enter: "${HIGHLIGHT_Z_ENTER:3.0}"
+    enter-ticks: "${HIGHLIGHT_ENTER_TICKS:3}"
+    z-exit: "${HIGHLIGHT_Z_EXIT:1.5}"
+    exit-ticks: "${HIGHLIGHT_EXIT_TICKS:8}"           # 소규모 채널은 판정 가능 틱이 드물어 15면 확정 기회가 없다
+    lead: "${HIGHLIGHT_LEAD:30s}"                     # 확정 시 시작점 소급 — 반응은 원인보다 늦다
+    max-active: "${HIGHLIGHT_MAX_ACTIVE:4m}"          # lead 포함 270s — 리포트 자격 상한 300s(DeterministicHighlightGenerator) 이내
+    cooldown: "${HIGHLIGHT_COOLDOWN:30s}"
+    warmup: "${HIGHLIGHT_WARMUP:3m}"                  # 방송 시작 인사 러시 오탐 방지 (가드 1)
+    min-window-chats: "${HIGHLIGHT_MIN_WINDOW_CHATS:4}"  # 저활동 틱 판정 생략 (가드 3). 절대량 방어는 mad-floor-chatters가 맡는다
+    mad-epsilon: "${HIGHLIGHT_MAD_EPSILON:0.001}"     # MAD 절대 하한 (가드 2)
+    mad-floor-chatters: "${HIGHLIGHT_MAD_FLOOR_CHATTERS:0.5}"  # MAD 동적 하한(채터 수 단위) — max(ε, 이 값/viewers)
+    tick-interval: 1s
+
+  # 하이라이트 클립 생성 (CLIP_SPEC.md)
+  # 영상은 스트리머 PC의 OBS 녹화본에서 Electron이 잘라 올린다 — 서버는 ffmpeg를
+  # 실행하지 않고, 방송당 ~100MB의 결과물만 받는다.
+  clip:
+    # CDN 송출 지연 보정. 시청자는 지연된 화면을 보고 채팅은 그에 대한 반응인데,
+    # OBS 로컬 녹화는 CDN을 거치지 않아 그만큼 빠르다. 안 빼면 클립이 전부
+    # "터지기 직전"에서 끝난다. 실방송 1회로 눈으로 맞춰야 하는 유일한 값이다.
+    platform-delay: 4500ms
+    # 실패 재시도 상한. 소진하면 FAILED로 확정하고 앱이 같은 작업을 다시 받지 않는다.
+    max-attempts: 3
+    storage-dir: "${CLIP_STORAGE_DIR:/var/laive/clips}"
+    # DB에는 상대 경로만 저장하고 조회 시 이 접두사를 붙인다. 절대 URL을 저장하면
+    # 도메인이 바뀌는 순간 그전에 만든 클립이 전부 죽은 링크가 된다.
+    public-base-url: "${CLIP_PUBLIC_BASE_URL:http://localhost:8080/clips}"
+    # nginx의 client_max_body_size도 함께 올려야 한다. 그쪽이 낮으면 요청이
+    # Spring에 도달조차 하지 않아 서버 로그에 아무것도 남지 않는다.
+    max-upload-bytes: 209715200
+
+  report:
+    ai:
+      enabled: "${REPORT_AI_ENABLED:false}"
+      max-input-chars: 24000
+      max-output-tokens: 1200
+      min-sentiment-coverage: 0.8
+      max-highlights: 5
+
+  growth:
+    ai:
+      enabled: "${GROWTH_AI_ENABLED:false}"
+      prompt-version: "${GROWTH_AI_PROMPT_VERSION:growth-action-v1}"
+      max-input-chars: 16000
+      max-output-tokens: 1000
+      max-actions: 3
+      timeout: 20s
+    roadmap-ai:
+      enabled: "${GROWTH_ROADMAP_AI_ENABLED:${GROWTH_AI_ENABLED:false}}"
+      prompt-version: "${GROWTH_ROADMAP_AI_PROMPT_VERSION:growth-roadmap-v1}"
+      max-input-chars: 24000
+      timeout: 30s
+      refresh-cooldown: 7d
+
+  # Spring이 치지직 채팅 수집기 제어 서비스를 호출할 때 쓰는 설정
+  collector:
+    # 비어 있으면 수집기를 연결하지 않는다(no-op). 로컬에서 나머지 API만 돌릴 때 쓴다.
+    base-url: "${COLLECTOR_BASE_URL:}"
+    control-token: "${COLLECTOR_CONTROL_TOKEN:}"
+    request-timeout: 5s
+    # 수집기 상태 보고가 이 시간 넘게 끊기면 STOPPED로 간주한다.
+    # 수집기 하트비트 주기(기본 10초)의 3배로 두어 한두 번의 유실로는 흔들리지 않게 한다.
+    heartbeat-timeout: 30s

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.laive.broadcast.live.repository.mybatis.LiveSnapshotMapper">
+
+    <select id="findLatestViewerCount" resultType="java.lang.Integer">
+        SELECT viewer_count
+          FROM viewer_metrics
+         WHERE session_id = #{sessionId}
+         ORDER BY measured_at DESC
+         LIMIT 1
+    </select>
+
+    <!-- created_at 동률(같은 초의 연속 저장) 대비 id 보조 정렬로 순서 흔들림을 막는다. -->
+    <select id="findRecentBriefings"
+            resultType="com.example.laive.broadcast.live.repository.mybatis.LiveBriefingRow">
+        SELECT id AS briefing_id,
+               briefing_type,
+               message,
+               promise_id,
+               created_at
+          FROM live_briefings
+         WHERE session_id = #{sessionId}
+         ORDER BY created_at DESC, id DESC
+         LIMIT #{limit}
+    </select>
+
+</mapper>

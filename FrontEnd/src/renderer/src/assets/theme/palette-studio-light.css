@@ -1,0 +1,71 @@
+/*
+ * LAIVE — 1층: 원시 팔레트 (Studio Light)
+ *
+ * 여기엔 "무슨 색인가"만 있다. "어디에 쓰는가"는 semantic.css(2층)가 정한다.
+ * 다른 디자인 시스템으로 바꾸려면 이 파일을 통째로 교체하면 된다 —
+ * semantic.css와 그 아래 화면 코드는 건드릴 필요가 없다.
+ *
+ * 값 출처: .claude/rules/design.md §1, 기존 globals.css :root/.dark
+ * (구조만 재편 — 값은 한 글자도 바꾸지 않았다)
+ */
+:root {
+  /* 중립 — 라이트 표면 */
+  --laive-white: #ffffff;
+  --laive-gray-100: #f5f6f8;
+  --laive-gray-150: #f1f2f5;
+  --laive-gray-200: #eef0f2;
+  --laive-gray-300: #e5e7ec;
+  --laive-gray-500: #767c88;
+  --laive-gray-900: #191c22;
+
+  /* 중립 — 다크 표면 (지금은 [data-theme='dark']에서만 참조) */
+  --laive-navy-900: #12151d;
+  --laive-navy-800: #2a2f3a;
+  --laive-navy-700: #232732;
+  --laive-navy-400: #9aa0ab;
+  --laive-navy-100: #e6ebf2;
+
+  /* 인디고 — Primary */
+  --laive-indigo-100: #eef0fb;
+  --laive-indigo-200: #c7cbf0;
+  --laive-indigo-400: #6d63f0;
+  --laive-indigo-600: #4338ca;
+  --laive-indigo-900: #232a4a;
+
+  /* 상태색 */
+  --laive-green-400: #4ade80;
+  --laive-green-600: #16a34a;
+  --laive-green-950: #052e16;
+
+  --laive-amber-400: #fbbf24;
+  --laive-amber-600: #d97706;
+  --laive-amber-950: #1f1300;
+
+  --laive-rose-400: #fb7185;
+  --laive-rose-600: #e11d48;
+  --laive-rose-950: #1a0e12;
+
+  --laive-violet-400: #c084fc;
+  --laive-violet-600: #7c3aed;
+
+  /*
+   * 방송 오버레이 전용 — 미니 위젯·OBS 오버레이처럼 방송 화면 위에 얹히는
+   * 표면이 쓰는 값이다. Studio Light와 무관하게 항상 어둡다(§ semantic.css
+   * [data-surface='overlay'] 참고). 나머지 화면과 겹치지 않는 새 값이라
+   * 여기서 새로 추가한다 — 옮겨온 값이 아니다.
+   */
+  --laive-navy-950: #0b0d12;
+  --laive-navy-600: #4a5162;
+  --laive-navy-500: #7b8494;
+  --laive-navy-450: #a7b0bf;
+  --laive-navy-300: #c4cbd6;
+  --laive-rose-100: #ffe4e6;
+  --laive-rose-300: #fda4af;
+  --laive-cyan-400: #22d3ee;
+  --laive-cyan-300: #67e8f9;
+  --laive-violet-300: #c4b5fd;
+  --laive-amber-300: #fcd34d;
+  --laive-gauge-from: #fb923c;
+  --laive-gauge-to: #f43f5e;
+  --laive-obs-backdrop: #0a0c12;
+}

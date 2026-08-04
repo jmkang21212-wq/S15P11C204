@@ -1,0 +1,112 @@
+# 개발:  docker compose up -d                        (DB·Redis·관리도구만. Spring은 IDE에서)
+# 배포:  docker compose up -d postgres redis spring  (관리도구 제외, Spring 포함)
+#
+# spring에 profiles를 걸어 두어 기본 `up -d`로는 뜨지 않는다. IDE에서 8080을
+# 쓰는 개발 흐름을 그대로 두기 위해서다. 배포에서는 위처럼 서비스를 직접
+# 지정하면 프로파일과 무관하게 뜬다.
+#
+# ⚠ AI compose(../../../AI)가 이 파일이 만드는 laive_default 네트워크에 붙는다.
+#    항상 이쪽을 먼저 띄워야 한다.
+
+services:
+  spring: # Spring 애플리케이션 서버
+    profiles: ["app"] # 위 주석 참고. 배포에서는 서비스명을 직접 지정해 띄운다
+    build:
+      context: .
+    image: laive-spring:latest
+    container_name: laive-spring
+    env_file: .env
+    environment:
+      # .env에 로컬 개발용 127.0.0.1이 남아 있어도 컨테이너에서는 서비스 이름으로
+      # 붙게 강제한다. environment가 env_file보다 우선한다.
+      # (컨테이너 안에서 127.0.0.1은 자기 자신이라 그대로 두면 DB를 못 찾는다)
+      POSTGRES_HOST: postgres
+      REDIS_HOST: redis
+    ports:
+      # 127.0.0.1에 묶는다. 호스트의 nginx만 접근하면 되고, 0.0.0.0으로 열면
+      # 도커가 iptables에 개방 규칙을 넣어 UFW를 우회해 외부에 그대로 노출된다.
+      - "127.0.0.1:8080:8080"
+    volumes:
+      # 클립 저장소(laive.clip.storage-dir). named volume이라 호스트의 /var를
+      # 건드리지 않고, 컨테이너를 지웠다 만들어도 파일이 남는다.
+      - clip-data:/var/laive/clips
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" } # 로그 무한 증식 방지
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 90s # Flyway 마이그레이션 + 기동 시간. 그전 실패는 무시한다
+
+  postgres: # 데이터베이스 구축을 위한 PostgreSQL 컨테이너
+    image: timescale/timescaledb:2.28.2-pg18 # PostgreSQL 18 + TimescaleDB 2.28.2
+    ports:
+      - "127.0.0.1:5432:5432"
+    environment:
+      POSTGRES_DB: laive
+      POSTGRES_USER: laive
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required} # 최초 데이터베이스 사용자 비밀번호(.env에 작성)
+      TZ: Asia/Seoul
+    volumes:
+      - postgres18-data:/var/lib/postgresql
+      # initdb/001-enable-timescaledb.sql 파일을 자동으로 실행, TimescaleDB 확장 생성
+      - ./initdb/001-enable-timescaledb.sql:/docker-entrypoint-initdb.d/001-enable-timescaledb.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis: # Redis 컨테이너
+    image: redis:8.2.7-alpine # Redis 8.2.7 사용
+    ports:
+      - "127.0.0.1:6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redisinsight:
+    image: redis/redisinsight:3.6.0
+    ports:
+      - "127.0.0.1:5540:5540"
+    environment:
+      RI_REDIS_HOST: redis
+      RI_REDIS_PORT: "6379"
+      RI_REDIS_ALIAS: laive-redis
+    volumes:
+      - redisinsight-data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  pgadmin:
+    image: dpage/pgadmin4:9.16
+    ports:
+      - "127.0.0.1:5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:?PGADMIN_DEFAULT_EMAIL is required} # pgAdmin 로그인 용 이메일(.env에 작성)
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:?PGADMIN_DEFAULT_PASSWORD is required} # pgAdmin 로그인 용 비밀번호(.env에 작성)
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres18-data:
+  redis-data:
+  redisinsight-data:
+  pgadmin-data:
+  clip-data: # 하이라이트 클립. 방송 1회당 약 100MB씩 쌓인다
