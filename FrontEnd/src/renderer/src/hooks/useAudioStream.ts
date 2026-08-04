@@ -66,7 +66,10 @@ export interface UseAudioStreamResult {
   /** WS 수신 시작 시각(ISO). 브리핑 병합 컷오버로 쓴다. 시작 전이면 null. */
   startedAt: string | null
   start: () => void
+  /** 마이크만 끈다. 브리핑 기록은 남는다. */
   stop: () => void
+  /** 방송 종료 — 마이크를 놓고 이 방송의 브리핑·컷오버를 버린다. */
+  end: () => void
 }
 
 /**
@@ -76,9 +79,9 @@ export interface UseAudioStreamResult {
  * 방송 중에 대시보드·일정 등으로 이동하는 순간 콘솔 페이지가 언마운트되어 마이크와 AI 서버
  * WebSocket이 끊긴다. 방송은 계속되는데 분석만 멈추는 것이라 사용자가 알아채기도 어렵다.
  *
- * 그래서 수명을 화면이 아니라 **방송**에 묶었다. 마이크는 방송 종료(`ConsoleStatusBar`가
- * `onStop`으로 `stop`을 넘긴다)와 로그아웃에서만 놓는다. `authStore`와 같은
- * `useSyncExternalStore` 패턴이라 여러 화면이 같은 상태를 구독할 수 있다.
+ * 그래서 수명을 화면이 아니라 **방송**에 묶었다. 마이크는 방송 종료(`end`)와 로그아웃
+ * (`reset`)에서만 놓는다. `authStore`와 같은 `useSyncExternalStore` 패턴이라 여러 화면이
+ * 같은 상태를 구독할 수 있다.
  *
  * 브리핑을 여기 쌓아 둬도 유실되지 않는다 — 이미 main의 중계 버퍼(최근 20건)가 미니 창에
  * 같은 값을 뿌리고 있고, 콘솔이 다시 마운트되면 이 저장소 값이 그대로 남아 있다.
@@ -166,17 +169,46 @@ export const audioStreamStore = {
     }
     void ensureClient().start(baseSessionId, broadcastSessionId)
   },
-  /** 마이크와 WebSocket을 놓는다. 방송 종료·로그아웃에서만 부른다. */
+  /**
+   * 마이크와 WebSocket만 놓는다. 방송 중 마이크를 잠시 끄는 용도라 브리핑 기록은 남긴다 —
+   * 지금까지 무슨 일이 있었는지가 이 화면의 본론이므로 마이크를 껐다고 지우면 안 된다.
+   */
   stop: (): void => {
     client?.stop()
   },
-  /** 로그아웃 정리 — 다음 사용자에게 이전 방송의 브리핑이 보이면 안 된다. */
+  /**
+   * 방송을 끝낸다. 마이크를 놓고 이 방송의 브리핑·컷오버를 모두 버린다.
+   *
+   * `stop`과 나눠 둔 이유는 저장소가 화면보다 오래 살기 때문이다. 종료 후 콘솔을 다시 열면
+   * 진행 중 세션이 없어 시청자·여론은 비지만, 브리핑은 이 저장소가 들고 있어 지난 방송
+   * 카드가 그대로 남는다.
+   *
+   * main의 중계 버퍼도 같이 비운다 — 미니 창은 브리핑을 그 버퍼에서 받으므로 여기만
+   * 비우면 미니 창에 지난 방송이 남는다.
+   */
+  end: (): void => {
+    client?.stop()
+    localId = 0
+    startedSessionId = null
+    setState({ status: 'IDLE', error: null, briefings: [], startedAt: null })
+    window.api?.briefing?.clear()
+  },
+  /**
+   * 로그아웃 정리 — 다음 사용자에게 이전 방송의 브리핑이 보이면 안 된다.
+   * `end`와 달리 클라이언트 자체를 버린다.
+   *
+   * 부팅 직후(토큰 복원 전)에도 불리므로 IPC는 브릿지 유무를 확인해서 부른다 —
+   * 브라우저로 직접 연 개발 환경에는 window.api가 없다(useCurrentSession과 같은 사정).
+   */
   reset: (): void => {
     client?.stop()
     client = null
     localId = 0
     startedSessionId = null
     setState({ status: 'IDLE', error: null, briefings: [], startedAt: null })
+    // reset은 부팅 직후(토큰 복원 전)에도 불리므로 브릿지 유무를 확인한다 —
+    // 브라우저로 직접 연 개발 환경에는 window.api가 없다(useCurrentSession과 같은 사정).
+    window.api?.briefing?.clear()
   }
 }
 
@@ -203,5 +235,9 @@ export function useAudioStream(
     audioStreamStore.stop()
   }, [])
 
-  return { status, error, briefings, startedAt, start, stop }
+  const end = useCallback(() => {
+    audioStreamStore.end()
+  }, [])
+
+  return { status, error, briefings, startedAt, start, stop, end }
 }

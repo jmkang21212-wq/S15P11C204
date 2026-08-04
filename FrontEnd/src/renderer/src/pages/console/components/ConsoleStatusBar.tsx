@@ -115,7 +115,8 @@ export default function ConsoleStatusBar({
       </Button>
 
       {/* OBS 연결 + 방송 시작/종료 — 세션과 송출을 한 버튼이 함께 제어한다 */}
-      <BroadcastControl sessionId={sessionId} onStarted={onStarted} onStop={audio.stop} />
+      {/* 위 토글은 마이크만 끄지만(audio.stop), 방송 종료는 브리핑까지 정리한다(audio.end) */}
+      <BroadcastControl sessionId={sessionId} onStarted={onStarted} onEnd={audio.end} />
 
       {audio.error && (
         <span className="max-w-48 truncate text-xs text-destructive" title={audio.error}>

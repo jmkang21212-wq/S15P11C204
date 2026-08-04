@@ -123,6 +123,8 @@ export interface BriefingBridge {
   publish: (briefing: unknown) => void
   /** main이 보관한 최근 브리핑 (최신순). */
   recent: () => Promise<unknown[]>
+  /** main의 보관 버퍼를 비운다. 방송 종료 시 콘솔이 부른다. */
+  clear: () => void
   /** 중계된 브리핑 구독. 반환 함수 호출로 구독 해제. */
   onNew: (callback: (briefing: unknown) => void) => () => void
 }
