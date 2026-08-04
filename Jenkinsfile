@@ -6,9 +6,16 @@ pipeline {
         disableConcurrentBuilds()
         timeout(time: 30, unit: 'MINUTES')
         buildDiscarder(logRotator(numToKeepStr: '10'))
+        gitLabConnection('laive-gitlab')
     }
 
     stages {
+        stage('Report Pending') {
+            steps {
+                updateGitlabCommitStatus name: 'jenkins', state: 'pending'
+            }
+        }
+
         stage('Spring Test') {
             steps {
                 dir('BackEnd/spring/laive') {
@@ -65,6 +72,21 @@ pipeline {
                         deploy@host.docker.internal
                 '''
             }
+        }
+    }
+
+    post {
+        success {
+            updateGitlabCommitStatus name: 'jenkins', state: 'success'
+        }
+        unstable {
+            updateGitlabCommitStatus name: 'jenkins', state: 'failed'
+        }
+        failure {
+            updateGitlabCommitStatus name: 'jenkins', state: 'failed'
+        }
+        aborted {
+            updateGitlabCommitStatus name: 'jenkins', state: 'canceled'
         }
     }
 }
