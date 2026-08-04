@@ -11,6 +11,7 @@ import PageHeader from '@renderer/components/common/PageHeader'
 import { MetricCardSkeleton } from '@renderer/components/common/MetricCard'
 import BasicInfoForm, { type BasicInfoValues } from './components/BasicInfoForm'
 import FeaturedHighlightsEditor from './components/FeaturedHighlightsEditor'
+import PortfolioCreateForm from './components/PortfolioCreateForm'
 import PerformanceSummary from './components/PerformanceSummary'
 import ProfileSummary from './components/ProfileSummary'
 import { fetchMyPortfolio, portfolioAbsence, updateMyPortfolio } from '@renderer/api/portfolio'
@@ -56,7 +57,9 @@ export default function PortfolioEditPage(): React.JSX.Element {
     setSyncedFrom(data)
     setForm({
       title: data.title,
-      introduction: data.introduction,
+      // introduction은 DB에서 nullable이라 앱 밖에서 만들어진 행은 null일 수 있다.
+      // 타입은 non-null이지만 믿지 않는다 — null이 오면 폼의 글자수 표시가 터진다.
+      introduction: data.introduction ?? '',
       contactEmail: data.contactEmail ?? '',
       contactUrl: data.contactUrl ?? ''
     })
@@ -114,29 +117,35 @@ export default function PortfolioEditPage(): React.JSX.Element {
 
   if (error || !data || form === null) {
     /*
-      BE는 포트폴리오가 없는 이유를 404 두 코드로 나눠 보낸다 — 아직 만들지 않았거나,
-      종료된 방송이 없어 만들 자격이 없거나. 둘 다 장애가 아니라 정상 상태이므로
-      "불러오지 못했습니다 + 재시도" 대신 다음에 할 일을 안내한다.
+      BE는 포트폴리오가 없는 이유를 404 두 코드로 나눠 보낸다 — 아직 만들지 않았거나
+      (NOT_CREATED), 종료된 방송이 없어 만들 자격이 없거나(NOT_ELIGIBLE). 둘 다 장애가
+      아니라 정상 상태이므로 "불러오지 못했습니다 + 재시도"로 처리하면 막다른 길이 된다.
     */
     const absence = portfolioAbsence(error)
+
+    // 만들 수 있는 상태 — 조회 대신 생성 폼을 보여준다. 이 화면이 유일한 생성 경로다.
+    if (absence === 'NOT_CREATED') {
+      return (
+        <div className="mx-auto flex max-w-[1400px] flex-col gap-6 p-8">
+          <PageHeader
+            title="포트폴리오"
+            caption="광고주와 다른 스트리머에게 보여줄 공개 프로필을 만들어 보세요."
+          />
+          <PortfolioCreateForm onCreated={refetch} />
+        </div>
+      )
+    }
+
     return (
       <div className="mx-auto max-w-[1400px] p-8">
-        {absence === null ? (
-          <ErrorState message="포트폴리오를 불러오지 못했습니다." onRetry={refetch} />
-        ) : (
+        {absence === 'NOT_ELIGIBLE' ? (
           <EmptyState
             icon={FileText}
-            title={
-              absence === 'NOT_ELIGIBLE'
-                ? '첫 방송을 마치면 만들 수 있어요'
-                : '아직 포트폴리오가 없어요'
-            }
-            description={
-              absence === 'NOT_ELIGIBLE'
-                ? '종료된 방송이 1개 이상 있어야 포트폴리오를 만들 수 있어요.'
-                : '방송 실적이 모여 만들 수 있는 상태예요. 생성 화면은 아직 준비 중이에요.'
-            }
+            title="첫 방송을 마치면 만들 수 있어요"
+            description="종료된 방송이 1개 이상 있어야 포트폴리오를 만들 수 있어요."
           />
+        ) : (
+          <ErrorState message="포트폴리오를 불러오지 못했습니다." onRetry={refetch} />
         )}
       </div>
     )

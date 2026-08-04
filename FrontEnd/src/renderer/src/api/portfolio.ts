@@ -1,10 +1,16 @@
 import { ApiError, apiFetch } from './client'
-import type { Portfolio, PortfolioUpdate, PublicPortfolio } from '@renderer/types/portfolio'
+import type {
+  Portfolio,
+  PortfolioCreate,
+  PortfolioUpdate,
+  PublicPortfolio
+} from '@renderer/types/portfolio'
 
 /**
  * SC-10 포트폴리오 데이터 소스.
  *
  * - `GET   /portfolio/me`            내 포트폴리오 (API 명세서 §12.1)
+ * - `POST  /portfolio/me`            생성 (§12 신설)
  * - `PATCH /portfolio/me`            부분 수정 (§12.2)
  * - `GET   /portfolios/{publicSlug}` 공개 뷰, 인증 불필요 (§12.4)
  *
@@ -36,6 +42,20 @@ export function portfolioAbsence(error: unknown): PortfolioAbsence | null {
 
 export async function fetchMyPortfolio(): Promise<Portfolio> {
   return apiFetch<Portfolio>('/portfolio/me')
+}
+
+/**
+ * 포트폴리오를 만든다. 종료된 방송이 1건 이상 있어야 하고(`PORTFOLIO_NOT_ELIGIBLE`),
+ * 스트리머당 하나만 가질 수 있다(`PORTFOLIO_ALREADY_EXISTS`).
+ *
+ * 서버는 생성과 동시에 태그를 `streamer_tags`에 반영하고 실적을 집계해서, 응답에 이미
+ * 실제 시청자·방송 수가 채워져 있다.
+ */
+export async function createMyPortfolio(input: PortfolioCreate): Promise<Portfolio> {
+  return apiFetch<Portfolio>('/portfolio/me', {
+    method: 'POST',
+    body: JSON.stringify(input)
+  })
 }
 
 /**
