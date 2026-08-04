@@ -55,19 +55,22 @@ export interface ReportInsight {
   content: string
 }
 
+/**
+ * `highlights.clip_status`(BE `ClipStatus`)와 이름을 공유한다.
+ * PENDING(대기)·UPLOADED(완료)·FAILED(재시도 소진)·SKIPPED(녹화본 없음).
+ */
+export type ClipStatus = 'PENDING' | 'UPLOADED' | 'FAILED' | 'SKIPPED'
+
 export interface ReportHighlight {
   highlightId: number
   /** 이 하이라이트를 만든 채팅 급증 구간. 구간 없이 만들어졌으면 null. */
   triggerId: number | null
   startMs: number
   endMs: number
-  /**
-   * 클립 생성 전이거나 생성에 실패하면 null (명세서 §1.5 nullable 표).
-   * 응답에 둘을 구분할 상태 필드가 없어 UI는 "생성 중"으로만 표시한다.
-   * TODO: 백엔드에 clipStatus 같은 상태 필드 추가 협의
-   */
+  /** 클립 생성 전이거나 생성에 실패하면 null (명세서 §1.5 nullable 표). 상태 구분은 clipStatus로 한다. */
   clipUrl: string | null
   thumbnailUrl: string | null
+  clipStatus: ClipStatus
 }
 
 export interface SessionReport {

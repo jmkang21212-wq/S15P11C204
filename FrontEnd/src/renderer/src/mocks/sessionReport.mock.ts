@@ -132,7 +132,8 @@ const HIGHLIGHTS: ReportHighlight[] = [
     startMs: 87 * MINUTE_MS,
     endMs: 87 * MINUTE_MS + 41_000,
     clipUrl: null,
-    thumbnailUrl: null
+    thumbnailUrl: null,
+    clipStatus: 'PENDING'
   },
   {
     highlightId: 72,
@@ -140,7 +141,8 @@ const HIGHLIGHTS: ReportHighlight[] = [
     startMs: 89 * MINUTE_MS,
     endMs: 89 * MINUTE_MS + 55_000,
     clipUrl: null,
-    thumbnailUrl: null
+    thumbnailUrl: null,
+    clipStatus: 'PENDING'
   },
   {
     highlightId: 73,
@@ -148,7 +150,8 @@ const HIGHLIGHTS: ReportHighlight[] = [
     startMs: 120 * MINUTE_MS,
     endMs: 120 * MINUTE_MS + 68_000,
     clipUrl: null,
-    thumbnailUrl: null
+    thumbnailUrl: null,
+    clipStatus: 'PENDING'
   },
   {
     highlightId: 74,
@@ -156,7 +159,8 @@ const HIGHLIGHTS: ReportHighlight[] = [
     startMs: 62 * MINUTE_MS,
     endMs: 62 * MINUTE_MS + 52_000,
     clipUrl: null,
-    thumbnailUrl: null
+    thumbnailUrl: null,
+    clipStatus: 'PENDING'
   }
 ]
 

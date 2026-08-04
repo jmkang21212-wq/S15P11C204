@@ -60,10 +60,10 @@ export const MOCK_DASHBOARD: DashboardData = {
     totalChatChangeRate: 0.08
   },
   recentHighlights: [
-    { highlightId: 71, durationMs: 42000, clipUrl: '', thumbnailUrl: '' },
-    { highlightId: 72, durationMs: 68000, clipUrl: '', thumbnailUrl: '' },
-    { highlightId: 73, durationMs: 55000, clipUrl: '', thumbnailUrl: '' },
-    { highlightId: 74, durationMs: 91000, clipUrl: '', thumbnailUrl: '' },
-    { highlightId: 75, durationMs: 38000, clipUrl: '', thumbnailUrl: '' }
+    { highlightId: 71, durationMs: 42000, clipUrl: null, thumbnailUrl: null },
+    { highlightId: 72, durationMs: 68000, clipUrl: null, thumbnailUrl: null },
+    { highlightId: 73, durationMs: 55000, clipUrl: null, thumbnailUrl: null },
+    { highlightId: 74, durationMs: 91000, clipUrl: null, thumbnailUrl: null },
+    { highlightId: 75, durationMs: 38000, clipUrl: null, thumbnailUrl: null }
   ]
 }

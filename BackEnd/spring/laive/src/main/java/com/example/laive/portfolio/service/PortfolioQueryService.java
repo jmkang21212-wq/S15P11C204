@@ -1,6 +1,8 @@
 package com.example.laive.portfolio.service;
 
 import com.example.laive.common.api.PageResponse;
+import com.example.laive.media.storage.ClipUrlResolver;
+import com.example.laive.portfolio.domain.FeaturedHighlightView;
 import com.example.laive.portfolio.domain.PerformanceSnapshot;
 import com.example.laive.portfolio.domain.PlatformAccountRow;
 import com.example.laive.portfolio.domain.Portfolio;
@@ -41,9 +43,11 @@ public class PortfolioQueryService {
     private static final ZoneId SERVICE_ZONE = ZoneId.of("Asia/Seoul");
 
     private final PortfolioRepository repository;
+    private final ClipUrlResolver clipUrlResolver;
 
-    public PortfolioQueryService(PortfolioRepository repository) {
+    public PortfolioQueryService(PortfolioRepository repository, ClipUrlResolver clipUrlResolver) {
         this.repository = repository;
+        this.clipUrlResolver = clipUrlResolver;
     }
 
     /**
@@ -138,7 +142,23 @@ public class PortfolioQueryService {
                         snapshot.totalBroadcastCount(),
                         snapshot.totalChat(),
                         primaryTimeRange(repository.findRecentEndedSessions(streamerId))),
-                repository.findFeaturedHighlights(portfolio.portfolioId()));
+                repository.findFeaturedHighlights(portfolio.portfolioId()).stream()
+                        .map(this::resolveUrls)
+                        .toList());
+    }
+
+    /**
+     * 매퍼가 DB의 상대 경로(저장 키)를 그대로 돌려주므로(PortfolioMapper.xml) 여기서
+     * 절대 URL로 조립한다 — SC-07·리포트가 {@code HighlightResponse.from()}에서 하는 것과
+     * 같은 단계다. 클립 생성 전이면 {@code ClipUrlResolver}가 null로 정규화한다.
+     */
+    private FeaturedHighlightView resolveUrls(FeaturedHighlightView highlight) {
+        return new FeaturedHighlightView(
+                highlight.highlightId(),
+                highlight.displayOrder(),
+                clipUrlResolver.toUrl(highlight.clipUrl()),
+                clipUrlResolver.toUrl(highlight.thumbnailUrl())
+        );
     }
 
     /**

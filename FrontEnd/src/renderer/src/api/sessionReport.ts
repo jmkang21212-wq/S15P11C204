@@ -76,6 +76,7 @@ interface RawReportHighlight {
   endMs: number
   clipUrl: string | null
   thumbnailUrl: string | null
+  clipStatus: ReportHighlight['clipStatus']
 }
 interface RawViewerTimelinePoint {
   measuredAt: string
@@ -152,7 +153,8 @@ function toHighlight(highlight: RawReportHighlight): ReportHighlight {
     startMs: highlight.startMs,
     endMs: highlight.endMs,
     clipUrl: highlight.clipUrl,
-    thumbnailUrl: highlight.thumbnailUrl
+    thumbnailUrl: highlight.thumbnailUrl,
+    clipStatus: highlight.clipStatus
   }
 }
 
