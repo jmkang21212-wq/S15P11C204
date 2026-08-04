@@ -10,6 +10,8 @@ import {
   UserRound,
   Handshake,
   LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
   type LucideIcon
 } from 'lucide-react'
 import logo from '@renderer/assets/logo.png'
@@ -19,6 +21,7 @@ import { PATHS } from '@renderer/routes/paths'
 import { useAuth } from '@renderer/auth/authStore'
 import { logout } from '@renderer/api/auth'
 import { usePlatformAccounts } from '@renderer/hooks/usePlatformAccounts'
+import { useGnbCollapsed } from '@renderer/hooks/useGnbCollapsed'
 import Avatar from '@renderer/components/common/Avatar'
 
 interface NavItem {
@@ -40,8 +43,6 @@ const NAV_ITEMS: NavItem[] = [
 ]
 
 interface GNBProps {
-  /** 방송 콘솔(SC-03)에서 아이콘만 남기고 축소한다. */
-  collapsed?: boolean
   /** 진행 중인 방송이 있으면 상단 LIVE 배너를 노출한다. */
   live?: boolean
   /** live일 때 배너 클릭 시 이동할 세션 ID. */
@@ -50,14 +51,12 @@ interface GNBProps {
 
 /**
  * Global Navigation Bar — 로그인 후 앱 화면들이 공유하는 좌측 주 메뉴.
- * 일반 화면은 232px, 방송 콘솔에서는 collapsed로 60px 축소된다.
+ * 펼침 232px / 접힘 60px. 화면이 아니라 사용자가 토글 버튼으로 직접 전환하며,
+ * 상태는 앱 전체가 공유한다(useGnbCollapsed).
  */
-export default function GNB({
-  collapsed = false,
-  live = false,
-  liveSessionId
-}: GNBProps): React.JSX.Element {
+export default function GNB({ live = false, liveSessionId }: GNBProps): React.JSX.Element {
   const navigate = useNavigate()
+  const { collapsed, toggle } = useGnbCollapsed()
   const { streamer } = useAuth()
   const { accounts } = usePlatformAccounts()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -105,17 +104,36 @@ export default function GNB({
   return (
     <nav
       className={cn(
-        'flex h-full shrink-0 flex-col border-r bg-card',
+        'flex h-full shrink-0 flex-col border-r bg-card transition-[width] duration-200',
         collapsed ? 'w-[60px] items-center' : 'w-[232px]'
       )}
     >
-      {/* 로고 */}
-      <div className={cn('flex items-center p-4', collapsed && 'justify-center')}>
+      {/* 로고 + 펼침/접힘 토글 */}
+      <div
+        className={cn(
+          'flex items-center p-4',
+          collapsed ? 'flex-col gap-2 justify-center' : 'justify-between'
+        )}
+      >
         {collapsed ? (
           <img src={appIcon} alt="LAIVE" className="size-8 rounded-md" />
         ) : (
           <img src={logo} alt="LAIVE" className="h-7 w-auto" />
         )}
+        <button
+          type="button"
+          onClick={toggle}
+          title={collapsed ? '펼치기' : '접기'}
+          aria-label={collapsed ? '펼치기' : '접기'}
+          aria-expanded={!collapsed}
+          className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent/50"
+        >
+          {collapsed ? (
+            <PanelLeftOpen className="size-4" strokeWidth={1.8} aria-hidden />
+          ) : (
+            <PanelLeftClose className="size-4" strokeWidth={1.8} aria-hidden />
+          )}
+        </button>
       </div>
 
       {/* LIVE 배너 — 방송 중일 때만 노출, 클릭 시 콘솔로 이동 */}
@@ -189,44 +207,51 @@ export default function GNB({
             {!collapsed && <span>{linkStatus === 'reauth' ? '재연동 필요' : '미연동'}</span>}
           </button>
         )}
-        {!collapsed && (
-          <div ref={accountRef} className="relative">
-            <button
-              type="button"
-              onClick={() => setMenuOpen((open) => !open)}
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              className="flex w-full items-center gap-2 rounded-md p-1 transition-colors hover:bg-accent/50"
-            >
-              <Avatar
-                src={streamer?.profileImageUrl ?? null}
-                alt={streamer?.nickname ?? '프로필'}
-                size="size-7"
-              />
+        <div ref={accountRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((open) => !open)}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            title={collapsed ? (streamer?.nickname ?? '프로필') : undefined}
+            className={cn(
+              'flex items-center gap-2 rounded-md p-1 transition-colors hover:bg-accent/50',
+              collapsed ? 'justify-center' : 'w-full'
+            )}
+          >
+            <Avatar
+              src={streamer?.profileImageUrl ?? null}
+              alt={streamer?.nickname ?? '프로필'}
+              size="size-7"
+            />
+            {!collapsed && (
               <span className="flex-1 truncate text-left text-sm font-medium">
                 {streamer?.nickname ?? '-'}
               </span>
-            </button>
-
-            {menuOpen && (
-              <div
-                role="menu"
-                className="absolute bottom-full left-0 z-50 mb-1 w-full overflow-hidden rounded-md border bg-card shadow-md"
-              >
-                <button
-                  type="button"
-                  role="menuitem"
-                  disabled={loggingOut}
-                  onClick={() => void handleLogout()}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-destructive transition-colors hover:bg-accent/50 disabled:opacity-60"
-                >
-                  <LogOut className="size-4" strokeWidth={1.8} aria-hidden />
-                  {loggingOut ? '로그아웃 중…' : '로그아웃'}
-                </button>
-              </div>
             )}
-          </div>
-        )}
+          </button>
+
+          {menuOpen && (
+            <div
+              role="menu"
+              className={cn(
+                'absolute z-50 overflow-hidden rounded-md border bg-card shadow-md',
+                collapsed ? 'bottom-0 left-full ml-1 w-max' : 'bottom-full left-0 mb-1 w-full'
+              )}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                disabled={loggingOut}
+                onClick={() => void handleLogout()}
+                className="flex w-full items-center gap-2 whitespace-nowrap px-3 py-2 text-sm text-destructive transition-colors hover:bg-accent/50 disabled:opacity-60"
+              >
+                <LogOut className="size-4" strokeWidth={1.8} aria-hidden />
+                {loggingOut ? '로그아웃 중…' : '로그아웃'}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </nav>
   )
