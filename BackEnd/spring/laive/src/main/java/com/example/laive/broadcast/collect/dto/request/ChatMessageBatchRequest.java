@@ -35,17 +35,20 @@ public record ChatMessageBatchRequest(
             ChatMessageType messageType,
             @DecimalMin("0") BigDecimal amount,
             @Size(max = 10) String currency,
-            @Size(max = 100) String providerEventType
+            @Size(max = 100) String providerEventType,
+            // 표시용 닉네임·역할 (FR-F-03). 구버전 수집기는 안 보내므로 선택 필드다.
+            @Size(max = 100) String nickname,
+            @Size(max = 20) String userRole
     ) {
 
         public Item(String viewerHash, String message, Instant sentAt) {
-            this(viewerHash, message, sentAt, null, null, null, null, null);
+            this(viewerHash, message, sentAt, null, null, null, null, null, null, null);
         }
 
         ChatMessageItem toDomain() {
             return new ChatMessageItem(
                     viewerHash, message, sentAt, null, platformMessageId, messageType,
-                    amount, currency, providerEventType);
+                    amount, currency, providerEventType, nickname, userRole);
         }
     }
 

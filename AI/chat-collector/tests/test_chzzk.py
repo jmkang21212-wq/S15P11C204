@@ -52,6 +52,24 @@ def test_profile이_없으면_역할은_None이다():
     assert parse_chat_event(dict(_BASE))[0].user_role_code is None
 
 
+def test_profile이_JSON_문자열이어도_닉네임을_읽는다():
+    payload = dict(_BASE, profile=json.dumps({'nickname': '한별팬1호'}))
+
+    assert parse_chat_event(payload)[0].nickname == '한별팬1호'
+
+
+def test_profile이_객체여도_닉네임을_읽는다():
+    payload = dict(_BASE, profile={'nickname': '한별팬1호', 'userRoleCode': 'common_user'})
+
+    assert parse_chat_event(payload)[0].nickname == '한별팬1호'
+
+
+def test_닉네임이_빈_문자열이면_None으로_눕힌다():
+    payload = dict(_BASE, profile={'nickname': ''})
+
+    assert parse_chat_event(payload)[0].nickname is None
+
+
 def test_이모티콘_종류가_아니라_사용_횟수를_센다():
     # 2026-07-29 실측 페이로드. 자리표시자는 4개인데 emojis 키는 2개다.
     # len(emojis)로 세면 밀도가 절반으로 깎인다.

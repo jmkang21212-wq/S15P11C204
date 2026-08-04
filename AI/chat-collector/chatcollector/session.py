@@ -365,6 +365,9 @@ class CollectorSession:
                 'viewerHash': viewer_hash(event.sender_channel_id),
                 'message': event.content,
                 'sentAt': iso(self._sent_at(event.message_time_ms, received_at)),
+                # 열성 시청자 TOP5(FR-F-03) 표기용. 원본 채널 id는 위 해시로만 나간다.
+                'nickname': event.nickname,
+                'userRole': event.user_role_code,
             })
 
     def _sent_at(self, message_time_ms: int, received_at: float) -> float:
