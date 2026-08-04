@@ -19,6 +19,22 @@ export interface Page<T> {
   totalPages: number
 }
 
+/** BE `PlatformSessionStatus` enum과 이름을 일치시킨다. */
+export type PlatformSessionStatus = 'PREPARING' | 'LIVE' | 'ENDED' | 'FAILED'
+
+/** 플랫폼별 자식 세션 — `BroadcastPlatformSessionResponse`. */
+export interface BroadcastPlatformSession {
+  platformSessionId: number
+  platformAccountId: number
+  platformCode: string
+  channelName: string
+  status: PlatformSessionStatus
+  startedAt: string
+  endedAt: string | null
+  errorCode: string | null
+  watchUrl: string | null
+}
+
 export interface BroadcastSessionDetail {
   sessionId: number
   platformAccountId: number
@@ -31,6 +47,8 @@ export interface BroadcastSessionDetail {
   status: BroadcastStatus
   startedAt: string
   endedAt: string | null
+  /** 플랫폼별 자식 세션 — 다중 연동으로 시작하면 2개 이상이다. */
+  platformSessions: BroadcastPlatformSession[]
 }
 
 export interface BroadcastSessionListItem {
@@ -55,7 +73,11 @@ export interface VoiceTicket {
 }
 
 export interface StartBroadcastSessionInput {
-  platformAccountId: number
+  /**
+   * 동시에 방송할 연동 계정들. BE `StartBroadcastSessionRequest`는 이 필드와 legacy
+   * `platformAccountId` 중 정확히 하나만 허용한다 — 항상 이 필드만 보낸다(1개여도).
+   */
+  platformAccountIds: number[]
   calendarEventId?: number | null
   title: string
   category?: string | null
