@@ -108,7 +108,7 @@ export default function ClipsPage(): React.JSX.Element {
   const pendingCount = (lastGoodHighlights?.length ?? 0) - doneCount - failedCount
 
   return (
-    <div className="mx-auto flex max-w-[1400px] flex-col gap-6 p-8">
+    <div className="mx-auto flex max-w-350 flex-col gap-6 p-8">
       <PageHeader
         title="하이라이트 / 클립"
         caption="방송에서 자동으로 뽑아낸 구간이에요. 재생하거나 파일로 내려받을 수 있어요."

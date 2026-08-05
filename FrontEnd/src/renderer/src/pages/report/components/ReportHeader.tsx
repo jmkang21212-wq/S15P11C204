@@ -41,7 +41,7 @@ export default function ReportHeader({
           aria-label="세션 리포트 목록으로"
           className="mt-0.5 shrink-0"
         >
-          <ArrowLeft className="size-[18px]" strokeWidth={1.8} aria-hidden />
+          <ArrowLeft className="size-4.5" strokeWidth={1.8} aria-hidden />
         </Button>
 
         <div className="flex min-w-0 flex-col gap-1.5">
@@ -72,11 +72,11 @@ export default function ReportHeader({
           disabled={refreshing}
           aria-label="리포트 새로고침"
         >
-          <RotateCcw className="size-[14px]" strokeWidth={1.8} aria-hidden />
+          <RotateCcw className="size-3.5" strokeWidth={1.8} aria-hidden />
           새로고침
         </Button>
         <Button type="button" size="sm" onClick={onOpenClips}>
-          <Film className="size-[14px]" strokeWidth={1.8} aria-hidden />
+          <Film className="size-3.5" strokeWidth={1.8} aria-hidden />
           클립 보러가기
         </Button>
       </div>

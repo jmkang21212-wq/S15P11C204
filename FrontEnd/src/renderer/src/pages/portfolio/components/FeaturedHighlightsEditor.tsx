@@ -106,7 +106,7 @@ export default function FeaturedHighlightsEditor({
                   <ClipThumbnail
                     src={highlight.thumbnailUrl}
                     alt={`대표 클립 ${index + 1} 썸네일`}
-                    className="w-[96px] shrink-0"
+                    className="w-24 shrink-0"
                   />
                   <span className="flex-1 font-mono text-xs">#{highlight.highlightId}</span>
                   <div className="flex shrink-0 items-center gap-1">
@@ -118,7 +118,7 @@ export default function FeaturedHighlightsEditor({
                       disabled={index === 0}
                       onClick={() => move(index, -1)}
                     >
-                      <ArrowUp className="size-[14px]" strokeWidth={1.8} aria-hidden />
+                      <ArrowUp className="size-3.5" strokeWidth={1.8} aria-hidden />
                     </Button>
                     <Button
                       type="button"
@@ -128,7 +128,7 @@ export default function FeaturedHighlightsEditor({
                       disabled={index === selected.length - 1}
                       onClick={() => move(index, 1)}
                     >
-                      <ArrowDown className="size-[14px]" strokeWidth={1.8} aria-hidden />
+                      <ArrowDown className="size-3.5" strokeWidth={1.8} aria-hidden />
                     </Button>
                     <Button
                       type="button"
@@ -137,7 +137,7 @@ export default function FeaturedHighlightsEditor({
                       aria-label="제거"
                       onClick={() => remove(highlight.highlightId)}
                     >
-                      <X className="size-[14px]" strokeWidth={1.8} aria-hidden />
+                      <X className="size-3.5" strokeWidth={1.8} aria-hidden />
                     </Button>
                   </div>
                 </li>
@@ -157,7 +157,7 @@ export default function FeaturedHighlightsEditor({
                 sessions={sessions}
                 value={sessionId}
                 onChange={setSessionId}
-                className="w-[280px]"
+                className="w-70"
               />
             )}
           </div>
@@ -216,14 +216,14 @@ export default function FeaturedHighlightsEditor({
                         >
                           {picked ? (
                             <>
-                              <Check className="size-[14px]" strokeWidth={1.8} aria-hidden />
+                              <Check className="size-3.5" strokeWidth={1.8} aria-hidden />
                               담김
                             </>
                           ) : pending ? (
                             '생성 중'
                           ) : (
                             <>
-                              <Plus className="size-[14px]" strokeWidth={1.8} aria-hidden />
+                              <Plus className="size-3.5" strokeWidth={1.8} aria-hidden />
                               담기
                             </>
                           )}

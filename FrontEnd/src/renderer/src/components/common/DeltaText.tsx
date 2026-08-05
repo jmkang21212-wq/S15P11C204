@@ -40,7 +40,7 @@ export default function DeltaText({
         className
       )}
     >
-      <Arrow className="size-[14px]" strokeWidth={2} aria-hidden />
+      <Arrow className="size-3.5" strokeWidth={2} aria-hidden />
       {up ? '+' : ''}
       {(delta * 100).toFixed(digits)}%
     </span>

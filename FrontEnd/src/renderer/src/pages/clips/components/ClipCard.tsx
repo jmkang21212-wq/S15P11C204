@@ -54,7 +54,7 @@ export default function ClipCard({
               className="flex-1"
               onClick={() => onPlay(clipUrl)}
             >
-              <Play className="size-[14px]" strokeWidth={1.8} aria-hidden />
+              <Play className="size-3.5" strokeWidth={1.8} aria-hidden />
               재생
             </Button>
             <Button
@@ -64,7 +64,7 @@ export default function ClipCard({
               className="flex-1"
               onClick={() => onDownload(clipUrl)}
             >
-              <Download className="size-[14px]" strokeWidth={1.8} aria-hidden />
+              <Download className="size-3.5" strokeWidth={1.8} aria-hidden />
               다운로드
             </Button>
           </div>
@@ -78,7 +78,7 @@ export default function ClipCard({
             <Progress
               value={100}
               aria-label="클립 생성 중"
-              className="animate-pulse bg-muted [&>[data-slot=progress-indicator]]:bg-muted-foreground/40"
+              className="animate-pulse bg-muted *:data-[slot=progress-indicator]:bg-muted-foreground/40"
             />
             <span className="text-caption text-muted-foreground">클립을 만드는 중이에요</span>
           </div>

@@ -128,7 +128,7 @@ export default function CalendarMonth({
                 드래그 스크롤은 그대로 동작하고, 넘칠 때 마지막 칩이 반쯤 잘려 보이는 것이
                 "더 있다"는 신호가 된다.
               */}
-              <div className="mt-1 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="mt-1 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto scrollbar-none [&::-webkit-scrollbar]:hidden">
                 {/*
                   일정 칩 — 다른 날짜로 끌면 시각·기간은 그대로 두고 날짜만 옮겨진다.
                   이미 끝난 일정(COMPLETED)은 옮기지 않는다. 방송이 실제로 있었던 날을
@@ -164,7 +164,7 @@ export default function CalendarMonth({
                       {e.eventType === 'BROADCAST' && (
                         <span className="font-bold opacity-70">{formatTime(e.startAt)}</span>
                       )}
-                      <span className="line-clamp-2 break-words">{e.title}</span>
+                      <span className="line-clamp-2 wrap-break-word">{e.title}</span>
                     </button>
                   )
                 })}
@@ -188,7 +188,7 @@ export default function CalendarMonth({
                         moving ? 'opacity-50' : 'cursor-grab active:cursor-grabbing'
                       )}
                     >
-                      <span className="line-clamp-2 break-words">🔖 {p.content}</span>
+                      <span className="line-clamp-2 wrap-break-word">🔖 {p.content}</span>
                     </div>
                   )
                 })}

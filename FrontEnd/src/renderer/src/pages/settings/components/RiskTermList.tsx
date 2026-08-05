@@ -57,7 +57,7 @@ export default function RiskTermList({
             disabled={pendingId === item.id}
             onClick={() => onRemove(item.id)}
           >
-            <X className="size-[14px]" strokeWidth={1.8} aria-hidden />
+            <X className="size-3.5" strokeWidth={1.8} aria-hidden />
           </Button>
         </li>
       ))}

@@ -35,7 +35,7 @@ export default function SessionSelect({
       value={value === null ? undefined : String(value)}
       onValueChange={(next) => onChange(Number(next))}
     >
-      <SelectTrigger className={cn('w-[320px]', className)} aria-label="방송 세션 선택">
+      <SelectTrigger className={cn('w-80', className)} aria-label="방송 세션 선택">
         <SelectValue placeholder="방송을 선택하세요" />
       </SelectTrigger>
       <SelectContent>

@@ -77,7 +77,7 @@ export default function PlatformConnectPage(): React.JSX.Element {
 
   return (
     <div className="flex h-screen items-center justify-center bg-background">
-      <Card className="w-[440px]">
+      <Card className="w-110">
         <CardHeader className="gap-1">
           <span className="text-xs font-bold tracking-wide text-primary">STEP 2 · 플랫폼 연동</span>
           <CardTitle className="text-xl">방송 플랫폼을 연결하세요</CardTitle>
