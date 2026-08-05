@@ -10,6 +10,7 @@ import ViewerTimelineChart from './components/ViewerTimelineChart'
 import SentimentBreakdown from './components/SentimentBreakdown'
 import InsightList from './components/InsightList'
 import HighlightList from './components/HighlightList'
+import TopViewerCard from './components/TopViewerCard'
 import { PartialSummaryNotice, ReportProcessingCard } from './components/ReportStatusNotice'
 import { fetchSessionReport, REPORT_NOT_FOUND } from '@renderer/api/sessionReport'
 import { useAsyncData } from '@renderer/hooks/useAsyncData'
@@ -157,7 +158,8 @@ export default function SessionReportDetailPage(): React.JSX.Element {
     )
   }
 
-  const { metrics, session, segments, insights, highlights, viewerTimeline, summary } = data
+  const { metrics, session, segments, insights, highlights, viewerTimeline, summary, topViewers } =
+    data
 
   return (
     <div className="mx-auto flex max-w-350 flex-col gap-6 p-8">
@@ -220,7 +222,10 @@ export default function SessionReportDetailPage(): React.JSX.Element {
 
         <aside className="flex flex-col gap-6">
           <SentimentBreakdown metrics={metrics} />
+          {/* 클립보다 아래에 둔다 — 복기의 1순위는 "어느 구간을 클립으로 쓸까"이고,
+              열성 시청자는 그다음에 확인하는 값이다 */}
           <HighlightList highlights={highlights} onPlayClip={playClip} />
+          <TopViewerCard viewers={topViewers} />
         </aside>
       </div>
     </div>

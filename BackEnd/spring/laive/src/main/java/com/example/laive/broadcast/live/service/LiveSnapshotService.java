@@ -176,22 +176,12 @@ public class LiveSnapshotService {
                 .map(viewer -> new LiveSnapshotResponse.TopViewer(
                         viewer.viewerId(),
                         viewer.nickname(),
-                        viewerAlias(viewer.viewerHash()),
+                        viewer.alias(),
                         viewer.chatScore(),
                         viewer.watchScore(),
                         viewer.totalScore()
                 ))
                 .toList();
-    }
-
-    /**
-     * 해시에서 파생한 익명 별칭이다 — 명세 11.5의 viewerAlias 형식(viewer-a91c)을
-     * 따른다. "sha256:" 프리픽스 뒤 4자를 쓴다.
-     */
-    private static String viewerAlias(String viewerHash) {
-        int colon = viewerHash.indexOf(':');
-        String digest = colon >= 0 ? viewerHash.substring(colon + 1) : viewerHash;
-        return "viewer-" + digest.substring(0, Math.min(4, digest.length()));
     }
 
     private LiveSnapshotResponse.Session session(BroadcastSessionDetail detail, Instant now) {

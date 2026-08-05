@@ -1,5 +1,6 @@
 package com.example.laive.report.controller;
 
+import com.example.laive.broadcast.fandom.domain.TopViewer;
 import com.example.laive.common.exception.GlobalExceptionHandler;
 import com.example.laive.common.security.JwtStreamerIdExtractor;
 import com.example.laive.media.config.ClipProperties;
@@ -87,6 +88,31 @@ class SessionReportControllerTest {
                 .andExpect(jsonPath("$.data.highlights").isArray());
     }
 
+    /**
+     * {@code topViewers}의 <b>와이어 계약</b>을 고정한다 — 프론트가 콘솔과 리포트에서 같은
+     * 타입·컴포넌트를 쓰기로 했으므로 필드 이름이 곧 계약이다.
+     *
+     * <p>{@code viewerHash}가 응답에 새지 않는 것도 함께 단정한다. 도메인 record는 해시를
+     * 들고 있고 별칭은 파생값이라, DTO 매핑을 생략하면 원본 해시가 그대로 나간다.
+     */
+    @Test
+    void completedReportExposesTopViewersWithAliasAndWithoutHash() throws Exception {
+        var viewer = new TopViewer(
+                77, "한별팬1호", "sha256:a91cffee0011", 42, 35, 112.0);
+        when(service.get(101L, 9001L))
+                .thenReturn(detail(ReportStatus.COMPLETED, 1.0, List.of(viewer)));
+
+        mockMvc.perform(get("/api/v1/broadcast-sessions/9001/report"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.topViewers[0].viewerId").value(77))
+                .andExpect(jsonPath("$.data.topViewers[0].nickname").value("한별팬1호"))
+                .andExpect(jsonPath("$.data.topViewers[0].viewerAlias").value("viewer-a91c"))
+                .andExpect(jsonPath("$.data.topViewers[0].chatScore").value(42))
+                .andExpect(jsonPath("$.data.topViewers[0].watchScore").value(35))
+                .andExpect(jsonPath("$.data.topViewers[0].totalScore").value(112.0))
+                .andExpect(jsonPath("$.data.topViewers[0].viewerHash").doesNotExist());
+    }
+
     @Test
     void highlightsReturnsEmptyArray() throws Exception {
         when(service.getHighlights(101L, 9001L)).thenReturn(List.of());
@@ -98,6 +124,11 @@ class SessionReportControllerTest {
     }
 
     private SessionReportDetail detail(ReportStatus status, double progress) {
+        return detail(status, progress, List.of());
+    }
+
+    private SessionReportDetail detail(
+            ReportStatus status, double progress, List<TopViewer> topViewers) {
         var report = new SessionReport(
                 301, 9001, "방송", Instant.parse("2026-07-20T13:00:00Z"),
                 Instant.parse("2026-07-20T14:00:00Z"), status,
@@ -106,6 +137,7 @@ class SessionReportControllerTest {
                 new SentimentCounts(0, 0, 0, 0, 0, 0, 0, 0, 0),
                 status == ReportStatus.COMPLETED ? Instant.parse("2026-07-20T14:01:00Z") : null
         );
-        return new SessionReportDetail(report, List.of(), List.of(), List.of(), List.of(), progress);
+        return new SessionReportDetail(
+                report, List.of(), List.of(), List.of(), List.of(), List.of(), topViewers, progress);
     }
 }

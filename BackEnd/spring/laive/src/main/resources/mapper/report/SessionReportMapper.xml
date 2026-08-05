@@ -85,4 +85,37 @@
          WHERE rpm.report_id = #{reportId}
          ORDER BY pa.platform, rpm.platform_session_id
     </select>
+
+    <!--
+      이 방송의 열성 시청자다 (FR-F-03).
+
+      chat_messages를 다시 집계하지 않고 방송 종료 시 확정 저장된 viewer_scores를
+      읽는다(ViewerScoreMapper.persistViewerScores). 채팅은 90일 후 삭제되므로
+      재집계하면 오래된 리포트가 조용히 빈 목록이 된다 — 콘솔의 실시간 조회와
+      출처가 다른 것이 의도다.
+
+      역할 필터를 여기서 다시 거는 것이 필수다. persistViewerScores는 스트리머
+      본인·매니저까지 전원 저장하고 노출만 거르는 설계라(ViewerScoreMapper.xml의
+      주석), 이 조건을 빼면 리포트에는 스트리머 자신이 상위권으로 올라온다.
+
+      TopViewer record 생성자 순서와 컬럼 순서를 일치시킨다
+      (viewerId, nickname, viewerHash, chatScore, watchScore, totalScore).
+      정렬 tie-breaker로 viewer_id를 두어 같은 점수의 순서가 매 조회마다 흔들리지
+      않게 한다 — 콘솔의 findTopViewers와 같은 규칙이다.
+    -->
+    <select id="findTopViewers"
+            resultType="com.example.laive.broadcast.fandom.domain.TopViewer">
+        SELECT vs.viewer_id,
+               vp.nickname,
+               vp.viewer_hash,
+               vs.chat_score,
+               vs.watch_score,
+               vs.total_score
+          FROM viewer_scores vs
+          JOIN viewer_profiles vp ON vp.id = vs.viewer_id
+         WHERE vs.session_id = #{sessionId}
+           AND COALESCE(vp.user_role, '') NOT IN ('streamer', 'manager')
+         ORDER BY vs.total_score DESC, vs.viewer_id
+         LIMIT #{limit}
+    </select>
 </mapper>

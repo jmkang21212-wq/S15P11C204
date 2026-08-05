@@ -22,4 +22,20 @@ public record TopViewer(
         int watchScore,
         double totalScore
 ) {
+
+    /**
+     * 해시에서 파생한 익명 별칭이다 — 명세 11.5의 viewerAlias 형식(viewer-a91c).
+     * "sha256:" 프리픽스 뒤 4자를 쓴다.
+     *
+     * <p>여기 한 곳에 두는 이유는 콘솔 스냅샷과 세션 리포트가 같은 사람을 <b>같은
+     * 별칭</b>으로 보여야 하기 때문이다. 두 화면이 각자 파생하면 형식이 갈라져도
+     * 아무도 모른다 — 점수 산식을 {@code <sql>} 조각으로 공유하는 것과 같은 이유다.
+     *
+     * <p>해시 원문은 프론트로 나가지 않는다. 응답에 싣는 것은 이 별칭뿐이다.
+     */
+    public String alias() {
+        int colon = viewerHash.indexOf(':');
+        String digest = colon >= 0 ? viewerHash.substring(colon + 1) : viewerHash;
+        return "viewer-" + digest.substring(0, Math.min(4, digest.length()));
+    }
 }

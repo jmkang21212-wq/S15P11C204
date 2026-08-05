@@ -10,6 +10,7 @@
  */
 
 import type { BroadcastSessionListItem } from '@renderer/types/broadcastSession'
+import type { TopViewer } from '@renderer/types/topViewer'
 
 export type ReportStatus = 'PROCESSING' | 'COMPLETED' | 'PARTIAL' | 'FAILED'
 
@@ -84,6 +85,13 @@ export interface SessionReport {
   segments: ReportSegment[]
   insights: ReportInsight[]
   highlights: ReportHighlight[]
+  /**
+   * 이 방송의 열성 시청자 상위 5명 (FR-F-03). 채팅이 없던 방송은 빈 배열이다.
+   *
+   * 콘솔의 실시간 목록과 같은 모양이지만 출처가 다르다 — 이쪽은 방송 종료 시
+   * `viewer_scores`에 확정 저장된 값이라 다시 조회해도 변하지 않는다.
+   */
+  topViewers: TopViewer[]
   /** 생성 완료 전에는 null */
   generatedAt: string | null
 }
