@@ -148,7 +148,7 @@ export default function RiskTermPanel({
                 onValueChange={(v) => setSeverity(v as RiskTermSeverity)}
                 disabled={full}
               >
-                <SelectTrigger className="w-[92px]" aria-label="알림 등급">
+                <SelectTrigger className="w-23" aria-label="알림 등급">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -167,7 +167,7 @@ export default function RiskTermPanel({
               onClick={() => void handleAdd()}
               disabled={busy || full || draft.trim() === ''}
             >
-              <Plus className="size-[14px]" strokeWidth={1.8} aria-hidden />
+              <Plus className="size-3.5" strokeWidth={1.8} aria-hidden />
               {busy ? '추가 중…' : '추가'}
             </Button>
           </div>

@@ -113,7 +113,7 @@ export default function PortfolioSearchPanel({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end gap-3">
-        <div className="relative min-w-[220px] flex-1">
+        <div className="relative min-w-55 flex-1">
           <Search
             className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
             strokeWidth={1.8}
@@ -132,7 +132,7 @@ export default function PortfolioSearchPanel({
           value={filters.platform}
           onValueChange={(v) => patchFilter({ platform: v as Platform | 'ALL' })}
         >
-          <SelectTrigger className="w-[120px]" aria-label="플랫폼 필터">
+          <SelectTrigger className="w-30" aria-label="플랫폼 필터">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -146,7 +146,7 @@ export default function PortfolioSearchPanel({
           value={filters.tag}
           onChange={(e) => patchFilter({ tag: e.target.value })}
           placeholder="태그"
-          className="w-[120px]"
+          className="w-30"
           aria-label="태그 필터"
         />
 
@@ -158,7 +158,7 @@ export default function PortfolioSearchPanel({
             value={filters.minAvgViewers}
             onChange={(e) => patchFilter({ minAvgViewers: e.target.value })}
             placeholder="최소"
-            className="w-[90px] font-mono"
+            className="w-22.5 font-mono"
             aria-label="최소 평균 시청자"
           />
           <span className="text-muted-foreground">~</span>
@@ -168,7 +168,7 @@ export default function PortfolioSearchPanel({
             value={filters.maxAvgViewers}
             onChange={(e) => patchFilter({ maxAvgViewers: e.target.value })}
             placeholder="최대"
-            className="w-[90px] font-mono"
+            className="w-22.5 font-mono"
             aria-label="최대 평균 시청자"
           />
         </div>
@@ -177,7 +177,7 @@ export default function PortfolioSearchPanel({
           value={filters.sort}
           onValueChange={(v) => patchFilter({ sort: v as PortfolioSort })}
         >
-          <SelectTrigger className="w-[168px]" aria-label="정렬 기준">
+          <SelectTrigger className="w-42" aria-label="정렬 기준">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -191,7 +191,7 @@ export default function PortfolioSearchPanel({
 
         {isFilterActive(filters) && (
           <Button type="button" variant="ghost" size="sm" onClick={resetFilters}>
-            <X className="size-[14px]" strokeWidth={1.8} aria-hidden />
+            <X className="size-3.5" strokeWidth={1.8} aria-hidden />
             필터 초기화
           </Button>
         )}
@@ -234,7 +234,7 @@ export default function PortfolioSearchPanel({
                     disabled={page === 0}
                     onClick={() => setPage((p) => p - 1)}
                   >
-                    <ChevronLeft className="size-[14px]" strokeWidth={1.8} aria-hidden />
+                    <ChevronLeft className="size-3.5" strokeWidth={1.8} aria-hidden />
                     이전
                   </Button>
                   <span className="font-mono text-xs text-muted-foreground">
@@ -248,7 +248,7 @@ export default function PortfolioSearchPanel({
                     onClick={() => setPage((p) => p + 1)}
                   >
                     다음
-                    <ChevronRight className="size-[14px]" strokeWidth={1.8} aria-hidden />
+                    <ChevronRight className="size-3.5" strokeWidth={1.8} aria-hidden />
                   </Button>
                 </div>
               )}

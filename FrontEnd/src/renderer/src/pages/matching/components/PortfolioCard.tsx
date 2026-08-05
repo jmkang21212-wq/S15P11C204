@@ -70,14 +70,14 @@ export default function PortfolioCard({ item, onSelect }: PortfolioCardProps): R
 
         <div className="flex items-center gap-5 text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
-            <Users className="size-[14px]" strokeWidth={1.8} aria-hidden />
+            <Users className="size-3.5" strokeWidth={1.8} aria-hidden />
             평균{' '}
             <span className="font-mono font-semibold text-foreground">
               {formatCount(item.avgViewers)}
             </span>
           </span>
           <span className="flex items-center gap-1.5">
-            <Radio className="size-[14px]" strokeWidth={1.8} aria-hidden />주{' '}
+            <Radio className="size-3.5" strokeWidth={1.8} aria-hidden />주{' '}
             <span className="font-mono font-semibold text-foreground">
               {formatCount(item.broadcastsPerWeek)}
             </span>

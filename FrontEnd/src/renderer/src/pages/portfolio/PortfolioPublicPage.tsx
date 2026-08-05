@@ -62,7 +62,7 @@ export default function PortfolioPublicPage({
         <div className="flex flex-col gap-6 p-8">
           <Skeleton className="h-16 w-64" />
           <Skeleton className="h-20 w-full" />
-          <Skeleton className="h-[200px] w-full rounded-xl" />
+          <Skeleton className="h-50 w-full rounded-xl" />
         </div>
       )}
 
@@ -81,7 +81,7 @@ export default function PortfolioPublicPage({
       )}
 
       {!loading && !error && data && (
-        <article className="mx-auto flex max-w-[840px] flex-col gap-8 p-8">
+        <article className="mx-auto flex max-w-210 flex-col gap-8 p-8">
           <header className="flex flex-col gap-4">
             <ProfileSummary profile={data.profile} tags={data.tags} variant="plain" />
             <h1 className="text-display font-extrabold tracking-[-0.03em]">{data.title}</h1>
@@ -118,7 +118,7 @@ export default function PortfolioPublicPage({
                         size="sm"
                         onClick={() => openExternal(highlight.clipUrl as string)}
                       >
-                        <Play className="size-[14px]" strokeWidth={1.8} aria-hidden />
+                        <Play className="size-3.5" strokeWidth={1.8} aria-hidden />
                         재생
                       </Button>
                     )}
@@ -139,7 +139,7 @@ export default function PortfolioPublicPage({
                     size="sm"
                     onClick={() => openExternal(`mailto:${data.contactEmail}`)}
                   >
-                    <Mail className="size-[14px]" strokeWidth={1.8} aria-hidden />
+                    <Mail className="size-3.5" strokeWidth={1.8} aria-hidden />
                     {data.contactEmail}
                   </Button>
                 )}
@@ -150,7 +150,7 @@ export default function PortfolioPublicPage({
                     size="sm"
                     onClick={() => openExternal(data.contactUrl as string)}
                   >
-                    <Link2 className="size-[14px]" strokeWidth={1.8} aria-hidden />
+                    <Link2 className="size-3.5" strokeWidth={1.8} aria-hidden />
                     문의 링크
                   </Button>
                 )}

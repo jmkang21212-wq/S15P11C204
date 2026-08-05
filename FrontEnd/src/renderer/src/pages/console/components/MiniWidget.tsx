@@ -85,7 +85,7 @@ export default function MiniWidget({
             ✕
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto rounded-lg border border-destructive/35 bg-destructive/15 p-3 text-caption leading-relaxed">
+        <div className="flex-1 overflow-y-auto rounded-lg border border-destructive/35 bg-destructive/15 p-3 text-caption leading-relaxed scrollbar-none [&::-webkit-scrollbar]:hidden">
           {highBriefing.message}
           {highBriefing.quote && (
             <span className="mt-1 block text-muted-foreground">“{highBriefing.quote}”</span>
@@ -129,9 +129,11 @@ export default function MiniWidget({
     >
       {/* 상단: LIVE · 시청자 · 닫기 */}
       <div className="mb-2.5 flex items-center gap-2.5">
-        <span className="rounded bg-destructive px-1.5 py-0.5 text-micro font-bold text-white">
-          ● LIVE
-        </span>
+        {data?.session.status === 'LIVE' && (
+          <span className="rounded bg-destructive px-1.5 py-0.5 text-micro font-bold text-white">
+            ● LIVE
+          </span>
+        )}
         <span className="flex items-center gap-1.5 text-sm font-bold">
           <span className="opacity-70">👁</span>
           <span className="font-mono">{data ? formatCount(data.session.currentViewers) : '-'}</span>
@@ -165,7 +167,7 @@ export default function MiniWidget({
 
       {/* 현재 브리핑 카드 (타입별) */}
       <div
-        className={`flex-1 overflow-y-auto rounded-lg p-2.5 text-caption leading-relaxed ${
+        className={`flex-1 overflow-y-auto rounded-lg p-2.5 text-caption leading-relaxed scrollbar-none [&::-webkit-scrollbar]:hidden ${
           isRisk ? 'bg-destructive/15 ring-1 ring-destructive/40' : 'bg-white/5'
         }`}
       >

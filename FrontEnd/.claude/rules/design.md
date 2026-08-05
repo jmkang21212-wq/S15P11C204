@@ -54,7 +54,7 @@ assets/globals.css (@theme inline)      3층. 실제 클래스(text-title, bg-pr
 
 ### 1.3 타이포
 
-본문 Wanted Sans, 수치·ID JetBrains Mono. 자간 `-.01em ~ -.03em`.
+본문·수치·ID 전부 Wanted Sans. 수치·ID는 `font-mono` 클래스로 tabular-nums(고정폭 숫자)만 켜서 구분한다. 자간 `-.01em ~ -.03em`.
 
 | 토큰 클래스 | 크기 | 용도 |
 |---|---|---|

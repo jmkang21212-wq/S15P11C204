@@ -42,7 +42,7 @@ export default function SettingsPage(): React.JSX.Element {
   }
 
   return (
-    <div className="mx-auto flex max-w-[1400px] flex-col gap-6 p-8">
+    <div className="mx-auto flex max-w-350 flex-col gap-6 p-8">
       <PageHeader title="설정" caption="방송 중 위험 발언 감지에 쓰는 개인 사전을 관리하세요." />
 
       <section className="flex flex-col gap-3">
@@ -55,8 +55,8 @@ export default function SettingsPage(): React.JSX.Element {
 
         {loading && (
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <Skeleton className="h-[320px] w-full rounded-xl" />
-            <Skeleton className="h-[320px] w-full rounded-xl" />
+            <Skeleton className="h-80 w-full rounded-xl" />
+            <Skeleton className="h-80 w-full rounded-xl" />
           </div>
         )}
 

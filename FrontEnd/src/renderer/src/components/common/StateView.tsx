@@ -35,7 +35,7 @@ export function EmptyState({
     >
       {Icon && (
         <span className="flex size-11 items-center justify-center rounded-full bg-muted text-muted-foreground">
-          <Icon className="size-[22px]" strokeWidth={1.8} aria-hidden />
+          <Icon className="size-5.5" strokeWidth={1.8} aria-hidden />
         </span>
       )}
       <div className="flex flex-col gap-1">
@@ -69,7 +69,7 @@ export function ErrorState({
       role="alert"
     >
       <span className="flex size-11 items-center justify-center rounded-full bg-destructive/10 text-destructive">
-        <AlertCircle className="size-[22px]" strokeWidth={1.8} aria-hidden />
+        <AlertCircle className="size-5.5" strokeWidth={1.8} aria-hidden />
       </span>
       <div className="flex flex-col gap-1">
         <p className="text-sm font-semibold">{title}</p>
@@ -77,7 +77,7 @@ export function ErrorState({
       </div>
       {onRetry && (
         <Button type="button" variant="outline" size="sm" onClick={onRetry}>
-          <RotateCcw className="size-[14px]" strokeWidth={1.8} aria-hidden />
+          <RotateCcw className="size-3.5" strokeWidth={1.8} aria-hidden />
           다시 시도
         </Button>
       )}

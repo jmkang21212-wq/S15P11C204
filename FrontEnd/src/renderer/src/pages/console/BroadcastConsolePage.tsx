@@ -152,7 +152,7 @@ export default function BroadcastConsolePage(): React.JSX.Element {
         />
 
         {/* 우: 치지직 방송 제목 · 여론 · 반복 질문 · 연결 상태 */}
-        <aside className="flex w-[328px] shrink-0 flex-col gap-4 border-l bg-card p-5">
+        <aside className="flex w-82 shrink-0 flex-col gap-4 border-l bg-card p-5">
           {/*
             방송 중에만 보인다. 시작 전에는 시작 폼(BroadcastControl)의 제목 입력이 같은 값을
             맡는다 — startSession의 title은 세션 제목이면서 BE가 치지직에도 그대로 반영하는

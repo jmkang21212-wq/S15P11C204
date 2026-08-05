@@ -26,15 +26,13 @@ export default function RecentSessionCard({ session }: RecentSessionCardProps): 
           <p className="text-sm font-semibold">{session.title}</p>
           <div className="mt-3 flex gap-6">
             <div>
-              <div className="font-mono text-2xl font-extrabold text-primary">
+              <div className="font-mono text-2xl font-bold text-primary">
                 {formatCount(session.peakViewers)}
               </div>
               <div className="text-xs text-muted-foreground">피크 시청자</div>
             </div>
             <div>
-              <div className="font-mono text-2xl font-extrabold">
-                {formatCount(session.avgViewers)}
-              </div>
+              <div className="font-mono text-2xl font-bold">{formatCount(session.avgViewers)}</div>
               <div className="text-xs text-muted-foreground">평균 시청자</div>
             </div>
           </div>

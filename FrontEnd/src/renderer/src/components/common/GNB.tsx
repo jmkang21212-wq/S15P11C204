@@ -144,7 +144,7 @@ export default function GNB({ live = false, liveSessionId }: GNBProps): React.JS
     <nav
       className={cn(
         'flex h-full shrink-0 flex-col border-r bg-card transition-[width] duration-200',
-        collapsed ? 'w-[60px] items-center' : 'w-[232px]'
+        collapsed ? 'w-15 items-center' : 'w-58'
       )}
     >
       {/* 로고 + 펼침/접힘 토글 */}
@@ -216,7 +216,7 @@ export default function GNB({ live = false, liveSessionId }: GNBProps): React.JS
                 )
               }
             >
-              <Icon className="size-[18px] shrink-0" strokeWidth={1.8} aria-hidden />
+              <Icon className="size-4.5 shrink-0" strokeWidth={1.8} aria-hidden />
               <GnbLabel show={!collapsed}>{label}</GnbLabel>
             </NavLink>
           </li>

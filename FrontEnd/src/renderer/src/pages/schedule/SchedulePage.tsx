@@ -434,7 +434,7 @@ export default function SchedulePage(): React.JSX.Element {
         기한 미정 약속이 드래그 소스라 패널은 상시 표시한다 — 일정을 선택했을 때만 열면
         약속을 끌어다 놓을 출발점 자체가 사라진다. 일정 상세/폼은 그 아래에 이어 붙는다.
       */}
-      <aside className="flex w-[344px] shrink-0 flex-col overflow-y-auto border-l bg-card">
+      <aside className="flex w-86 shrink-0 flex-col overflow-y-auto border-l bg-card">
         <UnscheduledPromises
           promises={unscheduledPromises}
           loading={promisesLoading}

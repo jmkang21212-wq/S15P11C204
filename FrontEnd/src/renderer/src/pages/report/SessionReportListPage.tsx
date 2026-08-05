@@ -24,7 +24,7 @@ export default function SessionReportListPage(): React.JSX.Element {
   }
 
   return (
-    <div className="mx-auto flex max-w-[1400px] flex-col gap-6 p-8">
+    <div className="mx-auto flex max-w-350 flex-col gap-6 p-8">
       <PageHeader title="세션 리포트" caption="종료된 방송의 분석 결과를 확인하세요." />
 
       {loading && (

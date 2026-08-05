@@ -32,7 +32,7 @@ function DetailSkeleton(): React.JSX.Element {
           <MetricCardSkeleton key={i} />
         ))}
       </div>
-      <Skeleton className="h-[340px] w-full rounded-xl" />
+      <Skeleton className="h-85 w-full rounded-xl" />
     </div>
   )
 }
@@ -88,7 +88,7 @@ export default function SessionReportDetailPage(): React.JSX.Element {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-[1400px] p-8">
+      <div className="mx-auto max-w-350 p-8">
         <DetailSkeleton />
       </div>
     )
@@ -97,7 +97,7 @@ export default function SessionReportDetailPage(): React.JSX.Element {
   if (error || !data) {
     const notFound = error?.message === REPORT_NOT_FOUND
     return (
-      <div className="mx-auto max-w-[1400px] p-8">
+      <div className="mx-auto max-w-350 p-8">
         <ErrorState
           title={notFound ? '리포트를 찾을 수 없어요' : '리포트를 불러오지 못했어요'}
           message={
@@ -123,7 +123,7 @@ export default function SessionReportDetailPage(): React.JSX.Element {
   // 분석 진행 중 — 지표가 아직 없으므로 화면 전체를 진행 카드로 대체한다.
   if (isProcessing(data)) {
     return (
-      <div className="mx-auto flex max-w-[1400px] flex-col gap-6 p-8">
+      <div className="mx-auto flex max-w-350 flex-col gap-6 p-8">
         <ReportHeader
           session={data.session}
           status={data.status}
@@ -139,7 +139,7 @@ export default function SessionReportDetailPage(): React.JSX.Element {
 
   if (data.status === 'FAILED') {
     return (
-      <div className="mx-auto flex max-w-[1400px] flex-col gap-6 p-8">
+      <div className="mx-auto flex max-w-350 flex-col gap-6 p-8">
         <ReportHeader
           session={data.session}
           status={data.status}
@@ -160,7 +160,7 @@ export default function SessionReportDetailPage(): React.JSX.Element {
   const { metrics, session, segments, insights, highlights, viewerTimeline, summary } = data
 
   return (
-    <div className="mx-auto flex max-w-[1400px] flex-col gap-6 p-8">
+    <div className="mx-auto flex max-w-350 flex-col gap-6 p-8">
       <ReportHeader
         session={session}
         status={data.status}

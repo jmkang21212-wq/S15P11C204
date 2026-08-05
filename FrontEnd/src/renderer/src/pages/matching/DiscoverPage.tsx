@@ -34,7 +34,7 @@ export default function DiscoverPage({ standalone = false }: DiscoverPageProps):
       url={`${PUBLIC_WEB_ORIGIN}/discover`}
       onBack={goBackToApp}
     >
-      <div className="mx-auto flex max-w-[1100px] flex-col gap-6 p-8">
+      <div className="mx-auto flex max-w-275 flex-col gap-6 p-8">
         <header className="flex flex-col gap-1">
           <h1 className="text-display font-extrabold tracking-[-0.02em]">스트리머 디렉터리</h1>
           <p className="text-body text-muted-foreground">
