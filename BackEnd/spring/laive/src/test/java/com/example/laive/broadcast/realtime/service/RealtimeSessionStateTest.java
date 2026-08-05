@@ -33,6 +33,11 @@ class RealtimeSessionStateTest {
     }
 
     private static HighlightParams params(int minWindowChats, double madFloorChatters, double zExit) {
+        return params(minWindowChats, madFloorChatters, zExit, true);
+    }
+
+    private static HighlightParams params(
+            int minWindowChats, double madFloorChatters, double zExit, boolean baselineDuringWarmup) {
         return new HighlightParams(
                 Duration.ofSeconds(10), 60,
                 3.0, 2,
@@ -41,6 +46,7 @@ class RealtimeSessionStateTest {
                 Duration.ofSeconds(120),
                 Duration.ofSeconds(10),
                 Duration.ofSeconds(10),   // 워밍업 10초
+                baselineDuringWarmup,
                 minWindowChats,
                 0.001,
                 madFloorChatters
@@ -173,6 +179,42 @@ class RealtimeSessionStateTest {
         assertThat(floored.forceFinalize(at(16))).isEmpty();
         // 하한이 없으면 같은 bump가 z ≈ 34로 진입한다 — 대조 검증.
         assertThat(bare.forceFinalize(at(16))).isPresent();
+    }
+
+    @Test
+    void excludingWarmupBaselineKeepsGreetingRushFromPresettingMedian() {
+        // 시연 시나리오: 워밍업 동안 인사 러시 → 정적 → 소규모 버스트(매초 새 3명).
+        // 러시를 baseline에 적재하면(기본) median이 러시 수준으로 선점되어 버스트가
+        // "평소 이하"로 읽혀 묻히고, 적재를 끄면 정적 구간만 baseline이 되어 잡힌다.
+        RealtimeSessionState excluded =
+                new RealtimeSessionState(1L, START, params(3, 0.0, 1.5, false));
+        RealtimeSessionState included = new RealtimeSessionState(1L, START, params(3));
+
+        // 인사 러시: 워밍업(10초) 전반부에 매초 새 10명.
+        for (int t = 0; t < 5; t++) {
+            feedNewcomers(excluded, t, 10);
+            feedNewcomers(included, t, 10);
+            excluded.tick(at(t), VIEWERS);
+            included.tick(at(t), VIEWERS);
+        }
+        // 정적: 러시가 윈도우(10초)를 빠져나가고 조용한 표본이 쌓인다.
+        for (int t = 5; t < 25; t++) {
+            excluded.tick(at(t), VIEWERS);
+            included.tick(at(t), VIEWERS);
+        }
+        // 버스트: 같은 입력을 양쪽에 공급한다.
+        for (int t = 25; t < 35; t++) {
+            feedSteady(excluded, t);
+            feedNewcomers(excluded, t, 3);
+            feedSteady(included, t);
+            feedNewcomers(included, t, 3);
+            excluded.tick(at(t), VIEWERS);
+            included.tick(at(t), VIEWERS);
+        }
+
+        assertThat(excluded.forceFinalize(at(35))).isPresent();
+        // 대조: 워밍업 표본이 baseline에 남아 있으면 같은 버스트가 진입하지 못한다.
+        assertThat(included.forceFinalize(at(35))).isEmpty();
     }
 
     @Test

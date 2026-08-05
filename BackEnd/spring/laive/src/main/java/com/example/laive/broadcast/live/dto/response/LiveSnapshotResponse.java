@@ -18,6 +18,7 @@ public record LiveSnapshotResponse(
         Services services,
         List<Briefing> briefings,
         Sentiment sentiment,
+        Highlight highlight,
         List<RepeatedQuestion> repeatedQuestions,
         List<TopViewer> topViewers,
         String lastEventId
@@ -70,6 +71,40 @@ public record LiveSnapshotResponse(
             Double engagement,
             String dominant,
             Map<String, Double> distribution
+    ) {
+    }
+
+    /**
+     * CHAT_SURGE 하이라이트 판정기의 현재 상태다(관측 전용 — HIGHLIGHT_SPEC §5가
+     * 강권하는 "판정 품질을 눈으로 보는" 창구). 파라미터가 백테스트 미검증이라
+     * z가 화면에 보여야 시연·튜닝 때 "왜 안 잡히나"를 즉석에서 알 수 있다.
+     *
+     * @param phase           IDLE | ACTIVE | COOLDOWN. 판정기 미등록(방송 전·재시작 직후)이면 null
+     * @param z               마지막 정상 판정 틱의 z-score. 가드에 걸린 틱이면 null
+     * @param zEnter          진입 임계 — z가 이 값 이상으로 연속되면 하이라이트 진입
+     * @param engagement      판정 윈도우 유니크 채터 ÷ 시청자 (여론의 180초 engagement와 다른 값)
+     * @param windowChats     판정 윈도우 안 채팅 수
+     * @param uniqueChatters  판정 윈도우 안 유니크 채터 수
+     * @param skipReason      마지막 틱이 가드에 걸린 이유
+     *                        (gap | no-viewers | warmup | empty-baseline | quiet). 정상 판정이면 null
+     * @param warmupUntil     워밍업이 끝나 판정이 시작되는 시각
+     * @param engageWindowSec 판정 윈도우 길이(초). 환경변수로 튜닝되는 값이라 화면이
+     *                        "최근 N초"를 표기할 때 이 값을 써야 한다
+     * @param detectedCount   이 세션에서 지금까지 확정된 하이라이트 구간 수
+     * @param lastDetectedAt  마지막으로 확정된 구간의 끝 시각. 없으면 null
+     */
+    public record Highlight(
+            String phase,
+            Double z,
+            Double zEnter,
+            Double engagement,
+            Integer windowChats,
+            Integer uniqueChatters,
+            String skipReason,
+            Instant warmupUntil,
+            Integer engageWindowSec,
+            int detectedCount,
+            Instant lastDetectedAt
     ) {
     }
 
