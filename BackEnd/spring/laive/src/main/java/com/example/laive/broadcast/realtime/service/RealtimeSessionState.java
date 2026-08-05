@@ -133,8 +133,14 @@ class RealtimeSessionState {
             return skipped(now, "gap");
         }
         // 가드 4: 시청자 수 없이 engagement를 계산할 수 없다. 0으로 나누지 않는다.
-        if (viewers == null || viewers <= 0) {
+        // 미수신(no-viewers)과 0명(zero-viewers)을 나누는 이유: 원인이 정반대다 —
+        // 전자는 수집기 폴링·전송 장애, 후자는 방송이 실제 송출 중이 아니거나
+        // 시청자가 없는 것. 콘솔이 이 구분을 보여줘야 현장에서 바로 진단된다.
+        if (viewers == null) {
             return skipped(now, "no-viewers");
+        }
+        if (viewers <= 0) {
+            return skipped(now, "zero-viewers");
         }
 
         double engagement = (double) window.uniqueChatters() / viewers;

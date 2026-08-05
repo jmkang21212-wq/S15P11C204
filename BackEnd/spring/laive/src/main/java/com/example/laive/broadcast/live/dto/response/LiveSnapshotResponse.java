@@ -86,7 +86,9 @@ public record LiveSnapshotResponse(
      * @param windowChats     판정 윈도우 안 채팅 수
      * @param uniqueChatters  판정 윈도우 안 유니크 채터 수
      * @param skipReason      마지막 틱이 가드에 걸린 이유
-     *                        (gap | no-viewers | warmup | empty-baseline | quiet). 정상 판정이면 null
+     *                        (gap | no-viewers | zero-viewers | warmup | empty-baseline | quiet).
+     *                        no-viewers는 미수신(수집기 장애), zero-viewers는 0명(송출 중
+     *                        아님·시청자 없음). 정상 판정이면 null
      * @param warmupUntil     워밍업이 끝나 판정이 시작되는 시각
      * @param engageWindowSec 판정 윈도우 길이(초). 환경변수로 튜닝되는 값이라 화면이
      *                        "최근 N초"를 표기할 때 이 값을 써야 한다

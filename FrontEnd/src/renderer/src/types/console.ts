@@ -89,8 +89,12 @@ export interface HighlightStatus {
   windowChats: number | null
   /** 판정 윈도우 안 유니크 채터 수 */
   uniqueChatters: number | null
-  /** 마지막 틱이 판정을 쉰 이유. 정상 판정 중이면 null */
-  skipReason: 'gap' | 'no-viewers' | 'warmup' | 'empty-baseline' | 'quiet' | null
+  /**
+   * 마지막 틱이 판정을 쉰 이유. 정상 판정 중이면 null.
+   * no-viewers(미수신 — 수집기 장애)와 zero-viewers(수신됐지만 0명 — 실제 송출
+   * 중이 아니거나 시청자 없음)는 원인이 정반대라 구분해서 내려온다.
+   */
+  skipReason: 'gap' | 'no-viewers' | 'zero-viewers' | 'warmup' | 'empty-baseline' | 'quiet' | null
   /** 워밍업이 끝나 판정이 시작되는 시각 */
   warmupUntil: string | null
   /** 판정 윈도우 길이(초). 환경변수 튜닝값이라 "최근 N초" 표기는 이 값을 쓴다. 판정기 미등록이면 null */
