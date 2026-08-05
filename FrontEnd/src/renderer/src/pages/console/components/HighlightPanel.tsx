@@ -21,7 +21,8 @@ const PHASE_BADGE: Record<'IDLE' | 'ACTIVE' | 'COOLDOWN', { tone: StatusTone; la
 /** 판정을 쉬는 이유(가드) → 사람이 읽는 문구. 백엔드 skipReason 값과 짝이다. */
 const SKIP_LABEL: Record<NonNullable<HighlightStatus['skipReason']>, string> = {
   warmup: '워밍업 — 방송 초반에는 판정하지 않아요',
-  'no-viewers': '시청자 수 수신 대기 — 판정이 멈춰 있어요',
+  'no-viewers': '시청자 수가 서버에 안 들어와요 — 수집기 폴링을 확인하세요',
+  'zero-viewers': '시청자 0명 — 실제 송출과 시청자가 있어야 판정해요',
   quiet: '채팅이 적어 판정을 쉬고 있어요',
   gap: '채팅 수집 공백 — 이 구간은 판정에서 제외돼요',
   'empty-baseline': '평소 수준(기준선) 수집 중이에요'

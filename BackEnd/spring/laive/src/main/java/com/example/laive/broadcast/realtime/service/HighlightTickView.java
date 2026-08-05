@@ -14,7 +14,9 @@ import java.time.Instant;
  * @param windowChats      판정 윈도우 안의 채팅 수
  * @param uniqueChatters   판정 윈도우 안의 유니크 채터 수
  * @param skipReason       마지막 틱이 가드에 걸렸으면 그 이유
- *                         (gap | no-viewers | warmup | empty-baseline | quiet). 정상 판정이면 null
+ *                         (gap | no-viewers | zero-viewers | warmup | empty-baseline | quiet).
+ *                         no-viewers는 시청자 수 미수신(수집기 장애), zero-viewers는
+ *                         수신은 되는데 0명(송출 중 아님·시청자 없음). 정상 판정이면 null
  * @param warmupUntil      워밍업(가드 1)이 끝나는 시각 — 이 전에는 판정하지 않는다
  * @param zEnter           진입 임계 — 콘솔이 "z가 임계까지 얼마나 왔나"를 그릴 때 쓴다
  * @param engageWindowSec  판정 윈도우 길이(초). 기본 60이지만 환경변수로 튜닝되는 값이라
