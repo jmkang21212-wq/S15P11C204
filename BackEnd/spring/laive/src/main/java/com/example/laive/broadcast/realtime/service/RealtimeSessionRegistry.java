@@ -77,6 +77,15 @@ public class RealtimeSessionRegistry {
         return statesBySession.values();
     }
 
+    /**
+     * 판정기의 마지막 틱 상태다(관측 전용 — 콘솔 스냅샷이 쓴다).
+     * 미등록 세션(방송 전·종료 후·재시작 직후 lazy 재등록 전)이면 비어 있다.
+     */
+    public Optional<HighlightTickView> highlightView(long sessionId) {
+        return Optional.ofNullable(statesBySession.get(sessionId))
+                .map(RealtimeSessionState::view);
+    }
+
     /** 시청자 수 측정을 반영한다. 재전송으로 과거 배치가 늦게 와도 최신 측정만 남긴다. */
     public void recordViewers(long sessionId, int viewerCount, Instant measuredAt) {
         viewersBySession.merge(
