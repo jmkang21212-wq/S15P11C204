@@ -69,6 +69,10 @@ class LiveConsoleControllerTest {
                         180, 6185L, 0.214, "JOY",
                         Map.of("JOY", 0.27, "NEUTRAL", 0.25)
                 ),
+                new LiveSnapshotResponse.Highlight(
+                        "ACTIVE", 4.2, 3.0, 0.31, 57, 41, null,
+                        NOW.minusSeconds(6000), 60, 2, NOW.minusSeconds(120)
+                ),
                 List.of(new LiveSnapshotResponse.RepeatedQuestion(
                         1753690000000007L, "오늘 몇 시까지 하세요?", "FAQ", 42, 51, true,
                         NOW.minusSeconds(600), NOW.minusSeconds(30)
@@ -90,6 +94,9 @@ class LiveConsoleControllerTest {
                 .andExpect(jsonPath("$.data.sentiment.analyzedChat").value(6185))
                 .andExpect(jsonPath("$.data.sentiment.dominant").value("JOY"))
                 .andExpect(jsonPath("$.data.sentiment.distribution.JOY").value(0.27))
+                .andExpect(jsonPath("$.data.highlight.phase").value("ACTIVE"))
+                .andExpect(jsonPath("$.data.highlight.z").value(4.2))
+                .andExpect(jsonPath("$.data.highlight.detectedCount").value(2))
                 .andExpect(jsonPath("$.data.topViewers[0].nickname").value("한별팬1호"))
                 .andExpect(jsonPath("$.data.topViewers[0].viewerAlias").value("viewer-a91c"))
                 .andExpect(jsonPath("$.data.topViewers[0].totalScore").value(112.0))

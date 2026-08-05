@@ -15,6 +15,7 @@ import ConsoleStatusBar from './components/ConsoleStatusBar'
 import ChzzkTitleSection from './components/ChzzkTitleSection'
 import BriefingFeed from './components/BriefingFeed'
 import SentimentPanel from './components/SentimentPanel'
+import HighlightPanel from './components/HighlightPanel'
 import ChatSummaryButton from './components/ChatSummaryButton'
 import RepeatedQuestions from './components/RepeatedQuestions'
 
@@ -166,6 +167,8 @@ export default function BroadcastConsolePage(): React.JSX.Element {
           {data && sid !== null ? (
             <>
               <SentimentPanel sentiment={data.sentiment} />
+              {/* 하이라이트 판정 상태 — 판정 파라미터 튜닝 전이라 z가 보여야 시연·조정이 된다 */}
+              {data.highlight && <HighlightPanel highlight={data.highlight} />}
               {/* 요약은 3분 주기로도 생성되지만, 지금 분위기를 바로 보고 싶을 때 쓴다 */}
               <ChatSummaryButton sessionId={sid} />
               <RepeatedQuestions sessionId={sid} questions={data.repeatedQuestions} />

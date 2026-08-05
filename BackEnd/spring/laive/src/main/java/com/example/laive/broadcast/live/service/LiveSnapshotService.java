@@ -9,6 +9,9 @@ import com.example.laive.broadcast.questions.config.RepeatedQuestionProperties;
 import com.example.laive.broadcast.questions.repository.mybatis.RepeatedQuestionMapper;
 import com.example.laive.broadcast.realtime.domain.SentimentWindow;
 import com.example.laive.broadcast.realtime.integration.SentimentSnapshotStore;
+import com.example.laive.broadcast.realtime.repository.mybatis.TriggerMapper;
+import com.example.laive.broadcast.realtime.service.HighlightTickView;
+import com.example.laive.broadcast.realtime.service.RealtimeSessionRegistry;
 import com.example.laive.broadcast.session.domain.BroadcastSessionDetail;
 import com.example.laive.broadcast.session.integration.SessionRedisGateway;
 import com.example.laive.broadcast.session.service.BroadcastSessionQueryService;
@@ -56,6 +59,8 @@ public class LiveSnapshotService {
     private final RepeatedQuestionMapper repeatedQuestionMapper;
     private final RepeatedQuestionProperties repeatedQuestionProperties;
     private final ViewerScoreMapper viewerScoreMapper;
+    private final RealtimeSessionRegistry realtimeSessionRegistry;
+    private final TriggerMapper triggerMapper;
     private final StringRedisTemplate redisTemplate;
     private final Clock clock;
 
@@ -67,6 +72,8 @@ public class LiveSnapshotService {
             RepeatedQuestionMapper repeatedQuestionMapper,
             RepeatedQuestionProperties repeatedQuestionProperties,
             ViewerScoreMapper viewerScoreMapper,
+            RealtimeSessionRegistry realtimeSessionRegistry,
+            TriggerMapper triggerMapper,
             StringRedisTemplate redisTemplate,
             Clock clock
     ) {
@@ -77,6 +84,8 @@ public class LiveSnapshotService {
         this.repeatedQuestionMapper = repeatedQuestionMapper;
         this.repeatedQuestionProperties = repeatedQuestionProperties;
         this.viewerScoreMapper = viewerScoreMapper;
+        this.realtimeSessionRegistry = realtimeSessionRegistry;
+        this.triggerMapper = triggerMapper;
         this.redisTemplate = redisTemplate;
         this.clock = clock;
     }
@@ -90,9 +99,32 @@ public class LiveSnapshotService {
                 services(sessionId, now),
                 briefings(sessionId),
                 sentiment(sessionId),
+                highlight(sessionId),
                 repeatedQuestions(sessionId),
                 topViewers(sessionId),
                 lastEventId(sessionId)
+        );
+    }
+
+    /**
+     * CHAT_SURGE 판정기의 현재 상태 + 확정 누계다(관측 전용). 실시간 값(z·phase)은
+     * 인메모리 판정기에서, 확정 누계는 {@code triggers}에서 온다 — 판정기는 재시작
+     * 시 리셋되지만 확정된 구간은 DB에 남아 있어 출처가 다르다.
+     */
+    private LiveSnapshotResponse.Highlight highlight(long sessionId) {
+        HighlightTickView view = realtimeSessionRegistry.highlightView(sessionId).orElse(null);
+        return new LiveSnapshotResponse.Highlight(
+                view != null ? view.phase() : null,
+                view != null ? view.z() : null,
+                view != null ? view.zEnter() : null,
+                view != null ? view.engagement() : null,
+                view != null ? view.windowChats() : null,
+                view != null ? view.uniqueChatters() : null,
+                view != null ? view.skipReason() : null,
+                view != null ? view.warmupUntil() : null,
+                view != null ? view.engageWindowSec() : null,
+                triggerMapper.countChatSurgeTriggers(sessionId),
+                triggerMapper.findLastChatSurgeEndedAt(sessionId).orElse(null)
         );
     }
 
