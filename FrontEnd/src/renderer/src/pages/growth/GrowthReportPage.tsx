@@ -202,7 +202,7 @@ export default function GrowthReportPage(): React.JSX.Element {
       : `이번 ${periodNoun} 진행 중 · 지난 ${periodNoun} ${formatCount(previous)}${unit}`
 
   return (
-    <div className="mx-auto flex max-w-[1400px] flex-col gap-6 p-8">
+    <div className="mx-auto flex max-w-350 flex-col gap-6 p-8">
       <PageHeader
         title="성장 리포트"
         caption="방송 지표가 어떻게 달라지고 있는지, 목표에 얼마나 가까워졌는지 확인하세요."
@@ -261,7 +261,7 @@ export default function GrowthReportPage(): React.JSX.Element {
         놓으면 세 장을 한눈에 비교할 수 있다. 차트도 폭을 다 써서 막대가 넓어진다.
       */}
       <div className="flex min-w-0 flex-col gap-6">
-        {reportLoading && <Skeleton className="h-[360px] w-full rounded-xl" />}
+        {reportLoading && <Skeleton className="h-90 w-full rounded-xl" />}
 
         {!reportLoading && reportError && (
           <ErrorState message="성장 지표를 불러오지 못했습니다." onRetry={refetchReport} />

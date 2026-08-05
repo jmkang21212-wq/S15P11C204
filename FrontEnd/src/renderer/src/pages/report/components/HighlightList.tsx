@@ -59,7 +59,7 @@ export default function HighlightList({
                       disabled={clipUrl === null}
                       onClick={() => clipUrl !== null && onPlayClip(clipUrl)}
                     >
-                      <Play className="size-[14px]" strokeWidth={1.8} aria-hidden />
+                      <Play className="size-3.5" strokeWidth={1.8} aria-hidden />
                       클립 열기
                     </Button>
                   </div>

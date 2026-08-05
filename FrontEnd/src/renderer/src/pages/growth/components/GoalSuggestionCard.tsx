@@ -39,11 +39,11 @@ export default function GoalSuggestionCard({
         {/* 지표와 목표치를 한 줄에 둔다 — 카드 세 장이 세로로 쌓이므로 높이를 아끼는 게 우선이다 */}
         <div className="flex items-baseline justify-between gap-2">
           <CardTitle className="flex items-center gap-1.5 text-sm font-semibold">
-            <Sparkles className="size-[14px] text-primary" strokeWidth={1.8} aria-hidden />
+            <Sparkles className="size-3.5 text-primary" strokeWidth={1.8} aria-hidden />
             {METRIC_LABEL[suggestion.metricType]}
           </CardTitle>
           <span className="shrink-0">
-            <span className="font-mono text-metric-sm font-extrabold">
+            <span className="font-mono text-metric-sm font-bold">
               {formatCount(suggestion.targetValue)}
             </span>
             <span className="text-xs font-medium text-muted-foreground">{unit}</span>
@@ -55,7 +55,7 @@ export default function GoalSuggestionCard({
       </CardHeader>
 
       <CardContent className="flex flex-col gap-2.5 px-4">
-        <p className="text-body font-semibold break-words">{suggestion.title}</p>
+        <p className="text-body font-semibold wrap-break-word">{suggestion.title}</p>
 
         {/* 근거는 3줄까지만. 전문은 title 속성으로 남겨 잘린 내용을 잃지 않는다. */}
         <p
@@ -78,11 +78,11 @@ export default function GoalSuggestionCard({
               aria-expanded={actionsOpen}
               className="flex items-center gap-1.5 text-caption font-medium text-muted-foreground hover:text-foreground"
             >
-              <Lightbulb className="size-[14px] shrink-0" strokeWidth={1.8} aria-hidden />
+              <Lightbulb className="size-3.5 shrink-0" strokeWidth={1.8} aria-hidden />
               실행 액션 {suggestion.actions.length}개
               <ChevronDown
                 className={cn(
-                  'size-[14px] shrink-0 transition-transform',
+                  'size-3.5 shrink-0 transition-transform',
                   actionsOpen && 'rotate-180'
                 )}
                 strokeWidth={1.8}

@@ -58,7 +58,7 @@ export default function GoalCard({ goal, pending, onAchieve }: GoalCardProps): R
       <CardContent className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
           <div className="flex items-baseline justify-between gap-2">
-            <span className="font-mono text-metric-sm leading-none font-extrabold tracking-[-0.02em]">
+            <span className="font-mono text-metric-sm leading-none font-bold tracking-[-0.02em]">
               {formatCount(goal.currentValue)}
               <span className="text-xs font-medium text-muted-foreground">
                 {' '}
@@ -78,13 +78,13 @@ export default function GoalCard({ goal, pending, onAchieve }: GoalCardProps): R
           <Progress
             value={barValue}
             aria-label={`${METRIC_LABEL[goal.metricType]} 달성률`}
-            className={cn(achieved && '[&>[data-slot=progress-indicator]]:bg-success')}
+            className={cn(achieved && '*:data-[slot=progress-indicator]:bg-success')}
           />
         </div>
 
         <div className="flex flex-col gap-2">
           <p className="flex items-center gap-1.5 text-caption font-medium text-muted-foreground">
-            <Lightbulb className="size-[14px]" strokeWidth={1.8} aria-hidden />
+            <Lightbulb className="size-3.5" strokeWidth={1.8} aria-hidden />
             AI 다음 액션
           </p>
           {goal.actions.length === 0 ? (
@@ -108,7 +108,7 @@ export default function GoalCard({ goal, pending, onAchieve }: GoalCardProps): R
             disabled={pending}
             onClick={() => onAchieve(goal.growthGoalId)}
           >
-            <CheckCircle2 className="size-[14px]" strokeWidth={1.8} aria-hidden />
+            <CheckCircle2 className="size-3.5" strokeWidth={1.8} aria-hidden />
             {pending ? '처리 중…' : '달성으로 확정'}
           </Button>
         )}

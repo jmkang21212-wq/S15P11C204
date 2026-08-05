@@ -136,14 +136,14 @@ export default function PortfolioEditPage(): React.JSX.Element {
 
   if (loading) {
     return (
-      <div className="mx-auto flex max-w-[1400px] flex-col gap-6 p-8">
+      <div className="mx-auto flex max-w-350 flex-col gap-6 p-8">
         <Skeleton className="h-8 w-48" />
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
           {Array.from({ length: 6 }, (_, i) => (
             <MetricCardSkeleton key={i} />
           ))}
         </div>
-        <Skeleton className="h-[320px] w-full rounded-xl" />
+        <Skeleton className="h-80 w-full rounded-xl" />
       </div>
     )
   }
@@ -159,7 +159,7 @@ export default function PortfolioEditPage(): React.JSX.Element {
     // 만들 수 있는 상태 — 조회 대신 생성 폼을 보여준다. 이 화면이 유일한 생성 경로다.
     if (absence === 'NOT_CREATED') {
       return (
-        <div className="mx-auto flex max-w-[1400px] flex-col gap-6 p-8">
+        <div className="mx-auto flex max-w-350 flex-col gap-6 p-8">
           <PageHeader
             title="포트폴리오"
             caption="광고주와 다른 스트리머에게 보여줄 공개 프로필을 만들어 보세요."
@@ -170,7 +170,7 @@ export default function PortfolioEditPage(): React.JSX.Element {
     }
 
     return (
-      <div className="mx-auto max-w-[1400px] p-8">
+      <div className="mx-auto max-w-350 p-8">
         {absence === 'NOT_ELIGIBLE' ? (
           <EmptyState
             icon={FileText}
@@ -185,7 +185,7 @@ export default function PortfolioEditPage(): React.JSX.Element {
   }
 
   return (
-    <div className="mx-auto flex max-w-[1400px] flex-col gap-6 p-8">
+    <div className="mx-auto flex max-w-350 flex-col gap-6 p-8">
       <PageHeader
         title="포트폴리오"
         caption="광고주와 다른 스트리머에게 보여줄 공개 프로필을 관리하세요."
@@ -193,7 +193,7 @@ export default function PortfolioEditPage(): React.JSX.Element {
           <div className="flex shrink-0 items-center gap-2">
             {saveState === 'saved' && (
               <span className="flex items-center gap-1 text-xs font-medium text-success">
-                <Check className="size-[14px]" strokeWidth={2} aria-hidden />
+                <Check className="size-3.5" strokeWidth={2} aria-hidden />
                 저장됨
               </span>
             )}
@@ -208,11 +208,11 @@ export default function PortfolioEditPage(): React.JSX.Element {
                 navigate(PATHS.publicPortfolio.replace(':publicSlug', data.publicSlug))
               }
             >
-              <ExternalLink className="size-[14px]" strokeWidth={1.8} aria-hidden />
+              <ExternalLink className="size-3.5" strokeWidth={1.8} aria-hidden />
               공개 뷰 보기
             </Button>
             <Button type="button" size="sm" onClick={handleSave} disabled={saveState === 'saving'}>
-              <Save className="size-[14px]" strokeWidth={1.8} aria-hidden />
+              <Save className="size-3.5" strokeWidth={1.8} aria-hidden />
               {saveState === 'saving' ? '저장 중…' : '저장'}
             </Button>
           </div>
@@ -281,9 +281,9 @@ export default function PortfolioEditPage(): React.JSX.Element {
                     onClick={() => copyUrl(data)}
                   >
                     {copied ? (
-                      <Check className="size-[14px] text-success" strokeWidth={2} aria-hidden />
+                      <Check className="size-3.5 text-success" strokeWidth={2} aria-hidden />
                     ) : (
-                      <Copy className="size-[14px]" strokeWidth={1.8} aria-hidden />
+                      <Copy className="size-3.5" strokeWidth={1.8} aria-hidden />
                     )}
                   </Button>
                 </div>

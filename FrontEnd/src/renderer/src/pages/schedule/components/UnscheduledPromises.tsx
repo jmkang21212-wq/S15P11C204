@@ -100,7 +100,7 @@ export default function UnscheduledPromises({
                   )}
                 >
                   <GripVertical
-                    className="mt-0.5 size-[14px] shrink-0 text-muted-foreground"
+                    className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
                     strokeWidth={1.8}
                     aria-hidden
                   />
@@ -118,7 +118,7 @@ export default function UnscheduledPromises({
                     title="약속 삭제"
                     className="shrink-0 text-muted-foreground hover:text-destructive disabled:opacity-50"
                   >
-                    <Trash2 className="size-[14px]" strokeWidth={1.8} aria-hidden />
+                    <Trash2 className="size-3.5" strokeWidth={1.8} aria-hidden />
                   </button>
                 </div>
               </li>

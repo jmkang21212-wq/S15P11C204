@@ -56,7 +56,7 @@ export default function LoginPage(): React.JSX.Element {
 
   return (
     <div className="flex h-screen items-center justify-center bg-background">
-      <Card className="w-[360px]">
+      <Card className="w-90">
         <CardHeader className="flex flex-col items-center gap-3 text-center">
           <img src={logo} alt="LAIVE" className="h-9 w-auto" />
           <CardTitle className="text-xl">다시 오신 걸 환영해요</CardTitle>

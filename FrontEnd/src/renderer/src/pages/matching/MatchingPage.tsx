@@ -17,7 +17,7 @@ export default function MatchingPage(): React.JSX.Element {
   }
 
   return (
-    <div className="mx-auto flex max-w-[1400px] flex-col gap-6 p-8">
+    <div className="mx-auto flex max-w-350 flex-col gap-6 p-8">
       <PageHeader
         title="비즈니스 매칭"
         caption="다른 스트리머의 공개 포트폴리오를 채널·태그·시청자 규모로 찾아보세요."

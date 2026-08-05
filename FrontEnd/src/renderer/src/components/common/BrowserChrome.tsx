@@ -24,7 +24,7 @@ export default function BrowserChrome({
 }: BrowserChromeProps): React.JSX.Element {
   return (
     <div className="flex h-screen flex-col bg-muted/60 p-6">
-      <div className="mx-auto flex h-full w-full max-w-[1100px] flex-col overflow-hidden rounded-xl border bg-card shadow-card">
+      <div className="mx-auto flex h-full w-full max-w-275 flex-col overflow-hidden rounded-xl border bg-card shadow-card">
         {/* 크롬 상단 바 */}
         <div className="flex shrink-0 items-center gap-3 border-b bg-muted/40 px-4 py-2.5">
           <div className="flex shrink-0 items-center gap-1.5" aria-hidden>
@@ -36,12 +36,12 @@ export default function BrowserChrome({
           <img src={appIcon} alt="" className="size-4 shrink-0 rounded-sm" aria-hidden />
 
           <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-full bg-background px-3 py-1.5">
-            <Lock className="size-[12px] shrink-0 text-success" strokeWidth={2} aria-hidden />
+            <Lock className="size-3 shrink-0 text-success" strokeWidth={2} aria-hidden />
             <span className="truncate font-mono text-caption text-muted-foreground">{url}</span>
           </div>
 
           <Button type="button" variant="ghost" size="sm" onClick={onBack} className="shrink-0">
-            <ArrowLeft className="size-[14px]" strokeWidth={1.8} aria-hidden />
+            <ArrowLeft className="size-3.5" strokeWidth={1.8} aria-hidden />
             앱으로 돌아가기
           </Button>
         </div>

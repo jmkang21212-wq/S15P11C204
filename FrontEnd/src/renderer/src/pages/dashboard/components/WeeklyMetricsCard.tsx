@@ -34,7 +34,7 @@ function MetricRow({
     <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-3">
       <span className="text-sm text-muted-foreground">{label}</span>
       <div className="flex items-baseline gap-2">
-        <span className="font-mono text-metric-sm font-extrabold">{value}</span>
+        <span className="font-mono text-metric-sm font-bold">{value}</span>
         <DeltaText delta={delta} digits={0} />
       </div>
     </div>

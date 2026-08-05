@@ -65,14 +65,12 @@ export default function MetricCard({
     >
       <CardContent className="flex flex-col gap-2 px-5">
         <div className="flex items-center gap-2 text-muted-foreground">
-          <Icon className="size-[18px]" strokeWidth={1.8} aria-hidden />
+          <Icon className="size-4.5" strokeWidth={1.8} aria-hidden />
           <span className="text-xs font-medium">{label}</span>
         </div>
 
         <div className="flex items-baseline gap-2">
-          <p className="font-mono text-metric leading-none font-extrabold tracking-[-0.03em]">
-            {value}
-          </p>
+          <p className="font-mono text-metric leading-none font-bold tracking-[-0.03em]">{value}</p>
           {delta !== undefined && <DeltaText delta={delta} />}
         </div>
 
