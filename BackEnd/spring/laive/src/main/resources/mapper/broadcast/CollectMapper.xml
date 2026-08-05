@@ -234,7 +234,10 @@
               FROM viewer_metrics
              WHERE session_id = #{sessionId}
                AND measured_at &lt;= #{measuredAt}
-               AND measured_at &gt; #{measuredAt} - interval '5 minutes'
+               <!-- CAST 필수: 컬럼 비교 문맥이 없는 "? - interval"은 PostgreSQL이
+                    파라미터를 interval로 잘못 추론해 "timestamptz > interval"
+                    연산자 없음 오류가 난다 (배치가 통째로 500). -->
+               AND measured_at &gt; CAST(#{measuredAt} AS timestamptz) - interval '5 minutes'
                AND platform_session_id IS NOT NULL
              ORDER BY platform_session_id, measured_at DESC
         )
