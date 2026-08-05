@@ -85,7 +85,9 @@ export default function MiniWidget({
             ✕
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto rounded-lg border border-destructive/35 bg-destructive/15 p-3 text-caption leading-relaxed scrollbar-none [&::-webkit-scrollbar]:hidden">
+        <div
+          className={`flex-1 overflow-y-auto rounded-lg border border-destructive/35 bg-destructive/15 p-3 text-caption leading-relaxed scrollbar-none [&::-webkit-scrollbar]:hidden ${NO_DRAG}`}
+        >
           {highBriefing.message}
           {highBriefing.quote && (
             <span className="mt-1 block text-muted-foreground">“{highBriefing.quote}”</span>
@@ -167,7 +169,7 @@ export default function MiniWidget({
 
       {/* 현재 브리핑 카드 (타입별) */}
       <div
-        className={`flex-1 overflow-y-auto rounded-lg p-2.5 text-caption leading-relaxed scrollbar-none [&::-webkit-scrollbar]:hidden ${
+        className={`flex-1 overflow-y-auto rounded-lg p-2.5 text-caption leading-relaxed scrollbar-none [&::-webkit-scrollbar]:hidden ${NO_DRAG} ${
           isRisk ? 'bg-destructive/15 ring-1 ring-destructive/40' : 'bg-white/5'
         }`}
       >
