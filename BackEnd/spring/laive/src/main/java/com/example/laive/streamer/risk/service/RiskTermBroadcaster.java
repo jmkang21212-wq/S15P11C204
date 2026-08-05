@@ -65,7 +65,7 @@ public class RiskTermBroadcaster {
         try {
             redisTemplate.convertAndSend(
                     CHANNEL_PREFIX + streamerId,
-                    objectMapper.writeValueAsString(payload)
+                    objectMapper.writeValueAsString(new TermsMessage(streamerId, payload))
             );
         } catch (JsonProcessingException | RuntimeException e) {
             // 삼켜야 한다. 이 발행은 "지금 방송에도 반영"이라는 편의 기능이고, 실패해도
@@ -73,5 +73,21 @@ public class RiskTermBroadcaster {
             log.warn("개인 사전 변경 발행 실패 streamerId={} — 다음 방송부터 반영된다: {}",
                     streamerId, e.toString());
         }
+    }
+
+    /**
+     * pub/sub 메시지 봉투. <b>필드 이름이 곧 AI 서버와의 계약이다.</b>
+     *
+     * <p>AI 서버는 {@code PersonalTerms.parse_json}에서 {@code data.get("terms")}를 읽는다
+     * (AI/app/detect/personal.py). 그래서 payload를 최상위에 그대로 실으면 {@code None}이
+     * 되고, {@code parse}가 dict가 아닌 입력을 빈 사전으로 처리하도록 설계돼 있어 <b>실패가
+     * 조용히 삼켜진다</b> — 방송 중 변경이 사전을 통째로 비우면서 오류도 로그도 남지 않았다.
+     *
+     * <p>{@code streamerId}는 채널명에 이미 있어 필수는 아니지만,
+     * {@code VoiceTicketService.TicketValue}와 같은 모양으로 맞춰 둔다. 두 경로가 같은
+     * 봉투를 쓰면 AI 쪽 파싱이 하나로 유지되고, 한쪽만 바꿨을 때 이번 같은 어긋남이 생기지
+     * 않는다.
+     */
+    private record TermsMessage(long streamerId, RiskTermsPayload terms) {
     }
 }

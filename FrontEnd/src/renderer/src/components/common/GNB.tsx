@@ -9,6 +9,7 @@ import {
   TrendingUp,
   UserRound,
   Handshake,
+  Settings,
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
@@ -39,7 +40,8 @@ const NAV_ITEMS: NavItem[] = [
   { to: PATHS.clips, label: '클립', icon: Film },
   { to: PATHS.growth, label: '성장 리포트', icon: TrendingUp },
   { to: PATHS.portfolio, label: '포트폴리오', icon: UserRound },
-  { to: PATHS.matching, label: '비즈니스 매칭', icon: Handshake }
+  { to: PATHS.matching, label: '비즈니스 매칭', icon: Handshake },
+  { to: PATHS.settings, label: '설정', icon: Settings }
 ]
 
 interface GNBProps {
