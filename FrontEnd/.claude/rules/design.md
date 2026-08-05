@@ -116,7 +116,7 @@ assets/globals.css (@theme inline)      3층. 실제 클래스(text-title, bg-pr
 | SC-03 | 방송 콘솔 (Track A) | Electron | 세컨드 모니터 상시 표시 |
 | SC-03 부속 | 미니 모드 · OBS 오버레이 | Electron / OBS | 축소 위젯 + 방송 화면용 오버레이. §1.5 참고 |
 | SC-04 | 일정 캘린더 | Electron | 일정 관리 + 공지 발행 |
-| SC-06 | 세션 리포트 | Electron | 방송 직후 5분 복기 |
+| SC-06 | 세션 리포트 | Electron | 방송 직후 5분 복기. 목록은 카드 그리드가 아니라 리스트 행(썸네일 미사용) |
 | SC-07 | 하이라이트 / 클립 | Electron | 생성 중·완료 클립 그리드 |
 | SC-09 | 성장 리포트 | Electron | 주간/월간 추이 + 목표 로드맵 |
 | SC-10 | 포트폴리오 | Electron + Web | 편집 화면 + 인증 불필요 공개 뷰 |

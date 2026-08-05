@@ -179,7 +179,9 @@
                s.status,
                s.started_at,
                s.ended_at,
-               r.status AS report_status
+               r.status AS report_status,
+               r.avg_viewers,
+               r.peak_viewers
           FROM broadcast_sessions s
           LEFT JOIN reports r ON r.session_id = s.id
          WHERE s.streamer_id = #{streamerId}

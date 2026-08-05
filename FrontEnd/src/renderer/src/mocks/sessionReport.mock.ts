@@ -334,41 +334,53 @@ export const MOCK_ENDED_SESSIONS: BroadcastSessionListItem[] = [
     category: '로그라이크',
     thumbnailUrl: null,
     status: 'ENDED',
-    reportStatus: 'PROCESSING'
+    reportStatus: 'PROCESSING',
+    avgViewers: null,
+    peakViewers: null
   },
   {
     ...SESSIONS[9003],
     category: '저챗',
     thumbnailUrl: null,
     status: 'ENDED',
-    reportStatus: 'PARTIAL'
+    reportStatus: 'PARTIAL',
+    avgViewers: 412,
+    peakViewers: 680
   },
   {
     ...SESSIONS[9001],
     category: '롤토체스',
     thumbnailUrl: null,
     status: 'ENDED',
-    reportStatus: 'COMPLETED'
+    reportStatus: 'COMPLETED',
+    avgViewers: 1820,
+    peakViewers: 3842
   },
   {
     ...SESSIONS[9004],
     category: '노래방',
     thumbnailUrl: null,
     status: 'ENDED',
-    reportStatus: 'FAILED'
+    reportStatus: 'FAILED',
+    avgViewers: null,
+    peakViewers: null
   },
   {
     ...SESSIONS[9005],
     category: '저챗',
     thumbnailUrl: null,
     status: 'ENDED',
-    reportStatus: 'COMPLETED'
+    reportStatus: 'COMPLETED',
+    avgViewers: 305,
+    peakViewers: 512
   },
   {
     ...SESSIONS[9006],
     category: '마리오카트',
     thumbnailUrl: null,
     status: 'ENDED',
-    reportStatus: 'COMPLETED'
+    reportStatus: 'COMPLETED',
+    avgViewers: 1240,
+    peakViewers: 2110
   }
 ]
