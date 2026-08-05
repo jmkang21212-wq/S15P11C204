@@ -112,7 +112,19 @@ class RealtimeSessionState {
         lastZ = null;
         lastEngagement = null;
         lastSkipReason = null;
-        window.evictBefore(now.minus(params.engageWindow()));
+        Instant cutoff = now.minus(params.engageWindow());
+        // 워밍업 표본을 baseline에서 빼는 모드에서는 워밍업 안에 받은 채팅을 판정
+        // 윈도우에서도 뺀다. 윈도우가 인사 러시를 최대 engageWindow만큼 물고 나오면
+        // 첫 baseline 표본(empty-baseline 시드)이 러시 수준이 되어, baseline을 비워둔
+        // 효과가 무색해진다. 워밍업이 끝난 틱부터만 적용해 워밍업 중 관측(view)은
+        // 그대로 살린다.
+        if (!params.baselineDuringWarmup()) {
+            Instant warmupEnd = sessionStartedAt.plus(params.warmup());
+            if (!now.isBefore(warmupEnd) && warmupEnd.isAfter(cutoff)) {
+                cutoff = warmupEnd;
+            }
+        }
+        window.evictBefore(cutoff);
 
         // 가드 9: 공백에 걸친 틱은 판정도 baseline도 제외한다. 공백은 튀는 값
         // 하나가 아니라 baseline 전체를 끌어내리는 구간이라 median/MAD의

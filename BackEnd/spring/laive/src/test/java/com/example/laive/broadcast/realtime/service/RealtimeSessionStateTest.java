@@ -183,38 +183,46 @@ class RealtimeSessionStateTest {
 
     @Test
     void excludingWarmupBaselineKeepsGreetingRushFromPresettingMedian() {
-        // 시연 시나리오: 워밍업 동안 인사 러시 → 정적 → 소규모 버스트(매초 새 3명).
+        // 시연 시나리오: 워밍업 내내 인사 러시 → 짧은 정적 → 소규모 버스트(매초 새 3명).
         // 러시를 baseline에 적재하면(기본) median이 러시 수준으로 선점되어 버스트가
-        // "평소 이하"로 읽혀 묻히고, 적재를 끄면 정적 구간만 baseline이 되어 잡힌다.
+        // "평소 이하"로 읽혀 묻힌다. 제외 모드는 baseline뿐 아니라 워밍업 안에 받은
+        // 채팅을 판정 윈도우에서도 빼므로, 러시가 워밍업 끝까지 이어져도 워밍업 종료
+        // 몇 초 뒤의 버스트가 바로 잡힌다 — 정적이 윈도우 길이(10초)만큼 필요하지 않다.
         RealtimeSessionState excluded =
                 new RealtimeSessionState(1L, START, params(3, 0.0, 1.5, false));
         RealtimeSessionState included = new RealtimeSessionState(1L, START, params(3));
 
-        // 인사 러시: 워밍업(10초) 전반부에 매초 새 10명.
-        for (int t = 0; t < 5; t++) {
+        // 인사 러시: 워밍업(10초) 내내 매초 새 10명 — 제외 모드가 없으면 이 채팅이
+        // 윈도우(10초)에 남아 워밍업 종료(t=10) 후까지 물려 나온다.
+        for (int t = 0; t < 10; t++) {
             feedNewcomers(excluded, t, 10);
             feedNewcomers(included, t, 10);
             excluded.tick(at(t), VIEWERS);
             included.tick(at(t), VIEWERS);
         }
-        // 정적: 러시가 윈도우(10초)를 빠져나가고 조용한 표본이 쌓인다.
-        for (int t = 5; t < 25; t++) {
+        // 짧은 정적: baseline이 조용한 표본으로 시드될 시간만 준다(윈도우 소진 대기 불필요).
+        for (int t = 10; t < 13; t++) {
             excluded.tick(at(t), VIEWERS);
             included.tick(at(t), VIEWERS);
         }
-        // 버스트: 같은 입력을 양쪽에 공급한다.
-        for (int t = 25; t < 35; t++) {
+        // 버스트: 같은 입력을 양쪽에 공급한다. 제외 모드는 baseline이 작아 버스트
+        // 자신의 램프가 금방 '평소'가 되고 z가 이탈 임계 밑으로 내려오므로, 구간이
+        // 루프 안에서 이미 확정될 수 있다 — 진입만이 아니라 확정까지를 신호로 본다.
+        boolean excludedConfirmed = false;
+        boolean includedConfirmed = false;
+        for (int t = 13; t < 25; t++) {
             feedSteady(excluded, t);
             feedNewcomers(excluded, t, 3);
             feedSteady(included, t);
             feedNewcomers(included, t, 3);
-            excluded.tick(at(t), VIEWERS);
-            included.tick(at(t), VIEWERS);
+            excludedConfirmed |= excluded.tick(at(t), VIEWERS).isPresent();
+            includedConfirmed |= included.tick(at(t), VIEWERS).isPresent();
         }
 
-        assertThat(excluded.forceFinalize(at(35))).isPresent();
-        // 대조: 워밍업 표본이 baseline에 남아 있으면 같은 버스트가 진입하지 못한다.
-        assertThat(included.forceFinalize(at(35))).isEmpty();
+        assertThat(excludedConfirmed || excluded.forceFinalize(at(25)).isPresent()).isTrue();
+        // 대조: 워밍업 표본이 baseline과 윈도우에 남아 있으면 같은 버스트가 진입하지 못한다.
+        assertThat(includedConfirmed).isFalse();
+        assertThat(included.forceFinalize(at(25))).isEmpty();
     }
 
     @Test
