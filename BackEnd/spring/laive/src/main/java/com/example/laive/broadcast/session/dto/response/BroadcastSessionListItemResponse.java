@@ -13,7 +13,9 @@ public record BroadcastSessionListItemResponse(
         BroadcastStatus status,
         Instant startedAt,
         Instant endedAt,
-        String reportStatus
+        String reportStatus,
+        Integer avgViewers,
+        Integer peakViewers
 ) {
     public static BroadcastSessionListItemResponse from(BroadcastSessionListItem item) {
         return new BroadcastSessionListItemResponse(
@@ -24,7 +26,9 @@ public record BroadcastSessionListItemResponse(
                 item.status(),
                 item.startedAt(),
                 item.endedAt(),
-                item.reportStatus()
+                item.reportStatus(),
+                item.avgViewers(),
+                item.peakViewers()
         );
     }
 }

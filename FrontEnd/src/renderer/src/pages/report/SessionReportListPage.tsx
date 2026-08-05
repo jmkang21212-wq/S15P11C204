@@ -2,9 +2,10 @@ import { useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CalendarDays } from 'lucide-react'
 import { Button } from '@renderer/components/ui/button'
+import { Card } from '@renderer/components/ui/card'
 import { EmptyState, ErrorState } from '@renderer/components/common/StateView'
 import PageHeader from '@renderer/components/common/PageHeader'
-import SessionCard, { SessionCardSkeleton } from './components/SessionCard'
+import SessionRow, { SessionRowSkeleton } from './components/SessionRow'
 import { fetchEndedSessions } from '@renderer/api/broadcastSessions'
 import { useAsyncData } from '@renderer/hooks/useAsyncData'
 import { PATHS } from '@renderer/routes/paths'
@@ -27,11 +28,11 @@ export default function SessionReportListPage(): React.JSX.Element {
       <PageHeader title="세션 리포트" caption="종료된 방송의 분석 결과를 확인하세요." />
 
       {loading && (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <Card className="gap-0 divide-y py-0">
           {Array.from({ length: 6 }, (_, i) => (
-            <SessionCardSkeleton key={i} />
+            <SessionRowSkeleton key={i} />
           ))}
-        </div>
+        </Card>
       )}
 
       {!loading && error && (
@@ -57,11 +58,11 @@ export default function SessionReportListPage(): React.JSX.Element {
       )}
 
       {!loading && !error && data && data.length > 0 && (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <Card className="gap-0 divide-y py-0">
           {data.map((session) => (
-            <SessionCard key={session.sessionId} session={session} onClick={openReport} />
+            <SessionRow key={session.sessionId} session={session} onClick={openReport} />
           ))}
-        </div>
+        </Card>
       )}
     </div>
   )

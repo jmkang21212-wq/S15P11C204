@@ -55,12 +55,16 @@ export interface BroadcastSessionListItem {
   sessionId: number
   title: string
   category: string | null
+  /** BE가 이 컬럼을 채우는 경로가 아직 없어 항상 null이다 — 화면에서 기대하지 않는다. */
   thumbnailUrl: string | null
   status: BroadcastStatus
   startedAt: string
   endedAt: string | null
   /** reports 테이블과 LEFT JOIN이라 리포트가 아직 생성되지 않았으면 null이다. */
   reportStatus: ReportStatus | null
+  /** avgViewers와 함께 reports LEFT JOIN 기준이라 리포트가 없으면 null이다. */
+  avgViewers: number | null
+  peakViewers: number | null
 }
 
 /**
