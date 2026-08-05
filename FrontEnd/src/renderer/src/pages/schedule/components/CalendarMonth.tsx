@@ -150,11 +150,13 @@ export default function CalendarMonth({
                       onClick={() => onSelectEvent(e)}
                       title={movable ? `${e.title} — 다른 날짜로 끌어 일정 변경` : e.title}
                       className={cn(
-                        'flex w-full shrink-0 flex-col rounded px-1.5 py-1 text-left text-caption leading-tight',
+                        'flex w-full shrink-0 flex-col rounded border-b-2 px-1.5 py-1 text-left text-caption leading-tight',
                         e.eventType === 'DAY_OFF'
                           ? 'bg-muted text-muted-foreground'
                           : 'bg-accent text-accent-foreground',
-                        e.calendarEventId === selectedEventId && 'ring-2 ring-primary',
+                        e.calendarEventId === selectedEventId
+                          ? 'border-primary'
+                          : 'border-transparent',
                         movable && 'cursor-grab active:cursor-grabbing',
                         movingEventId === e.calendarEventId && 'opacity-50'
                       )}

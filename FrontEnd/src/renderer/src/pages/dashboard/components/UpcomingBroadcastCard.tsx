@@ -87,7 +87,7 @@ export default function UpcomingBroadcastCard({
           // 예정 일정이 없어도 막다른 길이 아니다 — 콘솔에서 제목만 넣고 바로 시작할 수 있다.
           <EmptyState
             title="예정된 방송이 없어요"
-            className="flex-1 rounded-lg bg-muted/40 py-6"
+            className="mb-4 flex-1 rounded-lg bg-muted/40 py-6"
             action={
               <Link to={PATHS.schedule} className="text-xs font-medium text-primary">
                 일정 추가하기 →
