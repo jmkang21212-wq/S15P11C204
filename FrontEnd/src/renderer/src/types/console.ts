@@ -4,6 +4,7 @@
  */
 
 import type { BroadcastStatus } from '@renderer/types/broadcastSession'
+import type { TopViewer } from '@renderer/types/topViewer'
 
 /** @deprecated `BroadcastStatus`(types/broadcastSession.ts)를 직접 쓴다. 기존 화면 호환용 별칭. */
 export type SessionStatus = BroadcastStatus
@@ -137,5 +138,7 @@ export interface LiveSnapshot {
   sentiment: Sentiment
   highlight: HighlightStatus
   repeatedQuestions: RepeatedQuestion[]
+  /** 이 세션 열성 시청자 상위 5명, 총점 내림차순 (FR-F-03). 채팅이 없으면 빈 배열 */
+  topViewers: TopViewer[]
   lastEventId: string
 }

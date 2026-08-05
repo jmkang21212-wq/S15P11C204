@@ -16,6 +16,7 @@ import ChzzkTitleSection from './components/ChzzkTitleSection'
 import BriefingFeed from './components/BriefingFeed'
 import SentimentPanel from './components/SentimentPanel'
 import HighlightPanel from './components/HighlightPanel'
+import TopViewerPanel from './components/TopViewerPanel'
 import ChatSummaryButton from './components/ChatSummaryButton'
 import RepeatedQuestions from './components/RepeatedQuestions'
 
@@ -151,8 +152,12 @@ export default function BroadcastConsolePage(): React.JSX.Element {
           onPromiseResolved={refetchPromises}
         />
 
-        {/* 우: 치지직 방송 제목 · 여론 · 반복 질문 · 연결 상태 */}
-        <aside className="flex w-82 shrink-0 flex-col gap-4 border-l bg-card p-5">
+        {/* 우: 치지직 방송 제목 · 여론 · 하이라이트 · 반복 질문 · 열성 시청자 · 연결 상태
+            패널이 여섯 개를 넘어 최소 창 높이에서는 세로가 모자란다. 부모가
+            overflow-hidden이라 스크롤을 여기서 열지 않으면 아래 패널이 잘려 아예
+            보이지 않는다(음성 연결 상태가 mt-auto라 그것부터 밀린다).
+            min-h-0은 flex 아이템의 기본 min-height:auto가 축소를 막는 것을 푼다. */}
+        <aside className="flex min-h-0 w-[328px] shrink-0 flex-col gap-4 overflow-y-auto border-l bg-card p-5">
           {/*
             방송 중에만 보인다. 시작 전에는 시작 폼(BroadcastControl)의 제목 입력이 같은 값을
             맡는다 — startSession의 title은 세션 제목이면서 BE가 치지직에도 그대로 반영하는
@@ -172,6 +177,9 @@ export default function BroadcastConsolePage(): React.JSX.Element {
               {/* 요약은 3분 주기로도 생성되지만, 지금 분위기를 바로 보고 싶을 때 쓴다 */}
               <ChatSummaryButton sessionId={sid} />
               <RepeatedQuestions sessionId={sid} questions={data.repeatedQuestions} />
+              {/* 브리핑·질문보다 급하지 않아 아래에 둔다 — 지금 대응할 일이 아니라
+                  "이름을 불러줄 사람"을 곁눈으로 확인하는 용도다 */}
+              <TopViewerPanel viewers={data.topViewers} />
               {/* 폴링이 일시적으로 실패하면 직전 값을 유지하고 갱신 실패만 알린다 */}
               {error && <p className="text-caption text-warning">최신 정보로 갱신하지 못했어요</p>}
             </>

@@ -1,5 +1,6 @@
 package com.example.laive.report.repository.mybatis;
 
+import com.example.laive.broadcast.fandom.domain.TopViewer;
 import com.example.laive.report.domain.ReportInsight;
 import com.example.laive.report.domain.ReportTrigger;
 import com.example.laive.report.domain.SessionHighlight;
@@ -53,5 +54,10 @@ public class MyBatisSessionReportQueryRepository implements SessionReportQueryRe
     @Override
     public List<ReportPlatformMetrics> findPlatformMetrics(long reportId) {
         return mapper.findPlatformMetrics(reportId);
+    }
+
+    @Override
+    public List<TopViewer> findTopViewers(long sessionId, int limit) {
+        return mapper.findTopViewers(sessionId, limit);
     }
 }
