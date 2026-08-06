@@ -58,16 +58,22 @@ assets/globals.css (@theme inline)      3층. 실제 클래스(text-title, bg-pr
 
 | 토큰 클래스 | 크기 | 용도 |
 |---|---|---|
-| `text-display` | 24px | 공개 뷰(비인증 웹) 히어로 제목 — 앱 내부 제목과 구분 |
-| `text-title` | 18px/700 | 화면 제목 |
-| `text-subtitle` | 14px | 카드·프로필 이름 헤딩 |
-| `text-body` | 13px | 본문 |
-| `text-caption` | 11px | 캡션 (design.md 기준 11–12px 대) |
-| `text-micro` | 10px | 뱃지·미니 위젯처럼 캡션보다도 작은 지점 |
-| `text-metric` | 28px/800 | KPI 카드 등 큰 지표 숫자 |
-| `text-metric-sm` | 20px | 카드 안에 작게 들어가는 보조 지표 숫자 |
+| `text-metric` | 36px/800 | KPI 카드 등 큰 지표 숫자 — 화면에서 가장 지배적인 요소 |
+| `text-title` | 32px/700 | 화면 제목 |
+| `text-display` | 28px | 공개 뷰(비인증 웹) 히어로 제목 — 앱 내부 제목과 구분 |
+| `text-metric-sm` | 24px | 카드 안에 작게 들어가는 보조 지표 숫자 |
+| `text-subtitle` | 16px | 카드·프로필 이름 헤딩 |
+| `text-body` | 15px | 본문 |
+| `text-caption` | 13px | 캡션 |
+| `text-micro` | 11px | 뱃지·미니 위젯처럼 캡션보다도 작은 지점 |
 
 숫자·ID는 항상 `font-mono`로 렌더한다.
+
+**Tailwind 기본 단계(`text-xs`·`text-sm`·`text-base`…)도 같은 사다리 위에 있다.** §0이 막는 건 임의값(`text-[18px]`)이지 Tailwind 기본 단계가 아니라, 실제 코드는 `text-xs`·`text-sm`을 위 토큰만큼이나 많이 쓴다. 한쪽만 크기를 바꾸면 나란히 붙은 텍스트가 따로 노므로(예: `PageHeader`의 캡션은 `text-xs`, 바로 아래 `SessionRow`의 메타는 `text-caption`) `globals.css`에서 기본 단계도 함께 재정의해 서열을 맞춰 뒀다:
+
+`micro(11) < caption(13) < xs(14) < body(15) < subtitle = sm(16) < base(18) < lg(20) < xl(22) < metric-sm(24) < display = 2xl(28) < title(32) < metric(36)`
+
+둘 중 무엇을 써도 크기가 어긋나지 않는다. 스케일을 조정할 일이 있으면 `globals.css`의 `@theme inline` 블록 한 곳만 고치면 되고, 화면 코드는 손댈 필요가 없다.
 
 ### 1.4 형태 · elevation
 
@@ -115,7 +121,7 @@ assets/globals.css (@theme inline)      3층. 실제 클래스(text-title, bg-pr
 | SC-02 | 대시보드 | Electron | 방송 전 30초 상태 파악 허브 |
 | SC-03 | 방송 콘솔 (Track A) | Electron | 세컨드 모니터 상시 표시 |
 | SC-03 부속 | 미니 모드 · OBS 오버레이 | Electron / OBS | 축소 위젯 + 방송 화면용 오버레이. §1.5 참고 |
-| SC-04 | 일정 캘린더 | Electron | 일정 관리 + 공지 발행 |
+| SC-04 | 일정 캘린더 | Electron | 일정 관리 (등록·수정·취소, 약속→일정 전환) |
 | SC-06 | 세션 리포트 | Electron | 방송 직후 5분 복기. 목록은 카드 그리드가 아니라 리스트 행(썸네일 미사용) |
 | SC-07 | 하이라이트 / 클립 | Electron | 생성 중·완료 클립 그리드 |
 | SC-09 | 성장 리포트 | Electron | 주간/월간 추이 + 목표 로드맵 |

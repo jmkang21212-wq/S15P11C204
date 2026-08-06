@@ -45,6 +45,11 @@ function createWindow(): void {
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
+    // design.md §2가 "최소 폭 1240px 기준으로 디자인한다"고 정해 둔 값을 창 자체로 강제한다.
+    // 그 아래로 줄이면 GNB(펼침 232px) + 2열 본문(주 + 사이드 320~360px)이 들어갈 자리가
+    // 없어 콘솔·리포트 화면이 깨진다. 지금까지는 규칙만 있고 막는 곳이 없었다.
+    minWidth: 1240,
+    minHeight: 720,
     show: false,
     autoHideMenuBar: true,
     icon,
@@ -86,8 +91,10 @@ function createMiniWindow(): void {
   }
 
   const win = new BrowserWindow({
-    width: 340,
-    height: 220,
+    // 타이포 스케일을 전체적으로 ~1.15배 올리면서 창도 같은 비율로 키웠다(340×220 → 390×250).
+    // resizable: false라 사용자가 넓힐 수 없어, 창이 그대로면 내용이 스크롤에 걸린다.
+    width: 390,
+    height: 250,
     show: false,
     frame: false,
     resizable: false,
