@@ -49,10 +49,11 @@ public class DevAuthController {
 
     private ResponseCookie refreshCookie(RefreshTokenService.IssuedRefreshToken token) {
         // AuthController의 콜백과 동일한 속성으로 쿠키를 만든다.
+        // (SameSite 조건 분기 이유는 AuthController.sameSite() 참고)
         return ResponseCookie.from(properties.refreshCookie().name(), token.value())
                 .httpOnly(true)
                 .secure(properties.refreshCookie().secure())
-                .sameSite("Lax")
+                .sameSite(properties.refreshCookie().secure() ? "None" : "Lax")
                 .path("/api/v1/auth")
                 .maxAge(properties.refreshCookie().ttl())
                 .build();

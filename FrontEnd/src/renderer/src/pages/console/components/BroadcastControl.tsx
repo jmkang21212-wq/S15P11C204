@@ -1,8 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '@renderer/components/ui/button'
-import { Checkbox } from '@renderer/components/ui/checkbox'
 import { Input } from '@renderer/components/ui/input'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@renderer/components/ui/select'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,7 +20,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger
 } from '@renderer/components/ui/alert-dialog'
-import { cn } from '@renderer/lib/utils'
+import { cn, getIpcErrorMessage } from '@renderer/lib/utils'
 import { useObs } from '@renderer/hooks/useObs'
 import { usePlatformAccounts } from '@renderer/hooks/usePlatformAccounts'
 import { ApiError } from '@renderer/api/client'
@@ -90,7 +96,9 @@ export default function BroadcastControl({
   const connectedAccounts = (platformAccounts ?? []).filter(
     (a) => a.connectionStatus === 'CONNECTED'
   )
-  const [selectedAccountIds, setSelectedAccountIds] = useState<number[]>([])
+  // OBS 멀티 RTMP 송출은 플러그인이 있어야 해 아직 지원하지 않는다 — 한 번에 한
+  // 채널로만 송출한다. TODO: 멀티 송출 도입 시 다중 선택으로 되돌린다.
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null)
 
   const [showConnectForm, setShowConnectForm] = useState(false)
   const [url, setUrl] = useState('ws://127.0.0.1:4455')
@@ -162,16 +170,10 @@ export default function BroadcastControl({
     }
   }, [showStartForm, prefilled])
 
-  /** 시작 폼을 열 때 연동된 계정을 기본으로 전부 선택한다. */
+  /** 시작 폼을 열 때 연동된 계정 중 첫 번째를 기본 선택한다. */
   const openStartForm = (): void => {
-    setSelectedAccountIds(connectedAccounts.map((a) => a.platformAccountId))
+    setSelectedAccountId(connectedAccounts[0]?.platformAccountId ?? null)
     setShowStartForm(true)
-  }
-
-  const toggleAccount = (id: number): void => {
-    setSelectedAccountIds((prev) =>
-      prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]
-    )
   }
 
   const handleConnect = async (): Promise<void> => {
@@ -181,14 +183,14 @@ export default function BroadcastControl({
       await obs.connect(url, password || undefined)
       setShowConnectForm(false)
     } catch (e) {
-      setError(e instanceof Error ? e.message : '연결에 실패했어요')
+      setError(getIpcErrorMessage(e, '연결에 실패했어요'))
     } finally {
       setBusy(false)
     }
   }
 
   const handleStart = async (): Promise<void> => {
-    if (selectedAccountIds.length === 0) return
+    if (selectedAccountId === null) return
     const trimmed = title.trim()
     if (!trimmed) {
       setError('방송 제목을 입력해 주세요.')
@@ -199,7 +201,7 @@ export default function BroadcastControl({
     setError(null)
     try {
       const result = await startSession({
-        platformAccountIds: selectedAccountIds,
+        platformAccountIds: [selectedAccountId],
         calendarEventId,
         title: trimmed,
         category: null,
@@ -220,7 +222,7 @@ export default function BroadcastControl({
           baseTimecodeMs: recordStatus.outputDuration
         })
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'OBS 송출·녹화를 시작하지 못했어요.')
+        setError(getIpcErrorMessage(e, 'OBS 송출·녹화를 시작하지 못했어요.'))
       }
       setShowStartForm(false)
       onStarted(result.sessionId)
@@ -398,24 +400,29 @@ export default function BroadcastControl({
             <p className="text-caption text-muted-foreground">연동 계정을 확인하는 중…</p>
           ) : connectedAccounts.length > 0 ? (
             <>
-              {/* 연동 계정이 2개 이상일 때만 선택 목록을 보여준다 — 하나뿐이면 지금처럼 자동 선택 */}
+              {/* 여러 플랫폼을 동시에 연동해도 OBS가 멀티 송출 플러그인 없이는 한 곳에만
+                  붙는다 — 계정이 2개 이상일 때만 어느 채널로 송출할지 고르게 한다. */}
               {connectedAccounts.length > 1 && (
                 <div className="flex flex-col gap-1.5 border-b pb-2">
-                  <span className="text-xs font-medium text-muted-foreground">
-                    동시에 방송할 채널
-                  </span>
-                  {connectedAccounts.map((account) => (
-                    <label
-                      key={account.platformAccountId}
-                      className="flex items-center gap-2 text-xs"
-                    >
-                      <Checkbox
-                        checked={selectedAccountIds.includes(account.platformAccountId)}
-                        onCheckedChange={() => toggleAccount(account.platformAccountId)}
-                      />
-                      {PLATFORM_LABEL[account.platform]} · {account.channelName}
-                    </label>
-                  ))}
+                  <label className="text-xs font-medium text-muted-foreground">송출할 채널</label>
+                  <Select
+                    value={selectedAccountId === null ? undefined : String(selectedAccountId)}
+                    onValueChange={(next) => setSelectedAccountId(Number(next))}
+                  >
+                    <SelectTrigger className="w-full" aria-label="송출할 채널 선택">
+                      <SelectValue placeholder="채널을 선택하세요" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {connectedAccounts.map((account) => (
+                        <SelectItem
+                          key={account.platformAccountId}
+                          value={String(account.platformAccountId)}
+                        >
+                          {PLATFORM_LABEL[account.platform]} · {account.channelName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               )}
 
@@ -427,21 +434,21 @@ export default function BroadcastControl({
                 placeholder="오늘 방송 제목"
               />
               {/*
-                이 제목이 치지직에도 반영된다는 사실을 밝혀 둔다 — 방송 중에는 우측
-                패널에서 같은 값을 바꾸게 되므로, 둘이 별개라는 오해를 미리 막는다.
-                유튜브는 LAIVE가 제목을 바꾸지 않는다 — 진행 중인 방송을 관찰만 한다.
+                이 제목이 선택한 플랫폼 채널에도 반영된다는 사실을 밝혀 둔다 — 방송 중에는
+                우측 패널에서 같은 값을 바꾸게 되므로, 둘이 별개라는 오해를 미리 막는다.
+                치지직·유튜브 둘 다 liveSetting을 지원해 플랫폼을 가리지 않는다.
               */}
               <p className="text-micro leading-relaxed text-muted-foreground">
                 {calendarEventId === null
                   ? '예정된 일정 없이 시작해요.'
                   : '예정된 일정과 연결해 시작해요.'}{' '}
-                치지직 채널 제목에도 함께 반영돼요. 유튜브는 이미 진행 중인 방송을 수집만 해요.
+                채널 방송 제목에도 함께 반영돼요.
               </p>
               {error && <p className="text-xs text-destructive">{error}</p>}
               <Button
                 size="sm"
                 onClick={() => void handleStart()}
-                disabled={busy || selectedAccountIds.length === 0}
+                disabled={busy || selectedAccountId === null}
               >
                 {busy ? '시작하는 중…' : '방송 시작'}
               </Button>
