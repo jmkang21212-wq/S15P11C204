@@ -5,6 +5,23 @@
 @import './theme/semantic.css';
 
 /*
+ * 스캔 범위를 명시한다. Tailwind는 소스에서 발견한 클래스만 CSS로 만들므로,
+ * 범위를 놓치면 빌드는 성공하는데 화면만 스타일 없이 나온다.
+ *
+ * 자동 탐지는 Vite의 root를 기준으로 도는데, 웹 빌드(vite.config.web.ts)는
+ * root가 `src/web`이다. 그 안에는 클래스를 쓰는 파일이 없고 화면 컴포넌트는
+ * 전부 `src/renderer/src` 아래에 있어서, 명시하지 않으면 유틸리티가 한 개도
+ * 생성되지 않는다(공개 뷰가 텍스트만 나오던 원인).
+ *
+ * Electron 빌드는 renderer root가 `src/renderer`라 자동 탐지로도 잡히지만,
+ * @source는 자동 탐지에 더하는 방식이라 결과가 달라지지 않는다.
+ *
+ * 경로는 이 CSS 파일 기준 상대 경로다.
+ */
+@source '../**/*.{ts,tsx}';
+@source '../../../web/**/*.{ts,tsx,html}';
+
+/*
  * LAIVE — 3층: 유틸리티 매핑
  *
  * 토큰은 3층 구조다: palette(원시값) → semantic(역할, [data-theme]) → 여기(유틸리티 클래스).
