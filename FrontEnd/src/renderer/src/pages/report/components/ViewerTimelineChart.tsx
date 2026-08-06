@@ -89,7 +89,7 @@ export default function ViewerTimelineChart({
             description="방송 중 수집된 시청자 데이터가 없습니다."
           />
         ) : (
-          <ChartContainer config={CHART_CONFIG} className="h-[260px] w-full">
+          <ChartContainer config={CHART_CONFIG} className="h-65 w-full">
             <AreaChart data={data} margin={{ left: 4, right: 12, top: 8, bottom: 0 }}>
               <defs>
                 <linearGradient id="viewerFill" x1="0" y1="0" x2="0" y2="1">

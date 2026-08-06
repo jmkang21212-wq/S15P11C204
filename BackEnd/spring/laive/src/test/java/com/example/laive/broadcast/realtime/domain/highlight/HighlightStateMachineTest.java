@@ -23,6 +23,7 @@ class HighlightStateMachineTest {
             Duration.ofMinutes(5),
             Duration.ofSeconds(30),
             Duration.ofMinutes(3),
+            true, // baselineDuringWarmup — 상태기계는 읽지 않는다
             10,
             0.001,
             0.5   // madFloorChatters — 상태기계는 읽지 않는다

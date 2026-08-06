@@ -15,7 +15,8 @@ export const PATHS = {
   /** 인증 없이 보는 공개 포트폴리오. SC-11 비즈니스 매칭에서도 이 경로로 넘어온다. */
   publicPortfolio: '/p/:publicSlug',
   matching: '/matching', // 로그인 후 검색(GNB 메뉴) — 공개 디렉터리는 discover
-  /** 인증 없이 보는 공개 스트리머 디렉터리 (streampilot.tv/discover). */
+  settings: '/settings',
+  /** 인증 없이 보는 공개 스트리머 디렉터리. 웹 빌드에서도 같은 경로를 쓴다. */
   discover: '/discover',
   console: '/console', // 방송 콘솔 진입(GNB 메뉴) — 실제 세션은 consoleSession로 라우팅
   consoleSession: '/console/:sessionId',

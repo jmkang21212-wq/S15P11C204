@@ -17,6 +17,7 @@ import SchedulePage from '@renderer/pages/schedule/SchedulePage'
 import PortfolioEditPage from '@renderer/pages/portfolio/PortfolioEditPage'
 import PortfolioPublicPage from '@renderer/pages/portfolio/PortfolioPublicPage'
 import MatchingPage from '@renderer/pages/matching/MatchingPage'
+import SettingsPage from '@renderer/pages/settings/SettingsPage'
 import DiscoverPage from '@renderer/pages/matching/DiscoverPage'
 import NotFoundPage from '@renderer/pages/NotFoundPage'
 
@@ -62,6 +63,7 @@ export const router = createHashRouter([
           { path: PATHS.schedule, element: <SchedulePage /> },
           { path: PATHS.portfolio, element: <PortfolioEditPage /> },
           { path: PATHS.matching, element: <MatchingPage /> },
+          { path: PATHS.settings, element: <SettingsPage /> },
 
           // 아직 구현되지 않은 GNB 메뉴를 받는다. GNB는 남겨 두고 본문만 안내로 채운다.
           // 담당자가 위에 라우트를 추가하면 자연히 대체된다.

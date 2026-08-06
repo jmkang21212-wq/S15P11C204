@@ -63,6 +63,13 @@ mybatis:
     default-fetch-size: 100
     default-statement-timeout: 30
 
+logging:
+  level:
+    # 하이라이트 판정 로그. INFO면 상태 전이·확정만(방송당 몇 줄), DEBUG면 매 틱의
+    # (ts, engagement, z, phase)까지 — HIGHLIGHT_SPEC §5가 튜닝 근거로 강권하는 로그라
+    # 시연·파라미터 튜닝 때 DEBUG로 올린다(.env.highlight.example 참고).
+    com.example.laive.broadcast.realtime: "${HIGHLIGHT_LOG_LEVEL:INFO}"
+
 laive:
   auth:
     naver:
@@ -191,6 +198,10 @@ laive:
     max-active: "${HIGHLIGHT_MAX_ACTIVE:4m}"          # lead 포함 270s — 리포트 자격 상한 300s(DeterministicHighlightGenerator) 이내
     cooldown: "${HIGHLIGHT_COOLDOWN:30s}"
     warmup: "${HIGHLIGHT_WARMUP:3m}"                  # 방송 시작 인사 러시 오탐 방지 (가드 1)
+    # 워밍업 중 baseline 적재 여부. false면 워밍업 표본을 버리고 워밍업 안에 받은
+    # 채팅을 판정 윈도우에서도 빼서, 인사 러시가 "평소 수준"을 선점하지 못한다
+    # (짧은 시연용). 대신 판정이 빈 baseline으로 시작해 초반 z가 불안정해진다.
+    baseline-during-warmup: "${HIGHLIGHT_BASELINE_DURING_WARMUP:true}"
     min-window-chats: "${HIGHLIGHT_MIN_WINDOW_CHATS:4}"  # 저활동 틱 판정 생략 (가드 3). 절대량 방어는 mad-floor-chatters가 맡는다
     mad-epsilon: "${HIGHLIGHT_MAD_EPSILON:0.001}"     # MAD 절대 하한 (가드 2)
     mad-floor-chatters: "${HIGHLIGHT_MAD_FLOOR_CHATTERS:0.5}"  # MAD 동적 하한(채터 수 단위) — max(ε, 이 값/viewers)

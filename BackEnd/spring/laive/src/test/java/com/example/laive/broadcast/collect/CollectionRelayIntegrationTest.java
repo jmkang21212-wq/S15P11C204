@@ -157,6 +157,29 @@ class CollectionRelayIntegrationTest {
                 .hasToString("2417");
     }
 
+    @Test
+    void platformViewerMetricsPersistAndFeedSnapshot() {
+        // 수집기가 실제로 때리는 경로(플랫폼 세션 단위)다 — 레거시 세션 단위와 달리
+        // 삽입 후 플랫폼 합산(combinedViewerCount)을 거쳐 판정기·스냅샷에 반영된다.
+        long sessionId = createSession();
+        String stateKey = trackState(sessionId);
+        sessionRedisGateway.initialize(sessionId, 1L, Instant.now());
+        Long platformSessionId = jdbcTemplate.queryForObject(
+                "SELECT id FROM broadcast_platform_sessions WHERE broadcast_session_id = ?",
+                Long.class, sessionId);
+        Instant measuredAt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+
+        BatchIngestResult result = relayService.appendPlatformViewerMetrics(
+                platformSessionId, List.of(new ViewerMetricItem(measuredAt, 7)));
+
+        assertThat(result.acceptedCount()).isEqualTo(1);
+        Integer stored = jdbcTemplate.queryForObject(
+                "SELECT viewer_count FROM viewer_metrics WHERE platform_session_id = ?",
+                Integer.class, platformSessionId);
+        assertThat(stored).isEqualTo(7);
+        assertThat(redisTemplate.opsForHash().get(stateKey, "currentViewers")).hasToString("7");
+    }
+
     // --- Fixture (CollectionIngestIntegrationTest와 동일 구성) ---
 
     private String trackState(long sessionId) {

@@ -96,7 +96,7 @@ export default function GrowthTrendChart({
             description="방송을 마치면 구간별 지표가 쌓입니다."
           />
         ) : (
-          <ChartContainer config={chartConfig} className="h-[280px] w-full">
+          <ChartContainer config={chartConfig} className="h-70 w-full">
             <BarChart data={data} margin={{ left: 4, right: 12, top: 8, bottom: 0 }}>
               <CartesianGrid vertical={false} strokeDasharray="3 3" />
 

@@ -1,5 +1,6 @@
 package com.example.laive.report.repository;
 
+import com.example.laive.broadcast.fandom.domain.TopViewer;
 import com.example.laive.report.domain.ReportInsight;
 import com.example.laive.report.domain.ReportTrigger;
 import com.example.laive.report.domain.SessionHighlight;
@@ -18,4 +19,5 @@ public interface SessionReportQueryRepository {
     List<ReportInsight> findInsights(long reportId);
     List<SessionHighlight> findHighlights(long reportId);
     List<ReportPlatformMetrics> findPlatformMetrics(long reportId);
+    List<TopViewer> findTopViewers(long sessionId, int limit);
 }

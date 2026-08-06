@@ -18,6 +18,7 @@ public record SessionReportResponse(
         List<ReportInsightResponse> insights,
         List<HighlightResponse> highlights,
         List<ReportPlatformMetricsResponse> platformMetrics,
+        List<TopViewerResponse> topViewers,
         Instant generatedAt
 ) {
     public static SessionReportResponse from(SessionReportDetail detail, ClipUrlResolver urlResolver) {
@@ -31,6 +32,7 @@ public record SessionReportResponse(
                 detail.highlights().stream()
                         .map(highlight -> HighlightResponse.from(highlight, urlResolver)).toList(),
                 detail.platformMetrics().stream().map(ReportPlatformMetricsResponse::from).toList(),
+                detail.topViewers().stream().map(TopViewerResponse::from).toList(),
                 report.generatedAt()
         );
     }

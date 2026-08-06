@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LAIVE — 방송 준비부터 다시보기까지</title>
+
+<style>
+  @font-face {
+    font-family: 'Wanted Sans Variable';
+    src: url('./fonts/WantedSansVariable.woff2') format('woff2-variations');
+    font-weight: 400 1000;
+    font-display: swap;
+  }
+
+  :root {
+    /* brand blue — sampled from the LAIVE wordmark's own gradient */
+    --brand-100: #eaf3ff;
+    --brand-300: #7fb4ff;
+    --brand-500: #2f8bff;
+    --brand-600: #0a5cf5;
+    --brand-700: #0040cc;
+    --brand-900: #052a80;
+
+    /* chart accents — reused verbatim from the app's own --chart-* tokens */
+    --chart-indigo: #4338ca;
+    --chart-green: #16a34a;
+    --chart-amber: #d97706;
+    --chart-rose: #e11d48;
+    --chart-violet: #7c3aed;
+
+    --ink-900: #10131c;
+    --ink-700: #4d5566;
+    --ink-500: #8b93a3;
+    --surface-0: #ffffff;
+    --surface-1: #f6f8fc;
+    --surface-2: #eef2f9;
+    --border: rgba(16, 19, 28, 0.09);
+    --shadow-card: 0 10px 34px rgba(10, 30, 70, 0.08);
+  }
+
+  :root[data-theme='dark'] {
+    --ink-900: #e6ebf2;
+    --ink-700: #b6bcc9;
+    --ink-500: #9aa0ab;
+    --surface-0: #191d27;
+    --surface-1: #12151d;
+    --surface-2: #232732;
+    --border: rgba(230, 235, 242, 0.1);
+    --brand-100: #1b2740;
+    --shadow-card: 0 10px 34px rgba(0, 0, 0, 0.35);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --ink-900: #e6ebf2;
+      --ink-700: #b6bcc9;
+      --ink-500: #9aa0ab;
+      --surface-0: #191d27;
+      --surface-1: #12151d;
+      --surface-2: #232732;
+      --border: rgba(230, 235, 242, 0.1);
+      --brand-100: #1b2740;
+      --shadow-card: 0 10px 34px rgba(0, 0, 0, 0.35);
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--surface-1);
+    color: var(--ink-900);
+    font-family: 'Wanted Sans Variable', 'Pretendard', -apple-system, system-ui, 'Malgun Gothic', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  a { color: inherit; }
+
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 0 28px; }
+
+  /* ---------- nav ---------- */
+  nav.top {
+    position: sticky; top: 0; z-index: 40;
+    background: color-mix(in srgb, var(--surface-1) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+  }
+  nav.top .wrap { display: flex; align-items: center; justify-content: space-between; height: 68px; }
+  .brand-mark { display: flex; align-items: center; gap: 9px; }
+  .brand-mark img { height: 22px; display: block; }
+  .nav-links { display: flex; align-items: center; gap: 30px; font-size: 14px; color: var(--ink-700); }
+  .nav-links a { text-decoration: none; }
+  .nav-links a:not(.btn):hover { color: var(--ink-900); }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    border-radius: 12px; font-weight: 600; font-size: 14px;
+    padding: 10px 18px; cursor: pointer; border: 1px solid transparent;
+    text-decoration: none; transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
+  }
+  .btn:focus-visible { outline: 2px solid var(--brand-500); outline-offset: 2px; }
+  .btn-primary {
+    background: linear-gradient(180deg, var(--brand-500), var(--brand-700));
+    color: #fff;
+    box-shadow: 0 8px 20px rgba(10, 92, 245, 0.28);
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 12px 26px rgba(10, 92, 245, 0.36); }
+  .btn-ghost { background: var(--surface-0); color: var(--ink-900); border-color: var(--border); }
+  .btn-ghost:hover { border-color: var(--brand-300); }
+
+  /* ---------- hero ---------- */
+  .hero { position: relative; padding: 96px 0 40px; overflow: hidden; }
+  .hero canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .55; }
+  .hero::after {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(60% 50% at 50% 8%, color-mix(in srgb, var(--brand-100) 70%, transparent), transparent 70%);
+    pointer-events: none;
+  }
+  .hero-inner { position: relative; z-index: 2; text-align: center; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12.5px; font-weight: 600; letter-spacing: .04em;
+    color: var(--brand-700); background: var(--brand-100);
+    border-radius: 999px; padding: 6px 14px; margin-bottom: 22px;
+  }
+  :root[data-theme='dark'] .eyebrow, @media (prefers-color-scheme: dark) { }
+  .eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--chart-rose); box-shadow: 0 0 0 3px rgba(225,29,72,.2); }
+
+  h1.headline {
+    font-size: clamp(34px, 5.2vw, 58px);
+    line-height: 1.15;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin: 0 auto 20px;
+    max-width: 760px;
+    text-wrap: balance;
+  }
+  h1.headline .accent {
+    background: linear-gradient(100deg, var(--brand-500), var(--brand-700));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .sub {
+    font-size: 17px; color: var(--ink-700); max-width: 560px; margin: 0 auto 34px;
+    line-height: 1.6;
+  }
+  .hero-cta { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 18px; }
+  .hero-note { font-size: 13px; color: var(--ink-500); }
+
+  /* ---------- product mock ---------- */
+  .mock-stage { position: relative; z-index: 2; margin: 56px auto 0; max-width: 920px; }
+  .mock-window {
+    background: var(--surface-0); border: 1px solid var(--border); border-radius: 20px;
+    box-shadow: var(--shadow-card); overflow: hidden;
+  }
+  .mock-titlebar { display: flex; align-items: center; gap: 6px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .mock-titlebar span { width: 9px; height: 9px; border-radius: 50%; background: var(--surface-2); }
+  .mock-body { display: grid; grid-template-columns: 200px 1fr; min-height: 320px; }
+  .mock-side { background: var(--surface-1); border-right: 1px solid var(--border); padding: 18px 14px; display: flex; flex-direction: column; gap: 4px; }
+  .mock-side .item { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 9px; font-size: 12.5px; color: var(--ink-700); }
+  .mock-side .item.active { background: var(--brand-100); color: var(--brand-700); font-weight: 600; }
+  .mock-side .item .ic { width: 15px; height: 15px; border-radius: 4px; background: currentColor; opacity: .35; }
+  .mock-main { padding: 22px 24px; display: grid; gap: 16px; grid-template-columns: 1fr 1fr; }
+  .mock-card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px; padding: 16px; }
+  .mock-card h4 { margin: 0 0 4px; font-size: 12px; color: var(--ink-500); font-weight: 600; }
+  .mock-card .big { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .mock-card .delta { font-size: 12px; color: var(--chart-green); font-weight: 600; }
+  .mock-card.alert { background: color-mix(in srgb, var(--chart-rose) 8%, var(--surface-1)); border-color: color-mix(in srgb, var(--chart-rose) 30%, var(--border)); grid-column: span 2; display: flex; align-items: center; gap: 12px; }
+  .mock-card.alert .badge { flex-shrink: 0; width: 32px; height: 32px; border-radius: 9px; background: var(--chart-rose); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 15px; }
+  .mock-card.alert p { margin: 0; font-size: 13px; color: var(--ink-900); }
+  .mock-card.alert p b { font-weight: 700; }
+  .mock-card.alert small { color: var(--ink-500); }
+  .mock-card.chart svg { width: 100%; height: 64px; display: block; }
+
+  /* ---------- sections ---------- */
+  section { padding: 96px 0; }
+  .section-head { max-width: 560px; margin: 0 auto 52px; text-align: center; }
+  .section-head .kicker { font-size: 12.5px; font-weight: 700; letter-spacing: .06em; color: var(--brand-600); text-transform: uppercase; margin-bottom: 10px; }
+  .section-head h2 { font-size: clamp(26px, 3.4vw, 36px); font-weight: 800; letter-spacing: -0.015em; margin: 0 0 12px; text-wrap: balance; }
+  .section-head p { color: var(--ink-700); font-size: 15.5px; line-height: 1.6; margin: 0; }
+
+  .feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .feature {
+    background: var(--surface-0); border: 1px solid var(--border); border-radius: 16px;
+    padding: 26px 24px; box-shadow: var(--shadow-card);
+    transition: transform .18s ease, box-shadow .18s ease;
+  }
+  .feature:hover { transform: translateY(-3px); box-shadow: 0 16px 40px rgba(10,30,70,.12); }
+  .feature .ic {
+    width: 40px; height: 40px; border-radius: 11px; display: flex; align-items: center; justify-content: center;
+    margin-bottom: 16px; color: #fff;
+  }
+  .feature h3 { font-size: 16px; font-weight: 700; margin: 0 0 8px; letter-spacing: -0.01em; }
+  .feature p { font-size: 13.5px; color: var(--ink-700); line-height: 1.6; margin: 0; }
+  .feature.tone-risk .ic { background: var(--chart-rose); }
+  .feature.tone-growth .ic { background: var(--brand-600); }
+  .feature.tone-calendar .ic { background: var(--chart-amber); }
+  .feature.tone-platform .ic { background: #03c75a; }
+  .feature.tone-clip .ic { background: var(--chart-violet); }
+  .feature.tone-portfolio .ic { background: var(--chart-green); }
+
+  /* ---------- flow ---------- */
+  .flow-strip { background: var(--surface-0); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .flow-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; }
+  .flow-step { padding: 40px 32px; position: relative; }
+  .flow-step + .flow-step { border-left: 1px solid var(--border); }
+  .flow-step .stage { font-size: 12px; font-weight: 700; color: var(--brand-600); letter-spacing: .04em; margin-bottom: 10px; }
+  .flow-step h4 { margin: 0 0 8px; font-size: 16.5px; font-weight: 700; }
+  .flow-step p { margin: 0; font-size: 13.5px; color: var(--ink-700); line-height: 1.6; }
+
+  /* ---------- cta band ---------- */
+  .cta-band {
+    background: linear-gradient(160deg, var(--brand-700), var(--brand-900));
+    color: #fff; border-radius: 24px; margin: 0 auto; max-width: 1104px;
+    padding: 64px 48px; text-align: center; position: relative; overflow: hidden;
+  }
+  .cta-band h2 { font-size: clamp(24px, 3.2vw, 32px); font-weight: 800; margin: 0 0 12px; letter-spacing: -0.015em; }
+  .cta-band p { color: rgba(255,255,255,.78); font-size: 15px; margin: 0 0 30px; }
+  .cta-row { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+  .btn-white { background: #fff; color: var(--brand-700); }
+  .btn-outline { background: transparent; color: #fff; border-color: rgba(255,255,255,.35); }
+  .btn-outline:hover { border-color: #fff; }
+  .cta-band canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .5; }
+
+  /* ---------- footer ---------- */
+  footer { padding: 40px 0 56px; }
+  footer .wrap { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+  footer .brand-mark img { height: 16px; opacity: .8; }
+  footer .fine { font-size: 12.5px; color: var(--ink-500); }
+  footer .fine + .fine::before { content: '·'; margin: 0 10px; }
+
+  @media (max-width: 860px) {
+    .feature-grid { grid-template-columns: 1fr 1fr; }
+    .flow-grid { grid-template-columns: 1fr; }
+    .flow-step + .flow-step { border-left: none; border-top: 1px solid var(--border); }
+    .mock-body { grid-template-columns: 1fr; }
+    .mock-side { display: none; }
+    .mock-main { grid-template-columns: 1fr; }
+    .mock-card.alert { grid-column: span 1; }
+  }
+  @media (max-width: 560px) {
+    .feature-grid { grid-template-columns: 1fr; }
+    nav .nav-links a:not(.btn) { display: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hero canvas, .cta-band canvas { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="top">
+  <div class="wrap">
+    <div class="brand-mark">
+      <img src="./images/logo.png" alt="LAIVE" />
+    </div>
+    <div class="nav-links">
+      <a href="#features">기능</a>
+      <a href="#flow">사용 흐름</a>
+      <a href="#download" class="btn btn-primary">무료로 시작하기</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <canvas id="heroWave"></canvas>
+  <div class="wrap hero-inner">
+    <span class="eyebrow"><span class="dot"></span>1인 스트리머를 위한 AI 방송 동반자</span>
+    <h1 class="headline">방송 준비부터 다시보기까지,<br /><span class="accent">LAIVE</span> 하나로</h1>
+    <p class="sub">위험 발언은 실시간으로 잡아내고, 방송이 끝나면 리포트로 정리합니다.
+      켜두는 것만으로 방송 전·중·후를 챙기는 데스크톱 앱.</p>
+    <div class="hero-cta">
+      <a href="https://i15c204.p.ssafy.io/download/laive-setup.exe" class="btn btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v13m0 0 5-5m-5 5-5-5M4 21h16"/></svg>
+        Windows용 다운로드
+      </a>
+    </div>
+    <p class="hero-note">무료 체험 · 설치 후 바로 계정 연동</p>
+  </div>
+
+  <div class="wrap mock-stage">
+    <div class="mock-window">
+      <div class="mock-titlebar"><span></span><span></span><span></span></div>
+      <div class="mock-body">
+        <div class="mock-side">
+          <div class="item active"><span class="ic"></span>대시보드</div>
+          <div class="item"><span class="ic"></span>방송 콘솔</div>
+          <div class="item"><span class="ic"></span>일정 캘린더</div>
+          <div class="item"><span class="ic"></span>성장 리포트</div>
+          <div class="item"><span class="ic"></span>하이라이트</div>
+          <div class="item"><span class="ic"></span>포트폴리오</div>
+        </div>
+        <div class="mock-main">
+          <div class="mock-card">
+            <h4>동시 시청자</h4>
+            <div class="big">1,284</div>
+            <div class="delta">▲ 12.4% 지난주 대비</div>
+          </div>
+          <div class="mock-card">
+            <h4>채팅 반응도</h4>
+            <div class="big">86점</div>
+            <div class="delta">▲ 5.1%</div>
+          </div>
+          <div class="mock-card chart" style="grid-column: span 2;">
+            <h4>주간 성장 추이</h4>
+            <svg viewBox="0 0 400 64" preserveAspectRatio="none">
+              <polyline fill="none" stroke="#4338ca" stroke-width="2.5" points="0,48 50,42 100,44 150,30 200,34 250,20 300,24 350,10 400,14" />
+              <polyline fill="none" stroke="#16a34a" stroke-width="2" opacity="0.6" points="0,56 50,54 100,50 150,48 200,44 250,40 300,36 350,30 400,26" />
+            </svg>
+          </div>
+          <div class="mock-card alert">
+            <span class="badge">!</span>
+            <p><b>위험 발언 감지</b> — 00:14:32 지점, 그레이존 표현이 감지되어 즉시 알림을 보냈습니다.<br /><small>실시간 감지 · Groq Whisper 전사 기반</small></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<section id="features">
+  <div class="wrap">
+    <div class="section-head">
+      <div class="kicker">Everything in one app</div>
+      <h2>방송에 필요한 모든 것, 창 하나에</h2>
+      <p>플랫폼 앱을 여러 개 켜둘 필요 없이, LAIVE가 방송 전 준비부터 사고 예방, 다시보기까지 이어서 관리합니다.</p>
+    </div>
+    <div class="feature-grid">
+      <div class="feature tone-risk">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg></div>
+        <h3>실시간 위험 발언 감지</h3>
+        <p>마이크 음성을 실시간 전사해 위험 발언을 0.4초 안에 잡아내고 즉시 경고합니다. 방송 사고를 사후가 아니라 그 순간에 막습니다.</p>
+      </div>
+      <div class="feature tone-growth">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18M7 15l4-4 3 3 5-6"/></svg></div>
+        <h3>성장 리포트</h3>
+        <p>세션별 시청자·채팅 데이터를 분석해 주간·월간 추이와 다음 방송에서 시도해볼 액션을 제안합니다.</p>
+      </div>
+      <div class="feature tone-calendar">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div>
+        <h3>일정 캘린더</h3>
+        <p>방송 일정을 등록하면 시청자와 자동으로 공유됩니다. 정기 방송, 특별 방송을 한 곳에서 관리하세요.</p>
+      </div>
+      <div class="feature tone-platform">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 3.5 6 3.5 9s-1 6.5-3.5 9c-2.5-2.5-3.5-6-3.5-9s1-6.5 3.5-9Z"/></svg></div>
+        <h3>플랫폼 계정 연동</h3>
+        <p>네이버·치지직·SOOP 계정을 연동해 방송 설정을 한 번에 바꾸고, 여러 플랫폼 상태를 한 화면에서 확인합니다.</p>
+      </div>
+      <div class="feature tone-clip">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3V9Z"/></svg></div>
+        <h3>하이라이트 · 클립</h3>
+        <p>반응이 몰린 구간을 자동으로 찾아 클립으로 만들어둡니다. 방송이 끝나면 편집할 소스가 이미 정리돼 있습니다.</p>
+      </div>
+      <div class="feature tone-portfolio">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-3V5a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v2H4a1 1 0 0 0-1 1v3c0 1.1 2 2 4 2h10c2 0 4-.9 4-2V8a1 1 0 0 0-1-1Z"/><path d="M3 13v6a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6"/></svg></div>
+        <h3>포트폴리오</h3>
+        <p>방송 실적과 하이라이트를 모아 링크 하나로 공유합니다. 협찬·비즈니스 제안을 받을 때 바로 보여주세요.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="flow-strip" id="flow">
+  <div class="wrap">
+    <div class="section-head" style="margin-top: 88px;">
+      <div class="kicker">How it works</div>
+      <h2>켜두면, 그다음은 LAIVE가 합니다</h2>
+    </div>
+    <div class="flow-grid">
+      <div class="flow-step">
+        <div class="stage">방송 전</div>
+        <h4>연동하고 일정만 잡으세요</h4>
+        <p>플랫폼 계정을 연동하면 방송 설정과 캘린더가 앱 안에서 바로 준비됩니다.</p>
+      </div>
+      <div class="flow-step">
+        <div class="stage">방송 중</div>
+        <h4>위험 발언은 실시간으로 차단</h4>
+        <p>마이크를 감지하는 순간부터 위험 발언 경고와 채팅 반응이 콘솔에 표시됩니다.</p>
+      </div>
+      <div class="flow-step">
+        <div class="stage">방송 후</div>
+        <h4>리포트와 클립이 자동 완성</h4>
+        <p>방송이 끝나면 성장 리포트와 하이라이트 클립이 정리돼 바로 확인할 수 있습니다.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<section id="download">
+  <div class="wrap">
+    <div class="cta-band">
+      <canvas id="ctaWave"></canvas>
+      <div style="position:relative; z-index:2;">
+        <h2>다음 방송부터, LAIVE와 함께</h2>
+        <p>설치는 1분, 계정 연동은 3분이면 끝납니다.</p>
+        <div class="cta-row">
+          <a href="https://i15c204.p.ssafy.io/download/laive-setup.exe" class="btn btn-white">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v13m0 0 5-5m-5 5-5-5M4 21h16"/></svg>
+            Windows용 다운로드
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="brand-mark"><img src="./images/logo.png" alt="LAIVE" /></div>
+    <div>
+      <span class="fine">&copy; 2026 LAIVE</span>
+      <span class="fine">광주 2반 C204</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var prefersReduced = window.matchMedia('(prefers-reduce-motion: reduce)').matches ||
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function isDark() {
+    var t = document.documentElement.getAttribute('data-theme');
+    if (t === 'dark') return true;
+    if (t === 'light') return false;
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  }
+
+  function waveField(canvas, opts) {
+    if (prefersReduced) return;
+    var ctx = canvas.getContext('2d');
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w, h, t = 0;
+
+    function resize() {
+      w = canvas.clientWidth; h = canvas.clientHeight;
+      canvas.width = w * dpr; canvas.height = h * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    var layers = opts.layers;
+
+    function draw() {
+      ctx.clearRect(0, 0, w, h);
+      for (var i = 0; i < layers.length; i++) {
+        var L = layers[i];
+        ctx.beginPath();
+        var baseY = h * L.y;
+        var step = 6;
+        for (var x = 0; x <= w + step; x += step) {
+          var y = baseY +
+            Math.sin(x * L.freq1 + t * L.speed + L.phase) * L.amp1 +
+            Math.sin(x * L.freq2 - t * L.speed * 0.7 + L.phase * 1.7) * L.amp2;
+          if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = L.color;
+        ctx.lineWidth = L.width;
+        ctx.lineCap = 'round';
+        ctx.globalAlpha = L.alpha;
+        ctx.stroke();
+      }
+      t += 0.006;
+      requestAnimationFrame(draw);
+    }
+    draw();
+  }
+
+  var brand = isDark()
+    ? ['#2f8bff', '#5aa4ff', '#7fb4ff', '#0a5cf5']
+    : ['#0a5cf5', '#2f8bff', '#7fb4ff', '#0040cc'];
+
+  function buildLayers(baseColors, count, spread) {
+    var out = [];
+    for (var i = 0; i < count; i++) {
+      var yPos = 0.3 + (i / (count - 1)) * spread;
+      out.push({
+        y: yPos,
+        freq1: 0.004 + i * 0.0006,
+        freq2: 0.011 + i * 0.0004,
+        amp1: 26 - i * 1.6,
+        amp2: 10,
+        speed: 0.6 + i * 0.05,
+        phase: i * 0.7,
+        color: baseColors[i % baseColors.length],
+        width: 1.4,
+        alpha: 0.16 + (i / count) * 0.5
+      });
+    }
+    return out;
+  }
+
+  var heroCanvas = document.getElementById('heroWave');
+  if (heroCanvas) waveField(heroCanvas, { layers: buildLayers(brand, 12, 0.5) });
+
+  var ctaCanvas = document.getElementById('ctaWave');
+  if (ctaCanvas) waveField(ctaCanvas, { layers: buildLayers(['rgba(255,255,255,0.9)', 'rgba(255,255,255,0.6)'], 8, 0.6) });
+})();
+</script>
+</body>
+</html>

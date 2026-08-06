@@ -33,4 +33,10 @@ public interface TriggerMapper {
             @Param("peakZ") BigDecimal peakZ,
             @Param("peakEngagement") BigDecimal peakEngagement
     );
+
+    /** 이 세션에서 지금까지 확정된 CHAT_SURGE 구간 수 — 콘솔 관측용이다. */
+    int countChatSurgeTriggers(@Param("sessionId") long sessionId);
+
+    /** 가장 최근에 확정된 CHAT_SURGE 구간의 끝 시각. 없으면 비어 있다. */
+    Optional<Instant> findLastChatSurgeEndedAt(@Param("sessionId") long sessionId);
 }

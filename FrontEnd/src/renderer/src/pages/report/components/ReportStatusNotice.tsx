@@ -40,7 +40,7 @@ export function ReportProcessingCard({
           </p>
         </div>
 
-        <div className="flex w-full max-w-[360px] flex-col gap-2">
+        <div className="flex w-full max-w-90 flex-col gap-2">
           {/* 진행 중(클립 생성 등)은 뉴트럴 프로그레스 바 + 캡션 — design.md §6 */}
           <Progress value={percent ?? 12} />
           <p className="text-caption text-muted-foreground">
@@ -57,7 +57,7 @@ export function ReportProcessingCard({
         </div>
 
         <Button type="button" variant="outline" size="sm" onClick={onRefresh} disabled={refreshing}>
-          <RotateCcw className="size-[14px]" strokeWidth={1.8} aria-hidden />
+          <RotateCcw className="size-3.5" strokeWidth={1.8} aria-hidden />
           새로고침
         </Button>
       </CardContent>
@@ -73,7 +73,7 @@ export function PartialSummaryNotice(): React.JSX.Element {
       role="status"
     >
       <AlertTriangle
-        className="mt-0.5 size-[18px] shrink-0 text-warning"
+        className="mt-0.5 size-4.5 shrink-0 text-warning"
         strokeWidth={1.8}
         aria-hidden
       />

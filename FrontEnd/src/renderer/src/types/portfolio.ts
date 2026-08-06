@@ -7,12 +7,12 @@
  *   §12.4 `GET /portfolios/{publicSlug}`
  */
 
-export type Platform = 'CHZZK' | 'SOOP'
+export type Platform = 'CHZZK' | 'YOUTUBE'
 
 /** SC-10 포트폴리오와 SC-11 검색 카드가 함께 쓰는 플랫폼 표기. */
 export const PLATFORM_LABEL: Record<Platform, string> = {
   CHZZK: '치지직',
-  SOOP: 'SOOP'
+  YOUTUBE: '유튜브'
 }
 
 export interface PlatformAccount {
@@ -75,6 +75,27 @@ export interface Portfolio {
  * 화면에서도 이 타입을 써서 편집 전용 필드가 새어 나가지 않게 한다.
  */
 export type PublicPortfolio = Omit<Portfolio, 'isPublic' | 'publishedAt'>
+
+/**
+ * POST 본문 (`POST /portfolio/me`).
+ *
+ * 생성은 자동 구성이 아니라 "사용자가 설정을 마치는 행위"라, 백엔드가 대신 채워주는
+ * 기본값이 없다 — `title`·`isPublic`·`tagIds`·`featuredHighlights`가 모두 필수다.
+ * `tagIds`는 1개 이상이어야 하고, `featuredHighlights`는 배열 자체는 필수지만 0개를 허용한다
+ * (클립이 안 뽑힌 방송도 있어 1개 이상을 강제하면 생성이 막히는 스트리머가 생긴다).
+ *
+ * `publicSlug`는 서버가 무작위로 만든다 — 공개 주소라 추측 불가능해야 해서 요청에 없다.
+ */
+export interface PortfolioCreate {
+  title: string
+  /** 비워도 되지만 null은 보내지 않는다 — 조회 시 `introduction`을 non-null로 다루기 때문이다. */
+  introduction: string
+  contactEmail: string | null
+  contactUrl: string | null
+  isPublic: boolean
+  tagIds: number[]
+  featuredHighlights: { highlightId: number; displayOrder: number }[]
+}
 
 /** PATCH 본문. 전달한 필드만 수정된다. 태그·publicSlug는 대상이 아니다. */
 export interface PortfolioUpdate {

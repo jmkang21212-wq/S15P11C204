@@ -58,9 +58,9 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 
-  /* 타이포: 본문 Wanted Sans / 수치·ID JetBrains Mono */
+  /* 타이포: 본문·수치 모두 Wanted Sans. 수치는 같은 서체의 tabular-nums(고정폭 숫자)로 구분한다 — 아래 .font-mono 참고 */
   --font-sans: 'Wanted Sans Variable', 'Pretendard', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-mono: 'Wanted Sans Variable', 'Pretendard', system-ui, sans-serif;
 
   /* 타이포 스케일 — design.md §1 (text-title/body/caption/metric로 사용) */
   --text-title: 1.125rem; /* 18px 화면 제목 */
@@ -87,6 +87,10 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* 수치·ID(.font-mono)는 같은 Wanted Sans에서 tabular-nums로만 구분한다 — 자릿수가 흔들리지 않고 숫자다움이 강조된다 */
+  .font-mono {
+    font-variant-numeric: tabular-nums;
+  }
   html,
   body,
   #root {
@@ -94,5 +98,43 @@
   }
   body {
     @apply bg-background text-foreground font-sans;
+  }
+}
+
+@layer utilities {
+  /*
+   * 스켈레톤 깜빡임 방지. components/ui/skeleton.tsx는 shadcn CLI 생성물이라 손대지
+   * 않고(design.md §0), 셀렉터로 data-slot 속성만 잡아 애니메이션을 덮어쓴다.
+   *
+   * 로컬 API는 응답이 수십~100ms대로 와서, 지금까지처럼 즉시 스켈레톤을 그리면 "켰다
+   * 껐다"가 눈에는 깜빡임으로 보인다. 150ms 동안 투명하게 숨겨 뒀다가 그 안에 응답이
+   * 오면(스켈레톤이 언마운트되면) 화면엔 아무것도 찍히지 않고, 넘기면 150ms에 걸쳐
+   * 부드럽게 나타난 뒤 pulse로 이어진다.
+   *
+   * pulse를 Tailwind의 전역 `pulse` 키프레임(50%만 정의) 그대로 쓰지 않고 여기서
+   * 0%/100%를 명시해 새로 정의한다 — 두 애니메이션이 같은 opacity 프로퍼티를 같은
+   * 시점에 같이 돌리면(둘 다 delay 150ms) pulse의 빈 0%가 페이드 결과가 아니라
+   * 기저값(opacity:0)을 기준으로 잡혀 페이드가 파묻혔다. delay를 겹치지 않게 갈라
+   * (pulse는 페이드가 끝나는 300ms부터) 이 문제를 없앤다.
+   */
+  @keyframes skeleton-reveal {
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes skeleton-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+  [data-slot='skeleton'] {
+    opacity: 0;
+    animation:
+      skeleton-reveal 150ms 150ms forwards,
+      skeleton-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) 300ms infinite;
   }
 }

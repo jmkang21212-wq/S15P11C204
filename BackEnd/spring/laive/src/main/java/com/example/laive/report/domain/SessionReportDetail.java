@@ -1,5 +1,7 @@
 package com.example.laive.report.domain;
 
+import com.example.laive.broadcast.fandom.domain.TopViewer;
+
 import java.util.List;
 
 public record SessionReportDetail(
@@ -9,6 +11,7 @@ public record SessionReportDetail(
         List<ReportInsight> insights,
         List<SessionHighlight> highlights,
         List<ReportPlatformMetrics> platformMetrics,
+        List<TopViewer> topViewers,
         double progress
 ) {
     public SessionReportDetail {
@@ -17,6 +20,7 @@ public record SessionReportDetail(
         insights = List.copyOf(insights);
         highlights = List.copyOf(highlights);
         platformMetrics = List.copyOf(platformMetrics);
+        topViewers = List.copyOf(topViewers);
     }
 
     public SessionReportDetail(
@@ -27,6 +31,6 @@ public record SessionReportDetail(
             List<SessionHighlight> highlights,
             double progress
     ) {
-        this(report, viewerTimeline, triggers, insights, highlights, List.of(), progress);
+        this(report, viewerTimeline, triggers, insights, highlights, List.of(), List.of(), progress);
     }
 }

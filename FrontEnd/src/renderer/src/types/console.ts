@@ -4,6 +4,7 @@
  */
 
 import type { BroadcastStatus } from '@renderer/types/broadcastSession'
+import type { TopViewer } from '@renderer/types/topViewer'
 
 /** @deprecated `BroadcastStatus`(types/broadcastSession.ts)를 직접 쓴다. 기존 화면 호환용 별칭. */
 export type SessionStatus = BroadcastStatus
@@ -68,6 +69,44 @@ export interface Sentiment {
 }
 
 /**
+ * CHAT_SURGE 하이라이트 판정기의 현재 상태 (관측 전용 — 판정 자체는 백엔드
+ * 1초 틱이 한다). 판정 파라미터가 백테스트 미검증이라, 시연·튜닝 때 "왜 안
+ * 잡히나"를 화면에서 바로 볼 수 있게 내려온다.
+ *
+ * 여기의 engagement는 짧은 판정 윈도우(engageWindowSec, 기본 60초) 기준이라
+ * 여론(Sentiment)의 180초 engagement와 다른 값이다 — 하이라이트는 시작점이
+ * 밀리지 않게 짧은 윈도우로 민감하게 본다.
+ */
+export interface HighlightStatus {
+  /** IDLE(대기) | ACTIVE(감지 중) | COOLDOWN(확정 직후 휴지). 판정기 미등록(방송 전·서버 재시작 직후)이면 null */
+  phase: 'IDLE' | 'ACTIVE' | 'COOLDOWN' | null
+  /** 평소(최근 15분) 대비 유니크 채터 급증 정도. 가드에 걸린 틱이면 null */
+  z: number | null
+  /** 진입 임계 — z가 이 값 이상으로 연속되면 하이라이트 진입 */
+  zEnter: number | null
+  /** 판정 윈도우 유니크 채터 ÷ 시청자 */
+  engagement: number | null
+  /** 판정 윈도우 안 채팅 수 */
+  windowChats: number | null
+  /** 판정 윈도우 안 유니크 채터 수 */
+  uniqueChatters: number | null
+  /**
+   * 마지막 틱이 판정을 쉰 이유. 정상 판정 중이면 null.
+   * no-viewers(미수신 — 수집기 장애)와 zero-viewers(수신됐지만 0명 — 실제 송출
+   * 중이 아니거나 시청자 없음)는 원인이 정반대라 구분해서 내려온다.
+   */
+  skipReason: 'gap' | 'no-viewers' | 'zero-viewers' | 'warmup' | 'empty-baseline' | 'quiet' | null
+  /** 워밍업이 끝나 판정이 시작되는 시각 */
+  warmupUntil: string | null
+  /** 판정 윈도우 길이(초). 환경변수 튜닝값이라 "최근 N초" 표기는 이 값을 쓴다. 판정기 미등록이면 null */
+  engageWindowSec: number | null
+  /** 이 세션에서 지금까지 확정된 하이라이트 구간 수 */
+  detectedCount: number
+  /** 마지막 확정 구간의 끝 시각. 없으면 null */
+  lastDetectedAt: string | null
+}
+
+/**
  * 답할 수 있는 질문인지 (AI/CHAT_AI_API.md §3).
  * - `FAQ`: 화면을 안 봐도 답할 수 있다
  * - `CONTEXT`: 화면 맥락이 있어야 답할 수 있다 → 일괄 답변 목록에서 제외한다
@@ -97,6 +136,9 @@ export interface LiveSnapshot {
   services: ConsoleServices
   briefings: Briefing[]
   sentiment: Sentiment
+  highlight: HighlightStatus
   repeatedQuestions: RepeatedQuestion[]
+  /** 이 세션 열성 시청자 상위 5명, 총점 내림차순 (FR-F-03). 채팅이 없으면 빈 배열 */
+  topViewers: TopViewer[]
   lastEventId: string
 }
