@@ -38,6 +38,13 @@ class RealtimeSessionState {
     /** 공백이 닫힌 뒤에도 60초 윈도우가 공백에 걸치는 동안은 판정을 쉰다. */
     private Instant gapExcludedUntil;
 
+    // 마지막 틱의 관측값 — 콘솔 스냅샷(live-snapshot)이 판정 상태를 보여주는 재료다.
+    // 판정에는 쓰지 않는다. 정상 판정 틱이면 z·engagement가 채워지고 skipReason은 null,
+    // 가드에 걸린 틱이면 반대다.
+    private Double lastZ;
+    private Double lastEngagement;
+    private String lastSkipReason;
+
     RealtimeSessionState(long sessionId, Instant sessionStartedAt, HighlightParams params) {
         this.sessionId = sessionId;
         this.sessionStartedAt = sessionStartedAt;
@@ -86,7 +93,38 @@ class RealtimeSessionState {
      * @param viewers 최신 시청자 수. null이면 판정을 쉰다(가드 4)
      */
     synchronized Optional<HighlightCandidate> tick(Instant now, Integer viewers) {
-        window.evictBefore(now.minus(params.engageWindow()));
+        HighlightStateMachine.Phase before = machine.phase();
+        Optional<HighlightCandidate> confirmed = judge(now, viewers);
+        HighlightStateMachine.Phase after = machine.phase();
+        // 전이는 방송당 몇 번뿐이라 INFO로 남긴다 — DEBUG 틱 로그를 켜지 않아도
+        // "하이라이트가 잡히기 시작했다/확정됐다"를 서버 로그에서 바로 볼 수 있다.
+        if (before != after) {
+            log.info("하이라이트 상태 전이: sessionId={} {} → {} (z={} engagement={} uniq={} viewers={})",
+                    sessionId, before, after,
+                    lastZ == null ? "-" : String.format("%.2f", lastZ),
+                    lastEngagement == null ? "-" : String.format("%.4f", lastEngagement),
+                    window.uniqueChatters(), viewers);
+        }
+        return confirmed;
+    }
+
+    private Optional<HighlightCandidate> judge(Instant now, Integer viewers) {
+        lastZ = null;
+        lastEngagement = null;
+        lastSkipReason = null;
+        Instant cutoff = now.minus(params.engageWindow());
+        // 워밍업 표본을 baseline에서 빼는 모드에서는 워밍업 안에 받은 채팅을 판정
+        // 윈도우에서도 뺀다. 윈도우가 인사 러시를 최대 engageWindow만큼 물고 나오면
+        // 첫 baseline 표본(empty-baseline 시드)이 러시 수준이 되어, baseline을 비워둔
+        // 효과가 무색해진다. 워밍업이 끝난 틱부터만 적용해 워밍업 중 관측(view)은
+        // 그대로 살린다.
+        if (!params.baselineDuringWarmup()) {
+            Instant warmupEnd = sessionStartedAt.plus(params.warmup());
+            if (!now.isBefore(warmupEnd) && warmupEnd.isAfter(cutoff)) {
+                cutoff = warmupEnd;
+            }
+        }
+        window.evictBefore(cutoff);
 
         // 가드 9: 공백에 걸친 틱은 판정도 baseline도 제외한다. 공백은 튀는 값
         // 하나가 아니라 baseline 전체를 끌어내리는 구간이라 median/MAD의
@@ -95,17 +133,28 @@ class RealtimeSessionState {
             return skipped(now, "gap");
         }
         // 가드 4: 시청자 수 없이 engagement를 계산할 수 없다. 0으로 나누지 않는다.
-        if (viewers == null || viewers <= 0) {
+        // 미수신(no-viewers)과 0명(zero-viewers)을 나누는 이유: 원인이 정반대다 —
+        // 전자는 수집기 폴링·전송 장애, 후자는 방송이 실제 송출 중이 아니거나
+        // 시청자가 없는 것. 콘솔이 이 구분을 보여줘야 현장에서 바로 진단된다.
+        if (viewers == null) {
             return skipped(now, "no-viewers");
+        }
+        if (viewers <= 0) {
+            return skipped(now, "zero-viewers");
         }
 
         double engagement = (double) window.uniqueChatters() / viewers;
+        lastEngagement = engagement;
 
         // 가드 1: 워밍업. 인사 러시가 baseline 없이 판정되면 방송 첫 3분이
-        // 매번 하이라이트가 된다. baseline 적재는 계속한다 — 워밍업의 목적이
-        // baseline을 채우는 것이다.
+        // 매번 하이라이트가 된다. baseline 적재는 기본 계속한다 — 워밍업의 목적이
+        // baseline을 채우는 것이다. 단 baselineDuringWarmup=false면 워밍업 표본을
+        // 버린다: 짧은 시연에서는 시작 인사 러시가 초기 baseline의 다수를 차지해
+        // median을 선점하고, 그러면 이후의 진짜 급증이 "평소"로 읽혀 묻힌다.
         if (now.isBefore(sessionStartedAt.plus(params.warmup()))) {
-            baseline.add(engagement);
+            if (params.baselineDuringWarmup()) {
+                baseline.add(engagement);
+            }
             return skipped(now, "warmup");
         }
         // 가드 7: 재시작 직후 등 baseline이 비어 있으면 z를 계산할 수 없다.
@@ -123,6 +172,7 @@ class RealtimeSessionState {
         // z는 현재 값을 넣기 전의 baseline으로 계산한다. 자기 자신이 포함되면
         // 급증 값이 median을 끌어올려 z가 눌린다.
         double z = baseline.zScore(engagement, madFloor);
+        lastZ = z;
 
         Optional<HighlightCandidate> confirmed;
         if (window.chatCount() < params.minWindowChats()) {
@@ -130,6 +180,7 @@ class RealtimeSessionState {
             // engagement는 분모(시청자)만 흔들려도 z가 널뛴다. 단 ACTIVE 중에는
             // 이탈 카운트에 산입한다 — 저활동은 판정 불가가 아니라 채팅이
             // 식었다는 신호다.
+            lastSkipReason = "quiet";
             confirmed = machine.onQuietTick(now);
         } else {
             confirmed = machine.onTick(now, z, engagement);
@@ -151,7 +202,23 @@ class RealtimeSessionState {
         return machine.forceFinalize(endedAt);
     }
 
+    /** 마지막 틱의 판정 상태다. 콘솔 스냅샷(live-snapshot)이 관측용으로 읽는다. */
+    synchronized HighlightTickView view() {
+        return new HighlightTickView(
+                machine.phase().name(),
+                lastZ,
+                lastEngagement,
+                window.chatCount(),
+                window.uniqueChatters(),
+                lastSkipReason,
+                sessionStartedAt.plus(params.warmup()),
+                params.zEnter(),
+                (int) params.engageWindow().toSeconds()
+        );
+    }
+
     private Optional<HighlightCandidate> skipped(Instant now, String reason) {
+        lastSkipReason = reason;
         if (log.isDebugEnabled()) {
             log.debug("highlight tick skipped: sessionId={} ts={} reason={} phase={}",
                     sessionId, now, reason, machine.phase());

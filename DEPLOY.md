@@ -225,14 +225,17 @@ pnpm build:win
 `.env.production`이 자동으로 읽혀 실서버 주소가 박힌다. 산출물은 `dist/`에 생긴다.
 
 ```bash
-scp C:\LAIVE\FrontEnd\dist\laive-client-*-setup.exe laive:/var/www/laive/download/
+scp C:\LAIVE\FrontEnd\dist\laive-client-*-setup.exe laive:/var/www/laive/download/laive-setup.exe
 scp C:\LAIVE\FrontEnd\dist\latest.yml               laive:/var/www/laive/download/
 ```
+
+landing 페이지 다운로드 버튼이 `/download/laive-setup.exe`로 고정되어 있으므로, scp할 때
+반드시 이 이름으로 저장한다(버전이 박힌 원본 파일명 그대로 올리면 링크가 404).
 
 다운로드 주소:
 
 ```
-https://i15c204.p.ssafy.io/download/
+https://i15c204.p.ssafy.io/download/laive-setup.exe
 ```
 
 > `electron-updater`가 아직 의존성에 없어 **자동 업데이트는 동작하지 않는다.**

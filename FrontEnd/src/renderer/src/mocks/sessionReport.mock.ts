@@ -8,6 +8,7 @@ import type {
   ViewerTimelinePoint
 } from '@renderer/types/report'
 import type { BroadcastSessionListItem } from '@renderer/types/broadcastSession'
+import type { TopViewer } from '@renderer/types/topViewer'
 
 /**
  * SC-06 세션 리포트 목 데이터.
@@ -203,6 +204,53 @@ const SESSIONS: Record<number, ReportSession> = {
   }
 }
 
+/**
+ * 열성 시청자 TOP5. 마지막 항목은 닉네임 미관측(null) 케이스로 두어 별칭 폴백이
+ * 화면에서 실제로 확인되게 한다.
+ */
+const TOP_VIEWERS: TopViewer[] = [
+  {
+    viewerId: 402,
+    nickname: '오늘만사는 저승사자 5931',
+    viewerAlias: 'viewer-e5a4',
+    chatScore: 148,
+    watchScore: 96,
+    totalScore: 412.0
+  },
+  {
+    viewerId: 15,
+    nickname: '폭주하는 레전드 820',
+    viewerAlias: 'viewer-de65',
+    chatScore: 121,
+    watchScore: 78,
+    totalScore: 331.0
+  },
+  {
+    viewerId: 6,
+    nickname: '갖고싶은 궁수 9949',
+    viewerAlias: 'viewer-444f',
+    chatScore: 84,
+    watchScore: 61,
+    totalScore: 240.0
+  },
+  {
+    viewerId: 88,
+    nickname: '꿈에서본 요괴 5647',
+    viewerAlias: 'viewer-8ee3',
+    chatScore: 52,
+    watchScore: 34,
+    totalScore: 143.0
+  },
+  {
+    viewerId: 211,
+    nickname: null,
+    viewerAlias: 'viewer-ed02',
+    chatScore: 19,
+    watchScore: 12,
+    totalScore: 51.0
+  }
+]
+
 /** 기준 리포트(9001) — 명세서 §11.1 예시 값 */
 const BASE_REPORT: SessionReport = {
   reportId: 301,
@@ -222,6 +270,7 @@ const BASE_REPORT: SessionReport = {
   segments: SEGMENTS,
   insights: INSIGHTS,
   highlights: HIGHLIGHTS,
+  topViewers: TOP_VIEWERS,
   generatedAt: '2026-07-20T16:35:00Z'
 }
 
@@ -254,6 +303,7 @@ const PARTIAL_REPORT: SessionReport = {
   segments: [],
   insights: [],
   highlights: [],
+  topViewers: [],
   generatedAt: '2026-07-22T13:41:00Z'
 }
 
@@ -275,6 +325,7 @@ const FAILED_REPORT: SessionReport = {
   segments: [],
   insights: [],
   highlights: [],
+  topViewers: [],
   generatedAt: null
 }
 
@@ -334,41 +385,53 @@ export const MOCK_ENDED_SESSIONS: BroadcastSessionListItem[] = [
     category: '로그라이크',
     thumbnailUrl: null,
     status: 'ENDED',
-    reportStatus: 'PROCESSING'
+    reportStatus: 'PROCESSING',
+    avgViewers: null,
+    peakViewers: null
   },
   {
     ...SESSIONS[9003],
     category: '저챗',
     thumbnailUrl: null,
     status: 'ENDED',
-    reportStatus: 'PARTIAL'
+    reportStatus: 'PARTIAL',
+    avgViewers: 412,
+    peakViewers: 680
   },
   {
     ...SESSIONS[9001],
     category: '롤토체스',
     thumbnailUrl: null,
     status: 'ENDED',
-    reportStatus: 'COMPLETED'
+    reportStatus: 'COMPLETED',
+    avgViewers: 1820,
+    peakViewers: 3842
   },
   {
     ...SESSIONS[9004],
     category: '노래방',
     thumbnailUrl: null,
     status: 'ENDED',
-    reportStatus: 'FAILED'
+    reportStatus: 'FAILED',
+    avgViewers: null,
+    peakViewers: null
   },
   {
     ...SESSIONS[9005],
     category: '저챗',
     thumbnailUrl: null,
     status: 'ENDED',
-    reportStatus: 'COMPLETED'
+    reportStatus: 'COMPLETED',
+    avgViewers: 305,
+    peakViewers: 512
   },
   {
     ...SESSIONS[9006],
     category: '마리오카트',
     thumbnailUrl: null,
     status: 'ENDED',
-    reportStatus: 'COMPLETED'
+    reportStatus: 'COMPLETED',
+    avgViewers: 1240,
+    peakViewers: 2110
   }
 ]

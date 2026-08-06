@@ -16,6 +16,14 @@ import java.util.List;
 @Service
 @Transactional(readOnly = true)
 public class ReportQueryService {
+
+    /**
+     * 열성 시청자 노출 수(FR-F-03). 콘솔의 {@code LiveSnapshotService.TOP_VIEWER_LIMIT}와
+     * 같은 값으로 둔다 — 두 화면이 같은 목록 컴포넌트를 쓰는데 개수가 다르면 "방송
+     * 중에 보이던 사람이 리포트에서 사라졌다"로 읽힌다.
+     */
+    private static final int TOP_VIEWER_LIMIT = 5;
+
     private final SessionReportQueryRepository repository;
 
     public ReportQueryService(SessionReportQueryRepository repository) {
@@ -31,7 +39,7 @@ public class ReportQueryService {
         double progress = progress(report, triggers);
         if (report.status() == ReportStatus.PROCESSING) {
             return new SessionReportDetail(
-                    report, List.of(), triggers, List.of(), List.of(), List.of(), progress);
+                    report, List.of(), triggers, List.of(), List.of(), List.of(), List.of(), progress);
         }
         return new SessionReportDetail(
                 report,
@@ -40,6 +48,9 @@ public class ReportQueryService {
                 repository.findInsights(report.reportId()),
                 repository.findHighlights(report.reportId()),
                 repository.findPlatformMetrics(report.reportId()),
+                // sessionId 기준이다 — 점수는 reportId가 아니라 세션에 달려 있고,
+                // 방송 종료 시점에 이미 확정 저장돼 있어 리포트 생성보다 앞선다.
+                repository.findTopViewers(sessionId, TOP_VIEWER_LIMIT),
                 progress
         );
     }

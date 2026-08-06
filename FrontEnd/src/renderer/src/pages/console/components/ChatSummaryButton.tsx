@@ -13,11 +13,7 @@ import { formatCount } from '@renderer/lib/format'
  * 생성 결과를 여기서 직접 보여주지 않는다 — 요약은 CHAT_SUMMARY 브리핑으로 저장되어
  * 다음 스냅샷 폴링에 브리핑 피드로 나타난다. 두 곳에 같은 내용을 띄우면 중복이다.
  */
-export default function ChatSummaryButton({
-  sessionId
-}: {
-  sessionId: number
-}): React.JSX.Element {
+export default function ChatSummaryButton({ sessionId }: { sessionId: number }): React.JSX.Element {
   const [requesting, setRequesting] = useState(false)
   /** 남은 쿨다운(초). 0보다 크면 버튼을 잠근다. */
   const [cooldownSec, setCooldownSec] = useState(0)
@@ -73,11 +69,7 @@ export default function ChatSummaryButton({
         onClick={() => void handleClick()}
       >
         <Sparkles className="size-4" strokeWidth={1.8} aria-hidden />
-        {requesting
-          ? '요청 중…'
-          : cooldownSec > 0
-            ? `${cooldownSec}초 후 가능`
-            : '지금 여론 요약'}
+        {requesting ? '요청 중…' : cooldownSec > 0 ? `${cooldownSec}초 후 가능` : '지금 여론 요약'}
       </Button>
       {notice && <p className="text-micro text-muted-foreground">{notice}</p>}
     </div>

@@ -5,12 +5,13 @@ import { Button } from '@renderer/components/ui/button'
 import { Skeleton } from '@renderer/components/ui/skeleton'
 import ClipThumbnail from '@renderer/components/common/ClipThumbnail'
 import { EmptyState, ErrorState } from '@renderer/components/common/StateView'
-import BrowserChrome from '@renderer/components/common/BrowserChrome'
+import PublicPageShell from '@renderer/components/common/PublicPageShell'
 import PerformanceSummary from './components/PerformanceSummary'
 import ProfileSummary from './components/ProfileSummary'
 import { fetchPublicPortfolio, isPortfolioNotPublic } from '@renderer/api/portfolio'
 import { useAsyncData } from '@renderer/hooks/useAsyncData'
 import { openExternal } from '@renderer/lib/desktopBridge'
+import { PUBLIC_WEB_ORIGIN } from '@renderer/api/config'
 import { PATHS } from '@renderer/routes/paths'
 
 /**
@@ -22,7 +23,14 @@ import { PATHS } from '@renderer/routes/paths'
  * 명세서 §12.4대로 편집용 상태(isPublic·publishedAt)는 응답에도 화면에도 없다.
  * SC-11 비즈니스 매칭에서 이 경로로 넘어오게 된다.
  */
-export default function PortfolioPublicPage(): React.JSX.Element {
+interface PortfolioPublicPageProps {
+  /** 웹 빌드에서 true — 가짜 브라우저 크롬 없이 본문만 렌더한다. */
+  standalone?: boolean
+}
+
+export default function PortfolioPublicPage({
+  standalone = false
+}: PortfolioPublicPageProps): React.JSX.Element {
   const navigate = useNavigate()
   const { publicSlug = '' } = useParams<{ publicSlug: string }>()
 
@@ -45,12 +53,16 @@ export default function PortfolioPublicPage(): React.JSX.Element {
   }
 
   return (
-    <BrowserChrome url={`streampilot.tv/p/${publicSlug}`} onBack={goBackToApp}>
+    <PublicPageShell
+      standalone={standalone}
+      url={`${PUBLIC_WEB_ORIGIN}/p/${publicSlug}`}
+      onBack={goBackToApp}
+    >
       {loading && (
         <div className="flex flex-col gap-6 p-8">
           <Skeleton className="h-16 w-64" />
           <Skeleton className="h-20 w-full" />
-          <Skeleton className="h-[200px] w-full rounded-xl" />
+          <Skeleton className="h-50 w-full rounded-xl" />
         </div>
       )}
 
@@ -69,7 +81,7 @@ export default function PortfolioPublicPage(): React.JSX.Element {
       )}
 
       {!loading && !error && data && (
-        <article className="mx-auto flex max-w-[840px] flex-col gap-8 p-8">
+        <article className="mx-auto flex max-w-210 flex-col gap-8 p-8">
           <header className="flex flex-col gap-4">
             <ProfileSummary profile={data.profile} tags={data.tags} variant="plain" />
             <h1 className="text-display font-extrabold tracking-[-0.03em]">{data.title}</h1>
@@ -106,7 +118,7 @@ export default function PortfolioPublicPage(): React.JSX.Element {
                         size="sm"
                         onClick={() => openExternal(highlight.clipUrl as string)}
                       >
-                        <Play className="size-[14px]" strokeWidth={1.8} aria-hidden />
+                        <Play className="size-3.5" strokeWidth={1.8} aria-hidden />
                         재생
                       </Button>
                     )}
@@ -127,7 +139,7 @@ export default function PortfolioPublicPage(): React.JSX.Element {
                     size="sm"
                     onClick={() => openExternal(`mailto:${data.contactEmail}`)}
                   >
-                    <Mail className="size-[14px]" strokeWidth={1.8} aria-hidden />
+                    <Mail className="size-3.5" strokeWidth={1.8} aria-hidden />
                     {data.contactEmail}
                   </Button>
                 )}
@@ -138,7 +150,7 @@ export default function PortfolioPublicPage(): React.JSX.Element {
                     size="sm"
                     onClick={() => openExternal(data.contactUrl as string)}
                   >
-                    <Link2 className="size-[14px]" strokeWidth={1.8} aria-hidden />
+                    <Link2 className="size-3.5" strokeWidth={1.8} aria-hidden />
                     문의 링크
                   </Button>
                 )}
@@ -147,6 +159,6 @@ export default function PortfolioPublicPage(): React.JSX.Element {
           )}
         </article>
       )}
-    </BrowserChrome>
+    </PublicPageShell>
   )
 }

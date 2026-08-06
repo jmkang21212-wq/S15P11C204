@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '@renderer/components/ui/button'
+import { Checkbox } from '@renderer/components/ui/checkbox'
 import { Input } from '@renderer/components/ui/input'
 import {
   AlertDialog,
@@ -15,13 +16,14 @@ import {
 } from '@renderer/components/ui/alert-dialog'
 import { cn } from '@renderer/lib/utils'
 import { useObs } from '@renderer/hooks/useObs'
-import { usePrimaryPlatformAccount } from '@renderer/hooks/usePlatformAccounts'
+import { usePlatformAccounts } from '@renderer/hooks/usePlatformAccounts'
 import { ApiError } from '@renderer/api/client'
 import { endSession, fetchCurrentSession, startSession } from '@renderer/api/broadcastSessions'
 import { getDashboard } from '@renderer/api/dashboard'
 import { finishRecording, startRecording } from '@renderer/api/recording'
 import { PATHS } from '@renderer/routes/paths'
 import type { ObsConnStatus } from '@renderer/types/obs'
+import { PLATFORM_LABEL } from '@renderer/types/platformAccount'
 
 /** 녹화가 돌고 있었는데 결과 경로를 못 얻었을 때 FAILED 보고에 채우는 자리표시자.
  * FinishRecordingRequest.outputPath는 @NotBlank라 빈 문자열을 보낼 수 없고, FAILED
@@ -84,7 +86,11 @@ export default function BroadcastControl({
 }: BroadcastControlProps): React.JSX.Element {
   const navigate = useNavigate()
   const obs = useObs()
-  const { account: platformAccount, loading: platformAccountLoading } = usePrimaryPlatformAccount()
+  const { accounts: platformAccounts, loading: platformAccountLoading } = usePlatformAccounts()
+  const connectedAccounts = (platformAccounts ?? []).filter(
+    (a) => a.connectionStatus === 'CONNECTED'
+  )
+  const [selectedAccountIds, setSelectedAccountIds] = useState<number[]>([])
 
   const [showConnectForm, setShowConnectForm] = useState(false)
   const [url, setUrl] = useState('ws://127.0.0.1:4455')
@@ -156,6 +162,18 @@ export default function BroadcastControl({
     }
   }, [showStartForm, prefilled])
 
+  /** 시작 폼을 열 때 연동된 계정을 기본으로 전부 선택한다. */
+  const openStartForm = (): void => {
+    setSelectedAccountIds(connectedAccounts.map((a) => a.platformAccountId))
+    setShowStartForm(true)
+  }
+
+  const toggleAccount = (id: number): void => {
+    setSelectedAccountIds((prev) =>
+      prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]
+    )
+  }
+
   const handleConnect = async (): Promise<void> => {
     setError(null)
     setBusy(true)
@@ -170,7 +188,7 @@ export default function BroadcastControl({
   }
 
   const handleStart = async (): Promise<void> => {
-    if (!platformAccount) return
+    if (selectedAccountIds.length === 0) return
     const trimmed = title.trim()
     if (!trimmed) {
       setError('방송 제목을 입력해 주세요.')
@@ -181,7 +199,7 @@ export default function BroadcastControl({
     setError(null)
     try {
       const result = await startSession({
-        platformAccountId: platformAccount.platformAccountId,
+        platformAccountIds: selectedAccountIds,
         calendarEventId,
         title: trimmed,
         category: null,
@@ -329,7 +347,10 @@ export default function BroadcastControl({
         </AlertDialog>
       ) : connected ? (
         <>
-          <Button size="sm" onClick={() => setShowStartForm((v) => !v)}>
+          <Button
+            size="sm"
+            onClick={() => (showStartForm ? setShowStartForm(false) : openStartForm())}
+          >
             방송 시작
           </Button>
           <Button size="sm" variant="ghost" onClick={() => obs.disconnect()}>
@@ -375,8 +396,29 @@ export default function BroadcastControl({
         <div className="absolute top-full right-0 z-50 mt-2 flex w-72 flex-col gap-2 rounded-lg border bg-card p-3 shadow-md">
           {platformAccountLoading ? (
             <p className="text-caption text-muted-foreground">연동 계정을 확인하는 중…</p>
-          ) : platformAccount ? (
+          ) : connectedAccounts.length > 0 ? (
             <>
+              {/* 연동 계정이 2개 이상일 때만 선택 목록을 보여준다 — 하나뿐이면 지금처럼 자동 선택 */}
+              {connectedAccounts.length > 1 && (
+                <div className="flex flex-col gap-1.5 border-b pb-2">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    동시에 방송할 채널
+                  </span>
+                  {connectedAccounts.map((account) => (
+                    <label
+                      key={account.platformAccountId}
+                      className="flex items-center gap-2 text-xs"
+                    >
+                      <Checkbox
+                        checked={selectedAccountIds.includes(account.platformAccountId)}
+                        onCheckedChange={() => toggleAccount(account.platformAccountId)}
+                      />
+                      {PLATFORM_LABEL[account.platform]} · {account.channelName}
+                    </label>
+                  ))}
+                </div>
+              )}
+
               <label className="text-xs font-medium text-muted-foreground">방송 제목</label>
               <Input
                 value={title}
@@ -387,15 +429,20 @@ export default function BroadcastControl({
               {/*
                 이 제목이 치지직에도 반영된다는 사실을 밝혀 둔다 — 방송 중에는 우측
                 패널에서 같은 값을 바꾸게 되므로, 둘이 별개라는 오해를 미리 막는다.
+                유튜브는 LAIVE가 제목을 바꾸지 않는다 — 진행 중인 방송을 관찰만 한다.
               */}
               <p className="text-micro leading-relaxed text-muted-foreground">
                 {calendarEventId === null
                   ? '예정된 일정 없이 시작해요.'
                   : '예정된 일정과 연결해 시작해요.'}{' '}
-                치지직 채널 제목에도 함께 반영돼요.
+                치지직 채널 제목에도 함께 반영돼요. 유튜브는 이미 진행 중인 방송을 수집만 해요.
               </p>
               {error && <p className="text-xs text-destructive">{error}</p>}
-              <Button size="sm" onClick={() => void handleStart()} disabled={busy}>
+              <Button
+                size="sm"
+                onClick={() => void handleStart()}
+                disabled={busy || selectedAccountIds.length === 0}
+              >
                 {busy ? '시작하는 중…' : '방송 시작'}
               </Button>
             </>

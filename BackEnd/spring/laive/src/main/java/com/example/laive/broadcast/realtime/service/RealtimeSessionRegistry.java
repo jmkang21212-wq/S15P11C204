@@ -26,6 +26,12 @@ public class RealtimeSessionRegistry {
      * 시청자 수를 이 시간 넘게 못 받으면 모른다고 답한다(HIGHLIGHT_SPEC 가드 4).
      * 죽은 값으로 engagement를 계산하면 시청자가 빠져나간 뒤의 채팅 급증이
      * 실제보다 크게 잡힌다.
+     *
+     * <p>기준 시각은 measuredAt(수집기 시계)이 아니라 서버 수신 시각이다(가드 8 —
+     * 클라이언트 시계를 신뢰하지 않는다). measuredAt으로 재면 수집기와 서버의
+     * 시계가 5분 이상 어긋났을 때(Docker VM 드리프트 등) 10초마다 멀쩡히 도착하는
+     * 값이 전부 "오래됐다"로 버려져, 판정기만 no-viewers에 갇힌다 — 신선도 검사가
+     * 없는 콘솔·대시보드 표시는 정상이라 원인을 찾기 어려운 증상이 된다.
      */
     private static final Duration VIEWER_STALENESS = Duration.ofMinutes(5);
 
@@ -77,23 +83,36 @@ public class RealtimeSessionRegistry {
         return statesBySession.values();
     }
 
-    /** 시청자 수 측정을 반영한다. 재전송으로 과거 배치가 늦게 와도 최신 측정만 남긴다. */
+    /**
+     * 판정기의 마지막 틱 상태다(관측 전용 — 콘솔 스냅샷이 쓴다).
+     * 미등록 세션(방송 전·종료 후·재시작 직후 lazy 재등록 전)이면 비어 있다.
+     */
+    public Optional<HighlightTickView> highlightView(long sessionId) {
+        return Optional.ofNullable(statesBySession.get(sessionId))
+                .map(RealtimeSessionState::view);
+    }
+
+    /**
+     * 시청자 수 측정을 반영한다. 재전송으로 과거 배치가 늦게 와도 최신 측정만
+     * 남긴다 — 이 "어느 쪽이 최신인가" 비교는 같은 수집기 시계끼리라 measuredAt이
+     * 맞고, 신선도(수신이 끊겼는가)만 서버 시계로 잰다.
+     */
     public void recordViewers(long sessionId, int viewerCount, Instant measuredAt) {
         viewersBySession.merge(
                 sessionId,
-                new ViewerSample(viewerCount, measuredAt),
+                new ViewerSample(viewerCount, measuredAt, clock.instant()),
                 (existing, candidate) ->
                         existing.measuredAt().isAfter(candidate.measuredAt()) ? existing : candidate
         );
     }
 
-    /** 최신 시청자 수를 반환한다. 없거나 5분 넘게 오래됐으면 null이다. */
+    /** 최신 시청자 수를 반환한다. 없거나 수신이 5분 넘게 끊겼으면 null이다. */
     public Integer currentViewers(long sessionId) {
         ViewerSample sample = viewersBySession.get(sessionId);
         if (sample == null) {
             return null;
         }
-        if (sample.measuredAt().plus(VIEWER_STALENESS).isBefore(clock.instant())) {
+        if (sample.receivedAt().plus(VIEWER_STALENESS).isBefore(clock.instant())) {
             return null;
         }
         return sample.viewerCount();
@@ -119,6 +138,7 @@ public class RealtimeSessionRegistry {
     public record FinalizedHighlight(Instant sessionStartedAt, HighlightCandidate candidate) {
     }
 
-    private record ViewerSample(int viewerCount, Instant measuredAt) {
+    /** @param receivedAt 서버 수신 시각 — 신선도 검사 기준(가드 8). measuredAt은 수집기 시계다 */
+    private record ViewerSample(int viewerCount, Instant measuredAt, Instant receivedAt) {
     }
 }

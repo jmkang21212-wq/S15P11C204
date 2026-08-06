@@ -45,7 +45,7 @@ public class PlatformException extends RuntimeException {
         return new PlatformException(
                 HttpStatus.CONFLICT,
                 "PLATFORM_SCOPE_INSUFFICIENT",
-                "이 기능에 필요한 권한이 없어요. 치지직 채널을 다시 연동해 주세요."
+                "이 기능에 필요한 권한이 없어요. 플랫폼 채널을 다시 연동해 주세요."
         );
     }
 

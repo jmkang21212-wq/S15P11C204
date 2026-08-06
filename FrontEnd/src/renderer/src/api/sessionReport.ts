@@ -6,6 +6,7 @@ import type {
   SegmentType,
   SessionReportResult
 } from '@renderer/types/report'
+import type { TopViewer } from '@renderer/types/topViewer'
 
 /**
  * SC-06 세션 리포트 데이터 소스 — `SessionReportController`
@@ -104,6 +105,8 @@ interface RawSessionReport {
   triggers: RawReportTrigger[]
   insights: RawReportInsight[]
   highlights: RawReportHighlight[]
+  /** BE `TopViewerResponse`와 필드가 1:1이라 변환 없이 그대로 쓴다(live-snapshot과도 같은 모양). */
+  topViewers: TopViewer[]
   generatedAt: string | null
 }
 type RawSessionReportResult = RawSessionReportProcessing | RawSessionReport
@@ -132,6 +135,8 @@ function normalize(raw: RawSessionReportResult): SessionReportResult {
     segments: raw.triggers.map(toSegment),
     insights: raw.insights,
     highlights: raw.highlights.map(toHighlight),
+    // 이 필드가 없던 서버(구버전)와 붙어도 화면이 죽지 않게 빈 배열로 떨어뜨린다.
+    topViewers: raw.topViewers ?? [],
     generatedAt: raw.generatedAt
   }
 }

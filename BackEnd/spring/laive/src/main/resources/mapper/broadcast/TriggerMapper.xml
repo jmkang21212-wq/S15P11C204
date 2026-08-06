@@ -63,4 +63,18 @@
         ON CONFLICT (session_id, start_ms) DO NOTHING
     </insert>
 
+    <select id="countChatSurgeTriggers" resultType="int">
+        SELECT COUNT(*)
+          FROM triggers
+         WHERE session_id = #{sessionId}
+           AND trigger_type = 'CHAT_SURGE'
+    </select>
+
+    <select id="findLastChatSurgeEndedAt" resultType="java.time.Instant">
+        SELECT MAX(ended_at)
+          FROM triggers
+         WHERE session_id = #{sessionId}
+           AND trigger_type = 'CHAT_SURGE'
+    </select>
+
 </mapper>

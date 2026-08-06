@@ -120,7 +120,7 @@ export default function GoalRoadmapPanel({
         <h2 className="text-sm font-semibold">목표 로드맵</h2>
         {canRegenerate && (
           <Button variant="ghost" size="sm" disabled={regenerating} onClick={onRegenerate}>
-            <RefreshCw className="size-[14px]" strokeWidth={1.8} aria-hidden />
+            <RefreshCw className="size-3.5" strokeWidth={1.8} aria-hidden />
             {regenerating ? '요청 중…' : '다시 추천'}
           </Button>
         )}
@@ -143,7 +143,7 @@ export default function GoalRoadmapPanel({
       {roadmapLoading && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           {Array.from({ length: 3 }, (_, i) => (
-            <Skeleton key={i} className="h-[220px] w-full rounded-xl" />
+            <Skeleton key={i} className="h-55 w-full rounded-xl" />
           ))}
         </div>
       )}
@@ -178,7 +178,7 @@ export default function GoalRoadmapPanel({
       {/* ── 채택된 목표 ── 개수가 유동적이라 3열로 채우고 넘치면 다음 줄로 흐른다 */}
       {goalsLoading && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <Skeleton className="h-[200px] w-full rounded-xl" />
+          <Skeleton className="h-50 w-full rounded-xl" />
         </div>
       )}
 

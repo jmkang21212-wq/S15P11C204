@@ -114,9 +114,7 @@ export class AudioStreamClient {
     } catch (e) {
       this.teardown()
       this.handlers.onStatus('ERROR')
-      this.handlers.onError(
-        e instanceof Error ? e.message : '음성 스트리밍을 시작할 수 없어요'
-      )
+      this.handlers.onError(e instanceof Error ? e.message : '음성 스트리밍을 시작할 수 없어요')
     }
   }
 

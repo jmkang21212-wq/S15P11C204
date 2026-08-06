@@ -24,7 +24,7 @@ import java.util.List;
 public class YouTubeOAuthClient {
 
     private static final Logger log = LoggerFactory.getLogger(YouTubeOAuthClient.class);
-    private static final String SCOPE = "https://www.googleapis.com/auth/youtube.readonly";
+    private static final String SCOPE = "https://www.googleapis.com/auth/youtube.force-ssl";
 
     private final RestClient restClient;
     private final PlatformProperties.YouTube properties;

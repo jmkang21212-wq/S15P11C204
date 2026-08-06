@@ -44,9 +44,16 @@ export function useCurrentSession(mode: 'owner' | 'follower' = 'owner'): UseCurr
   // 15초마다 깜빡이므로, 마지막으로 성공한 값을 별도 state로 붙들어 그걸 반환한다.
   // effect가 아니라 렌더 중 조건부 setState로 조정한다 — React가 공식적으로 허용하는
   // "이전 렌더 값을 저장" 패턴이며, 다음 값이 같으면 다시 렌더하지 않는다.
+  //
+  // 로딩 판정은 lastGood이 아니라 settledOnce로 한다. 진행 중인 방송이 없으면 조회가
+  // 성공해도 값이 null이라 lastGood이 영영 null로 남는데, 그걸 로딩으로 치면 폴링이 돌
+  // 때마다 화면 전체가 스켈레톤으로 되돌아간다. 실패도 "완료"로 친다 — 에러는 error로
+  // 따로 알리며, 계속 실패하는 동안 화면을 스켈레톤으로 덮을 이유는 없다.
   const [lastGood, setLastGood] = useState<BroadcastSessionDetail | null>(null)
-  if (isOwner && !asyncLoading && !error && data !== lastGood) {
-    setLastGood(data)
+  const [settledOnce, setSettledOnce] = useState(false)
+  if (isOwner && !asyncLoading) {
+    if (!error && data !== lastGood) setLastGood(data)
+    if (!settledOnce) setSettledOnce(true)
   }
 
   useEffect(() => {
@@ -89,7 +96,7 @@ export function useCurrentSession(mode: 'owner' | 'follower' = 'owner'): UseCurr
   if (isOwner) {
     return {
       session: lastGood,
-      loading: asyncLoading && lastGood === null,
+      loading: asyncLoading && !settledOnce,
       error,
       refresh: refetch
     }

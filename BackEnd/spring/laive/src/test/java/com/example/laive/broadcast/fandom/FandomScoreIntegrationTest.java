@@ -13,6 +13,7 @@ import com.example.laive.broadcast.session.domain.StartBroadcastSessionCommand;
 import com.example.laive.broadcast.session.service.BroadcastSessionTransactionService;
 import com.example.laive.platform.domain.PlatformAccountUpsert;
 import com.example.laive.platform.persistence.PlatformAccountMapper;
+import com.example.laive.report.repository.SessionReportQueryRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -61,6 +62,9 @@ class FandomScoreIntegrationTest {
 
     @Autowired
     private PlatformAccountMapper platformAccountMapper;
+
+    @Autowired
+    private SessionReportQueryRepository reportRepository;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -207,6 +211,63 @@ class FandomScoreIntegrationTest {
                 .containsEntry("watch_score", 2)
                 .containsEntry("streamer_id", f.streamerId);
         assertThat(((Number) rows.get(0).get("total_score")).doubleValue()).isEqualTo(6.0);
+    }
+
+    // ------------------------------------------------------------ 세션 리포트
+
+    /**
+     * 리포트는 {@code chat_messages}를 다시 집계하지 않고 확정 저장된
+     * {@code viewer_scores}를 읽어야 한다 — 채팅은 90일 후 삭제되므로 재집계에
+     * 기대면 오래된 리포트가 조용히 빈 목록이 된다. 확정 저장 전에 비어 있다는 것이
+     * 그 증거다.
+     *
+     * <p>그리고 역할 필터를 조회에서 다시 걸어야 한다. 저장은 스트리머 본인까지
+     * 전부 남기는 설계라, 필터를 빼면 리포트에 방장이 상위권으로 올라온다.
+     */
+    @Test
+    void 리포트_열성_시청자는_확정_저장을_읽고_스트리머를_제외한다() {
+        Fixture f = createFixture();
+        String fan = hash();
+        String streamer = hash();
+        ingestService.appendChatMessages(f.sessionId, List.of(
+                chat(fan, "팬 채팅", BASE, "한별팬1호", "common_user"),
+                chat(streamer, "방장 채팅", BASE, "한별TV", "streamer"),
+                chat(streamer, "방장 채팅2", BASE.plus(1, ChronoUnit.MINUTES), "한별TV", "streamer")
+        ));
+
+        assertThat(reportRepository.findTopViewers(f.sessionId, 5))
+                .as("확정 저장 전에는 비어 있어야 한다 — 채팅 재집계가 아니라는 뜻")
+                .isEmpty();
+
+        viewerScoreMapper.persistViewerScores(f.sessionId);
+
+        // 방장 점수(2 + 2×2 = 6.0)가 팬(1 + 1×2 = 3.0)보다 높지만 노출에서 빠진다.
+        assertThat(reportRepository.findTopViewers(f.sessionId, 5))
+                .singleElement()
+                .satisfies(viewer -> {
+                    assertThat(viewer.nickname()).isEqualTo("한별팬1호");
+                    assertThat(viewer.totalScore()).isEqualTo(3.0);
+                });
+    }
+
+    /**
+     * 같은 사람이 콘솔과 리포트에서 같은 별칭으로 보여야 한다. 파생 로직이 한 곳
+     * ({@code TopViewer.alias()})에 있는 이유이고, 복사되면 형식이 갈라져도 아무도
+     * 모른다.
+     */
+    @Test
+    void 콘솔과_리포트가_같은_시청자에게_같은_별칭을_준다() {
+        Fixture f = createFixture();
+        ingestService.appendChatMessages(f.sessionId,
+                List.of(new ChatMessageItem("sha256:a91cffee0011", "익명 채팅", BASE)));
+        viewerScoreMapper.persistViewerScores(f.sessionId);
+
+        String consoleAlias = liveSnapshotService.getSnapshot(f.streamerId, f.sessionId)
+                .topViewers().getFirst().viewerAlias();
+
+        assertThat(reportRepository.findTopViewers(f.sessionId, 5).getFirst().alias())
+                .isEqualTo(consoleAlias)
+                .isEqualTo("viewer-a91c");
     }
 
     // -------------------------------------------------------------- 픽스처

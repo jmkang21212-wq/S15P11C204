@@ -9,6 +9,7 @@ import {
   TrendingUp,
   UserRound,
   Handshake,
+  Settings,
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
@@ -39,7 +40,8 @@ const NAV_ITEMS: NavItem[] = [
   { to: PATHS.clips, label: '클립', icon: Film },
   { to: PATHS.growth, label: '성장 리포트', icon: TrendingUp },
   { to: PATHS.portfolio, label: '포트폴리오', icon: UserRound },
-  { to: PATHS.matching, label: '비즈니스 매칭', icon: Handshake }
+  { to: PATHS.matching, label: '비즈니스 매칭', icon: Handshake },
+  { to: PATHS.settings, label: '설정', icon: Settings }
 ]
 
 interface GNBProps {
@@ -124,18 +126,25 @@ export default function GNB({ live = false, liveSessionId }: GNBProps): React.JS
       setLoggingOut(false)
     }
   }
-  const primary = accounts?.find((a) => a.connectionStatus === 'CONNECTED') ?? accounts?.[0] ?? null
-  const linkStatus: 'connected' | 'reauth' | 'none' =
-    primary === null
-      ? 'none'
-      : primary.connectionStatus === 'REAUTH_REQUIRED'
-        ? 'reauth'
-        : 'connected'
+  // 다중 연동을 지원한다 — 하나라도 REAUTH_REQUIRED면 경고를 우선 보여준다.
+  const connectedAccounts = accounts?.filter((a) => a.connectionStatus === 'CONNECTED') ?? []
+  const reauthAccount = accounts?.find((a) => a.connectionStatus === 'REAUTH_REQUIRED') ?? null
+  const linkStatus: 'connected' | 'reauth' | 'none' = reauthAccount
+    ? 'reauth'
+    : connectedAccounts.length > 0
+      ? 'connected'
+      : 'none'
+  const connectedLabel =
+    connectedAccounts.length >= 2
+      ? `연동됨 · ${connectedAccounts.length}개 채널`
+      : connectedAccounts.length === 1
+        ? `연동됨 · ${connectedAccounts[0].channelName}`
+        : '연동됨'
   return (
     <nav
       className={cn(
         'flex h-full shrink-0 flex-col border-r bg-card transition-[width] duration-200',
-        collapsed ? 'w-[60px] items-center' : 'w-[232px]'
+        collapsed ? 'w-15 items-center' : 'w-58'
       )}
     >
       {/* 로고 + 펼침/접힘 토글 */}
@@ -207,7 +216,7 @@ export default function GNB({ live = false, liveSessionId }: GNBProps): React.JS
                 )
               }
             >
-              <Icon className="size-[18px] shrink-0" strokeWidth={1.8} aria-hidden />
+              <Icon className="size-4.5 shrink-0" strokeWidth={1.8} aria-hidden />
               <GnbLabel show={!collapsed}>{label}</GnbLabel>
             </NavLink>
           </li>
@@ -229,7 +238,7 @@ export default function GNB({ live = false, liveSessionId }: GNBProps): React.JS
             )}
           >
             <span className="size-2 shrink-0 rounded-full bg-success" aria-hidden />
-            <GnbLabel show={!collapsed}>연동됨{primary && ` · ${primary.channelName}`}</GnbLabel>
+            <GnbLabel show={!collapsed}>{connectedLabel}</GnbLabel>
           </div>
         ) : (
           <button

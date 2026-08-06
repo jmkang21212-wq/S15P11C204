@@ -18,6 +18,13 @@ import java.time.Duration;
  * @param maxActive      이 시간을 넘긴 구간은 강제 확정한다
  * @param cooldown       확정 직후 판정을 쉬는 시간
  * @param warmup         방송 시작 후 판정을 쉬는 시간(가드 1 — 인사 러시 오탐 방지)
+ * @param baselineDuringWarmup 워밍업 중에도 baseline을 적재할지. 기본 true —
+ *                       워밍업의 원래 목적이 baseline 채우기다. false면 워밍업 표본을
+ *                       버리고, 워밍업 안에 받은 채팅을 판정 윈도우에서도 뺀다(윈도우가
+ *                       러시를 물고 나와 첫 baseline 표본을 시드하는 것 방지). 시작 직후
+ *                       인사 러시가 "평소 수준"을 선점하는 것을 막는 시연·단방송용 옵션
+ *                       (러시가 baseline의 다수를 차지할 때 유효).
+ *                       대신 판정이 거의 빈 baseline으로 시작하므로 초반 z가 불안정하다
  * @param minWindowChats 윈도우 채팅이 이보다 적으면 그 틱은 판정하지 않는다(가드 3)
  * @param madEpsilon     MAD 절대 하한(가드 2 — 같은 값이 절반을 넘으면 MAD가 0이 된다)
  * @param madFloorChatters MAD 동적 하한(채터 수 단위). 실제 하한은
@@ -35,6 +42,7 @@ public record HighlightParams(
         Duration maxActive,
         Duration cooldown,
         Duration warmup,
+        boolean baselineDuringWarmup,
         int minWindowChats,
         double madEpsilon,
         double madFloorChatters

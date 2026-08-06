@@ -13,7 +13,9 @@ public record BroadcastSessionListItem(
         BroadcastStatus status,
         Instant startedAt,
         Instant endedAt,
-        String reportStatus
+        String reportStatus,
+        Integer avgViewers,
+        Integer peakViewers
 ) {
 }
 

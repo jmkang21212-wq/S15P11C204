@@ -32,7 +32,7 @@ export default function ClipThumbnail({
         )}
         aria-label={alt}
       >
-        <Film className="size-[18px]" strokeWidth={1.8} aria-hidden />
+        <Film className="size-4.5" strokeWidth={1.8} aria-hidden />
       </span>
     )
   }
