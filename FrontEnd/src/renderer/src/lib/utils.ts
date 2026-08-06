@@ -22,3 +22,13 @@ const twMerge = extendTailwindMerge({
 export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs))
 }
+
+/**
+ * main 프로세스가 던진 에러를 `ipcRenderer.invoke`로 받으면 Electron이
+ * "Error invoking remote method 'X': Error: <메시지>"로 감싼다. 사용자에게는
+ * 이 껍데기를 벗긴 원래 메시지만 보여준다.
+ */
+export function getIpcErrorMessage(e: unknown, fallback: string): string {
+  if (!(e instanceof Error)) return fallback
+  return e.message.replace(/^Error invoking remote method '[^']*': (Error: )?/, '')
+}
