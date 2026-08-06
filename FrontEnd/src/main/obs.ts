@@ -132,6 +132,14 @@ export function registerObsIpc(): void {
       } catch (e) {
         // OBS 미실행·WebSocket 서버 꺼짐·비밀번호 오류 등 → graceful
         setStatus('DISCONNECTED')
+        // ECONNREFUSED: OBS가 아예 꺼져 있거나 WebSocket 서버가 비활성화된 경우.
+        // Node의 원본 메시지("connect ECONNREFUSED 127.0.0.1:4455")는 사용자에게 그대로
+        // 보여주기엔 낯설어서, 여기서 뜻이 통하는 문구로 바꿔 던진다.
+        const code = (e as { code?: string })?.code
+        const message = e instanceof Error ? e.message : ''
+        if (code === 'ECONNREFUSED' || message.includes('ECONNREFUSED')) {
+          throw new Error('OBS가 실행되어 있지 않아요. OBS를 켜고 WebSocket 서버를 확인해 주세요.')
+        }
         throw new Error(e instanceof Error ? e.message : 'OBS 연결에 실패했어요')
       }
     }
