@@ -29,7 +29,7 @@ export default function SessionRow({ session, onClick }: SessionRowProps): React
         }
       }}
       className={cn(
-        'flex cursor-pointer items-center gap-4 px-5 py-4 transition-colors hover:bg-muted/40',
+        'flex cursor-pointer items-center gap-4 px-5 py-5 transition-colors hover:bg-muted/40',
         'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'
       )}
     >
@@ -67,7 +67,7 @@ export default function SessionRow({ session, onClick }: SessionRowProps): React
 /** 목록 로딩 중 자리를 지키는 스켈레톤 행. */
 export function SessionRowSkeleton(): React.JSX.Element {
   return (
-    <div className="flex items-center gap-4 px-5 py-4">
+    <div className="flex items-center gap-4 px-5 py-5">
       <div className="min-w-0 flex-1 space-y-2">
         <Skeleton className="h-5 w-48" />
         <Skeleton className="h-3 w-64" />

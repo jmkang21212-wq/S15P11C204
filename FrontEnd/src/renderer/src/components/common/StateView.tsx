@@ -38,7 +38,7 @@ export function EmptyState({
           <Icon className="size-5.5" strokeWidth={1.8} aria-hidden />
         </span>
       )}
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-2">
         <p className="text-sm font-semibold">{title}</p>
         {description && <p className="text-xs text-muted-foreground">{description}</p>}
       </div>
@@ -71,7 +71,7 @@ export function ErrorState({
       <span className="flex size-11 items-center justify-center rounded-full bg-destructive/10 text-destructive">
         <AlertCircle className="size-5.5" strokeWidth={1.8} aria-hidden />
       </span>
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-2">
         <p className="text-sm font-semibold">{title}</p>
         <p className="text-xs text-muted-foreground">{message}</p>
       </div>
