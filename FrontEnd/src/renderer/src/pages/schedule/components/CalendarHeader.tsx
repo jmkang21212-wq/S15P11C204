@@ -67,7 +67,7 @@ export default function CalendarHeader({
         <Button variant="outline" size="icon" onClick={onPrevMonth} aria-label="이전 달">
           ◀
         </Button>
-        <span className="min-w-32 text-center text-title font-bold">
+        <span className="min-w-32 text-center text-lg font-bold">
           {year}년 {month + 1}월
         </span>
         <Button variant="outline" size="icon" onClick={onNextMonth} aria-label="다음 달">

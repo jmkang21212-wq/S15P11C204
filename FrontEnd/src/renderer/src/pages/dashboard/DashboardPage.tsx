@@ -57,10 +57,10 @@ export default function DashboardPage(): React.JSX.Element {
   return (
     <div className="flex flex-col gap-4 p-8">
       <header>
-        <h1 className="text-2xl font-bold tracking-tight">
+        <h1 className="text-title font-bold tracking-[-0.02em]">
           좋은 저녁이에요, {streamer?.nickname ?? '스트리머'}님
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">{today}</p>
+        <p className="text-xs text-muted-foreground">{today}</p>
       </header>
 
       {/* 스켈레톤·에러는 보여줄 값이 아직 없을 때만. 재조회 중에는 이전 화면을 유지한다. */}
