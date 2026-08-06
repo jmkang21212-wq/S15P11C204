@@ -127,7 +127,7 @@ public class AuthController {
         return ResponseCookie.from(properties.refreshCookie().name(), token.value())
                 .httpOnly(true)
                 .secure(properties.refreshCookie().secure())
-                .sameSite("Lax")
+                .sameSite(sameSite())
                 .path("/api/v1/auth")
                 .maxAge(properties.refreshCookie().ttl())
                 .build();
@@ -138,9 +138,17 @@ public class AuthController {
         return ResponseCookie.from(properties.refreshCookie().name(), "")
                 .httpOnly(true)
                 .secure(properties.refreshCookie().secure())
-                .sameSite("Lax")
+                .sameSite(sameSite())
                 .path("/api/v1/auth")
                 .maxAge(0)
                 .build();
+    }
+
+    private String sameSite() {
+        // 설치형 Electron 앱은 렌더러가 file:// 오리진이라 API 호출이 크로스 사이트다.
+        // Lax면 브라우저가 refresh 요청에 쿠키를 싣지 않아 로그인이 마지막 단계(401)에서
+        // 끊긴다. None은 Secure가 필수라 secure 플래그와 묶는다 — 배포(HTTPS)는 None,
+        // 로컬 개발(http, 같은 사이트라 Lax로 충분)은 기존 동작을 유지한다.
+        return properties.refreshCookie().secure() ? "None" : "Lax";
     }
 }
