@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@renderer/components/ui/button'
 import { cn } from '@renderer/lib/utils'
 import { formatMs, formatCount } from '@renderer/lib/format'
@@ -32,6 +33,56 @@ function ServiceDot({ label, state }: { label: string; state: DotState }): React
       {label}
     </span>
   )
+}
+
+/**
+ * 경과 시간 표시.
+ *
+ * `elapsedSeconds`는 3초 폴링(`useLiveSnapshot`) 응답에만 실려 오기 때문에 그대로 그리면
+ * 시계가 3초씩 뛴다. 새 값이 올 때마다 (값, 도착 시각)을 기준점으로 잡고 그 사이를 로컬
+ * 1초 티커로 메운다 — 표시만 매끄러워지고 폴링 주기와 서버 부하는 그대로다.
+ *
+ * 기준점을 매 응답마다 다시 잡는 게 핵심이다. 로컬 타이머가 밀리거나(창이 가려졌을 때의
+ * 백그라운드 스로틀) PC 시계가 서버와 어긋나 있어도 다음 응답에서 곧바로 교정된다.
+ *
+ * LIVE일 때만 굴린다 — PREPARING은 startedAt이 없어 서버가 0을 고정으로 내려주고 종료된
+ * 세션은 값이 멈추는데, 거기에 로컬 시간을 이어 붙이면 흐르지 않은 시간이 흐른다.
+ *
+ * 별도 컴포넌트로 뺀 건 1초마다의 리렌더를 이 span 안에 가두기 위해서다. 상태줄에는
+ * OBS 상태를 구독하는 `BroadcastControl`이 같이 있어 통째로 다시 그릴 이유가 없다.
+ */
+function ElapsedClock({ session }: { session: LiveSnapshotSession }): React.JSX.Element {
+  const live = session.status === 'LIVE'
+  const [ticked, setTicked] = useState(session.elapsedSeconds)
+
+  /**
+   * 기준점은 state가 아니라 ref다. 새 응답이 올 때마다 갱신해야 하는데 effect 안에서
+   * setState를 동기 호출하면 응답마다 렌더가 한 번씩 더 붙는다(react-hooks/set-state-in-effect).
+   * 화면에 그리는 값은 아래 1초 티커가 따로 들고 있으므로 기준점 자체는 렌더를 유발할
+   * 이유가 없다.
+   */
+  const anchorRef = useRef<{ seconds: number; at: number } | null>(null)
+
+  useEffect(() => {
+    anchorRef.current = live ? { seconds: session.elapsedSeconds, at: Date.now() } : null
+  }, [live, session.elapsedSeconds])
+
+  useEffect(() => {
+    if (!live) return
+    const id = window.setInterval(() => {
+      const anchor = anchorRef.current
+      if (anchor) {
+        setTicked(anchor.seconds + Math.max(0, Math.floor((Date.now() - anchor.at) / 1000)))
+      }
+    }, 1_000)
+    return () => window.clearInterval(id)
+  }, [live])
+
+  // 서버 값보다 뒤로 가지 않게 둘 중 큰 쪽을 쓴다. 티커는 최대 1초 늦게 따라오고(기준점을
+  // 갈아 끼운 직후), 타이머가 밀렸다면 서버 값이 앞서므로 그때는 서버 값이 그대로 이긴다.
+  const elapsed = live ? Math.max(ticked, session.elapsedSeconds) : session.elapsedSeconds
+
+  return <span className="font-mono text-xl font-bold">{formatMs(elapsed * 1000)}</span>
 }
 
 export default function ConsoleStatusBar({
@@ -71,9 +122,11 @@ export default function ConsoleStatusBar({
         >
           {session ? (session.status === 'PREPARING' ? '● 준비 중' : '● LIVE') : '●'}
         </span>
-        <span className="font-mono text-xl font-bold">
-          {session ? formatMs(session.elapsedSeconds * 1000) : '--:--'}
-        </span>
+        {session ? (
+          <ElapsedClock session={session} />
+        ) : (
+          <span className="font-mono text-xl font-bold">--:--</span>
+        )}
       </div>
 
       {/* 현재 시청자 */}
