@@ -5,6 +5,23 @@
 @import './theme/semantic.css';
 
 /*
+ * 스캔 범위를 명시한다. Tailwind는 소스에서 발견한 클래스만 CSS로 만들므로,
+ * 범위를 놓치면 빌드는 성공하는데 화면만 스타일 없이 나온다.
+ *
+ * 자동 탐지는 Vite의 root를 기준으로 도는데, 웹 빌드(vite.config.web.ts)는
+ * root가 `src/web`이다. 그 안에는 클래스를 쓰는 파일이 없고 화면 컴포넌트는
+ * 전부 `src/renderer/src` 아래에 있어서, 명시하지 않으면 유틸리티가 한 개도
+ * 생성되지 않는다(공개 뷰가 텍스트만 나오던 원인).
+ *
+ * Electron 빌드는 renderer root가 `src/renderer`라 자동 탐지로도 잡히지만,
+ * @source는 자동 탐지에 더하는 방식이라 결과가 달라지지 않는다.
+ *
+ * 경로는 이 CSS 파일 기준 상대 경로다.
+ */
+@source '../**/*.{ts,tsx}';
+@source '../../../web/**/*.{ts,tsx,html}';
+
+/*
  * LAIVE — 3층: 유틸리티 매핑
  *
  * 토큰은 3층 구조다: palette(원시값) → semantic(역할, [data-theme]) → 여기(유틸리티 클래스).
@@ -63,19 +80,41 @@
   --font-mono: 'Wanted Sans Variable', 'Pretendard', system-ui, sans-serif;
 
   /* 타이포 스케일 — design.md §1 (text-title/body/caption/metric로 사용) */
-  --text-title: 1.125rem; /* 18px 화면 제목 */
-  --text-body: 0.8125rem; /* 13px 본문 */
-  --text-caption: 0.6875rem; /* 11px 캡션. design.md가 11~12px를 캡션으로 묶어 12·12.5px도 여기 흡수 */
-  --text-metric: 1.75rem; /* 28px 지표 숫자 */
+  --text-title: 2rem; /* 32px 화면 제목 */
+  --text-title--line-height: 1.2; /* 32px에 기본 1.5를 쓰면 제목 아래가 필요 이상으로 벌어진다 */
+  --text-body: 0.9375rem; /* 15px 본문 */
+  --text-caption: 0.8125rem; /* 13px 캡션. design.md가 캡션으로 묶는 대역이 통째로 여기 흡수된다 */
+  --text-metric: 2.25rem; /* 36px 지표 숫자 — 화면 제목(32px)보다 커야 KPI가 계속 지배적이다 */
+  /* text-metric에는 line-height 토큰을 두지 않는다 — 유일한 사용처인 MetricCard가
+     leading-none으로 덮어써서 아무 효과가 없다. 줄간격은 그쪽이 정한다. */
 
   /*
    * 스케일 밖 임의값을 기계적으로 흡수하며 커밋 6에서 추가한 보조 단계.
    * design.md에 명시된 4단계(title/body/caption/metric)로는 못 덮는 지점만 넣었다.
    */
-  --text-micro: 0.625rem; /* 10px — 뱃지·미니 위젯처럼 캡션보다도 더 작은 지점 (9~10.5px 흡수) */
-  --text-subtitle: 0.875rem; /* 14px — 카드·프로필 이름 헤딩 (본문보다 굵고 크게, 15px 흡수) */
-  --text-display: 1.5rem; /* 24px — 공개 뷰(비인증 웹) 히어로 제목, 앱 내부 title과 구분 (22·26px 흡수) */
-  --text-metric-sm: 1.25rem; /* 20px — 카드 안에 작게 들어가는 보조 지표 숫자 */
+  --text-micro: 0.6875rem; /* 11px — 뱃지·미니 위젯처럼 캡션보다도 더 작은 지점 */
+  --text-subtitle: 1rem; /* 16px — 카드·프로필 이름 헤딩 (본문보다 굵고 크게) */
+  --text-display: 1.75rem; /* 28px — 공개 뷰(비인증 웹) 히어로 제목, 앱 내부 title과 구분 */
+  --text-metric-sm: 1.5rem; /* 24px — 카드 안에 작게 들어가는 보조 지표 숫자 */
+
+  /*
+   * Tailwind 기본 단계도 같은 사다리 위로 끌어올린다.
+   *
+   * 위 LAIVE 토큰만 올리면 화면이 어긋난다 — 실제 코드는 text-xs(115곳)·text-sm(57곳)을
+   * LAIVE 토큰(text-caption 76곳 등)보다 오히려 더 많이 쓰고, 둘이 나란히 붙어 있는
+   * 자리도 있다(PageHeader의 캡션은 text-xs, 바로 아래 SessionRow의 메타는 text-caption).
+   * design.md §0이 막는 건 임의값(text-[18px])이지 Tailwind 기본 단계가 아니라서 이렇게 됐다.
+   *
+   * 서열은 그대로 둔다: micro(11) < caption(13) < xs(14) < body(15) < subtitle=sm(16) < base(18).
+   * subtitle과 sm은 지금도 같은 계급(14px)이라 새 값에서도 16px로 묶어 둔다.
+   * line-height는 Tailwind 기본값이 무단위 비율이라 새 크기에 알아서 따라온다.
+   */
+  --text-xs: 0.875rem; /* 12 → 14px */
+  --text-sm: 1rem; /* 14 → 16px */
+  --text-base: 1.125rem; /* 16 → 18px */
+  --text-lg: 1.25rem; /* 18 → 20px */
+  --text-xl: 1.375rem; /* 20 → 22px */
+  --text-2xl: 1.75rem; /* 24 → 28px */
 
   /* elevation — design.md §1 카드 그림자 (shadow-card로 사용) */
   --shadow-card: 0 10px 34px rgba(0, 0, 0, 0.09);
@@ -136,5 +175,44 @@
     animation:
       skeleton-reveal 150ms 150ms forwards,
       skeleton-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) 300ms infinite;
+  }
+
+  /*
+   * 버튼으로 넘기는 가로 캐러셀(리포트 하이라이트 후보)에서 네이티브 스크롤바를 숨긴다.
+   * 휠·트랙패드 스크롤은 그대로 살려 두고 막대만 감춘다 — 넘기는 수단이 버튼으로 이미
+   * 보이는데 그 아래 스크롤바가 또 깔리면 카드 하단이 지저분해진다.
+   */
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  /*
+   * 조작 컨트롤은 타이포 스케일 상향에서 제외한다.
+   *
+   * 위에서 --text-sm을 14 → 16px로 올리면 본문은 읽기 좋아지는데 버튼·입력창은 부담스러워
+   * 진다. 박스 높이(h-8 32px / h-9 36px)가 shadcn cva에 고정돼 있어 글씨만 커지고 위아래
+   * 여백이 사라지기 때문이다 — 특히 앱에서 제일 많이 쓰는 size="sm"(40곳)이 32px 안에
+   * 16px 글씨를 담게 된다.
+   *
+   * 그렇다고 --text-sm 자체를 되돌리면 페이지 본문에서 text-sm을 쓴 47곳까지 같이
+   * 작아진다. 그래서 토큰은 16px로 두고, 컨트롤만 data-slot으로 집어 14px로 되돌린다.
+   * components/ui/*는 shadcn CLI 생성물이라 손대지 않는다(design.md §0) — 위 스켈레톤과
+   * 같은 방식이다.
+   *
+   * 유틸리티 클래스(.text-sm)와 특이도가 같아(0,1,0) 나중에 선언된 이쪽이 이긴다.
+   * 그래서 호출부에서 text-* 클래스로 준 크기까지 덮어버린다 — 예외를 두려면 아래
+   * :not()에 추가한다. 지금은 버튼 size="xs"(앱 전체에 1곳) 하나뿐이라 그대로 묶어 뒀다.
+   */
+  [data-slot='button'],
+  [data-slot='input'],
+  [data-slot='textarea'],
+  [data-slot='label'],
+  [data-slot='select-trigger'],
+  [data-slot='select-item'],
+  [data-slot='tabs-trigger'] {
+    font-size: 0.875rem; /* 16 → 14px, 상향 전 크기 */
   }
 }

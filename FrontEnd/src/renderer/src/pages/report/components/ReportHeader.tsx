@@ -44,7 +44,7 @@ export default function ReportHeader({
           <ArrowLeft className="size-4.5" strokeWidth={1.8} aria-hidden />
         </Button>
 
-        <div className="flex min-w-0 flex-col gap-1.5">
+        <div className="flex min-w-0 flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="truncate text-title font-bold tracking-[-0.02em]">{session.title}</h1>
             <ReportStatusBadge status={status} />

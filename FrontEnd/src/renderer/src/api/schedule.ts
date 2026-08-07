@@ -45,20 +45,3 @@ export async function updateCalendarEvent(
 export async function cancelCalendarEvent(calendarEventId: number): Promise<CalendarEvent> {
   return updateCalendarEvent(calendarEventId, { status: 'CANCELLED' })
 }
-
-/**
- * AI 공지 문구 초안 — 실제 `POST /calendar-events/{id}/announcement-drafts`는
- * 명세서 8.4 기준 BE 미구현("보류")이라 그동안 클라이언트에서 생성해 둔다.
- * BE 구현 시 이 함수를 걷어내고 실제 호출로 교체한다.
- */
-export function buildAnnouncementDraft(event: CalendarEvent): string {
-  const time = new Date(event.startAt).toLocaleTimeString('ko-KR', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false
-  })
-  if (event.eventType === 'DAY_OFF') {
-    return `📢 오늘은 휴방입니다. 다음 방송에서 만나요! 🙌`
-  }
-  return `📢 오늘 밤 ${time}! ${event.title} 갑니다. 놓치지 마세요 🔥`
-}

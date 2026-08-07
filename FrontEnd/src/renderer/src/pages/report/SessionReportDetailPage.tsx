@@ -218,13 +218,15 @@ export default function SessionReportDetailPage(): React.JSX.Element {
           )}
 
           <InsightList insights={insights} />
+
+          {/* 사이드바가 아니라 본문 열 맨 아래에 둔다 — 썸네일이 aspect-video라 폭이 곧
+              정보량이고, 340px 사이드바에서는 한 장씩 세로로 쌓여 자리만 먹었다.
+              넓어진 폭을 가로 캐러셀로 쓴다(HighlightList). */}
+          <HighlightList highlights={highlights} onPlayClip={playClip} />
         </div>
 
         <aside className="flex flex-col gap-6">
           <SentimentBreakdown metrics={metrics} />
-          {/* 클립보다 아래에 둔다 — 복기의 1순위는 "어느 구간을 클립으로 쓸까"이고,
-              열성 시청자는 그다음에 확인하는 값이다 */}
-          <HighlightList highlights={highlights} onPlayClip={playClip} />
           <TopViewerCard viewers={topViewers} />
         </aside>
       </div>

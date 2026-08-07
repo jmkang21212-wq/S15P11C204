@@ -100,6 +100,37 @@ class RealtimeSessionStateTest {
     }
 
     @Test
+    void staleViewerCountIsLiftedToWindowChatters() {
+        // 치지직 집계 지연: 채팅한 사람이 3명인데 시청자 집계는 1명에 머무는 틱.
+        // 분모를 채터 수로 끌어올려 engagement가 1.0을 넘지 않아야 한다 —
+        // 2.0·3.0짜리 지연 아티팩트가 baseline을 선점하면 집계가 따라잡은 뒤의
+        // 진짜 버스트가 평소 이하로 읽힌다(가드 4 확장, 2026-08-07 실측).
+        RealtimeSessionState state = new RealtimeSessionState(1L, START, params(3));
+        int t = warmUpWithSteadyChat(state);
+
+        feedSteady(state, t);
+        state.tick(at(t), 1);
+
+        assertThat(state.view().skipReason()).isNull();
+        assertThat(state.view().engagement()).isEqualTo(1.0);
+    }
+
+    @Test
+    void chatsWhileReportedZeroViewersAreStillJudged() {
+        // 집계가 0인데 채팅이 들어오는 틱은 무신호가 아니라 집계 지연이다 — 판정한다.
+        RealtimeSessionState state = new RealtimeSessionState(1L, START, params(3));
+        int t = warmUpWithSteadyChat(state);
+
+        feedSteady(state, t);
+        state.tick(at(t), 0);
+        assertThat(state.view().skipReason()).isNull();
+
+        // 채팅까지 없는 0명 틱만 진짜 무신호라 zero-viewers로 쉰다.
+        state.tick(at(t + 20), 0); // 윈도우(10초)가 완전히 비도록 건너뛴다
+        assertThat(state.view().skipReason()).isEqualTo("zero-viewers");
+    }
+
+    @Test
     void lowActivityTickIsNotJudged() {
         // 윈도우 채팅 하한을 높게 잡아 급증 uid 수가 하한에 못 미치게 한다(가드 3).
         RealtimeSessionState state = new RealtimeSessionState(1L, START, params(200));

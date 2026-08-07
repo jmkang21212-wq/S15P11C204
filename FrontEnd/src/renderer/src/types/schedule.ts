@@ -1,5 +1,5 @@
 /**
- * 일정 캘린더(SC-04) 타입 — `CALENDAR_EVENTS`, `SCHEDULE_ANNOUNCEMENTS` (API §8).
+ * 일정 캘린더(SC-04) 타입 — `CALENDAR_EVENTS` (API §8).
  */
 
 export type CalendarEventType = 'BROADCAST' | 'DAY_OFF'
@@ -16,17 +16,6 @@ export interface CalendarEvent {
   status: CalendarEventStatus
   /** 전환의 출처가 된 약속. null이면 사용자가 직접 만든 일정이다. */
   promiseId: number | null
-}
-
-export type PublishStatus = 'DRAFT' | 'PUBLISHED'
-
-export interface ScheduleAnnouncement {
-  announcementId: number
-  calendarEventId: number
-  content: string
-  aiGenerated: boolean
-  publishStatus: PublishStatus
-  publishedAt: string | null
 }
 
 /** GET /calendar-events 응답 본문 (API 8.1). */

@@ -35,7 +35,19 @@ export function registerOAuthIpc(): void {
           if (url.startsWith(returnUriPrefix)) finish(url)
         }
 
-        win.webContents.on('will-redirect', (_e, url) => check(url))
+        /*
+          returnUri는 로드할 페이지가 아니라 "인증이 끝났다"는 약속된 신호다. 그래서
+          이동 자체를 취소한다 — 그냥 두면 창이 닫히는 것과 동시에 리다이렉트가 진행되어
+          커스텀 스킴 핸들러(main/index.ts)가 없는 파일을 찾고 404를 남긴다.
+          동작에는 영향이 없지만, 그 404 로그가 실제 자산 누락과 섞여 진단을 흐린다.
+        */
+        win.webContents.on('will-redirect', (event, url) => {
+          if (url.startsWith(returnUriPrefix)) {
+            event.preventDefault()
+            finish(url)
+          }
+        })
+        // will-redirect가 안 잡히는 경로(302가 아닌 이동)를 위한 안전망.
         win.webContents.on('did-navigate', (_e, url) => check(url))
         // 사용자가 인증을 마치지 않고 창을 닫으면 null
         win.on('closed', () => {

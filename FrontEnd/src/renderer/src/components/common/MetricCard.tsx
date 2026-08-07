@@ -63,7 +63,7 @@ export default function MetricCard({
           }
         : {})}
     >
-      <CardContent className="flex flex-col gap-2 px-5">
+      <CardContent className="flex flex-col gap-3 px-5">
         <div className="flex items-center gap-2 text-muted-foreground">
           <Icon className="size-4.5" strokeWidth={1.8} aria-hidden />
           <span className="text-xs font-medium">{label}</span>
