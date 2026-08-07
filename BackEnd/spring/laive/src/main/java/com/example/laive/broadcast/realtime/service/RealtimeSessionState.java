@@ -139,11 +139,18 @@ class RealtimeSessionState {
         if (viewers == null) {
             return skipped(now, "no-viewers");
         }
-        if (viewers <= 0) {
+        // 가드 4 확장: 시청자는 방금 채팅한 사람 수보다 적을 수 없다. 치지직 시청자
+        // 집계는 실제 입장보다 1분 이상 늦어, 소규모 방송에서 채터가 분모(집계)보다
+        // 먼저 늘면 그 사이 engagement가 1.0을 넘는다(예: 채터 2 ÷ 집계 1 = 2.0).
+        // 이 지연 아티팩트가 baseline에 쌓이면 집계가 따라잡은 뒤의 진짜 버스트가
+        // "평소 이하"로 읽힌다. 채팅이 있는데 집계가 0인 틱도 같은 지연이므로
+        // zero-viewers로 쉬지 않고 판정한다 — 채팅 없이 0인 틱만 진짜 무신호다.
+        int effectiveViewers = Math.max(viewers, window.uniqueChatters());
+        if (effectiveViewers <= 0) {
             return skipped(now, "zero-viewers");
         }
 
-        double engagement = (double) window.uniqueChatters() / viewers;
+        double engagement = (double) window.uniqueChatters() / effectiveViewers;
         lastEngagement = engagement;
 
         // 가드 1: 워밍업. 인사 러시가 baseline 없이 판정되면 방송 첫 3분이
@@ -167,7 +174,7 @@ class RealtimeSessionState {
         // 같은 값으로 도배되어 MAD가 붕괴하는데, ε=0.001만으로는 채터 1명 변화에
         // z가 폭발해 임계가 변별력을 잃는다. 채터 수 단위라 규모 불변이며, 하한이
         // 지배할 때 진입 문턱은 median 대비 채터 약 +zEnter×1.4826×madFloorChatters명이다.
-        double madFloor = Math.max(params.madEpsilon(), params.madFloorChatters() / viewers);
+        double madFloor = Math.max(params.madEpsilon(), params.madFloorChatters() / effectiveViewers);
 
         // z는 현재 값을 넣기 전의 baseline으로 계산한다. 자기 자신이 포함되면
         // 급증 값이 median을 끌어올려 z가 눌린다.
