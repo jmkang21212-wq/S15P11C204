@@ -1,4 +1,5 @@
 import { ipcMain, BrowserWindow } from 'electron'
+import { setBroadcastPowerGuard } from './power'
 
 /**
  * 진행 중인 방송 세션 상태를 창 사이에 릴레이한다.
@@ -25,6 +26,10 @@ export function registerSessionIpc(): void {
   /** owner 창(메인)이 새 조회 결과를 밀어 넣는다. */
   ipcMain.on('session:state', (_event, session: unknown) => {
     lastState = session
+    // 진행 중인 세션이 없으면 null이 온다. main이 "방송 중인가"를 알 수 있는 신호가
+    // 이미 여기로 흐르고 있어, 별도 IPC 없이 전력·스로틀 보호를 이 지점에 붙인다.
+    // payload 구조는 여전히 들여다보지 않는다(위 주석 참고).
+    setBroadcastPowerGuard(session !== null)
     broadcastState()
   })
 
