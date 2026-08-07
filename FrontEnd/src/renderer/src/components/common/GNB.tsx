@@ -147,17 +147,28 @@ export default function GNB({ live = false, liveSessionId }: GNBProps): React.JS
         collapsed ? 'w-15 items-center' : 'w-58'
       )}
     >
-      {/* 로고 + 펼침/접힘 토글 */}
+      {/*
+        로고 + 펼침/접힘 토글.
+
+        펼친 상태에만 높이를 고정한다(h-20). 로고를 키우는 대신 주변 여백을 줘서 상단
+        블록에 무게를 싣는 쪽이다 — logo.png가 800×218(3.67:1) 가로형이라 이미지를 키우면
+        폭이 같이 늘어나는데, 내부 폭 200px에서 접기 버튼 28px을 빼면 172px뿐이라
+        높이 46px가 한계다.
+
+        접힘 상태는 세로로 쌓여(아이콘 32 + gap 8 + 버튼 28) 내용만 68px이라 같은 높이를
+        먹이면 넘친다. 그대로 두면 100px인데, 펼침이 60 → 80px가 되면서 두 상태의
+        높이 차이는 오히려 줄어든다.
+      */}
       <div
         className={cn(
           'flex items-center p-4',
-          collapsed ? 'flex-col gap-2 justify-center' : 'justify-between'
+          collapsed ? 'flex-col gap-2 justify-center' : 'h-20 justify-between'
         )}
       >
         {collapsed ? (
           <img src={appIcon} alt="LAIVE" className="size-8 rounded-md" />
         ) : (
-          <img src={logo} alt="LAIVE" className="h-7 w-auto" />
+          <img src={logo} alt="LAIVE" className="h-8 w-auto" />
         )}
         <button
           type="button"

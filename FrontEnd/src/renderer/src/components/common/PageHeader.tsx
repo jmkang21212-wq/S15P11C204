@@ -23,7 +23,7 @@ export default function PageHeader({
 }: PageHeaderProps): React.JSX.Element {
   return (
     <header className={cn('flex flex-wrap items-start justify-between gap-4', className)}>
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-2">
         <h1 className="text-title font-bold tracking-[-0.02em]">{title}</h1>
         {caption && <p className="text-xs text-muted-foreground">{caption}</p>}
       </div>

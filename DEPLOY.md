@@ -15,19 +15,27 @@
  │     ├── /api/v1/*  ──▶ 127.0.0.1:8080  spring          │
  │     ├── /ws/audio  ──▶ 127.0.0.1:8000  voice           │
  │     ├── /clips/*   ──▶ 127.0.0.1:8080  spring          │
- │     └── /download/*──▶ /var/www/laive/download (정적)  │
+ │     ├── /download/*──▶ /var/www/laive/download (정적)  │
+ │     ├── /assets/*  ──▶ /var/www/laive/web     (정적)  │
+ │     ├── /p/<slug>  ──▶ 위 web의 index.html (SPA 폴백) │
+ │     ├── /discover  ──▶ 위 web의 index.html (SPA 폴백) │
+ │     └── /          ──▶ 127.0.0.1:8090  landing         │
  │                                                         │
  │  ┌─ laive_default 네트워크 ─────────────────────────┐  │
  │  │  spring ◀──▶ postgres · redis                    │  │
  │  │      ▲  └──▶ chat-ai(8001) · collector(8002)     │  │
  │  │      └───── voice(8000)                          │  │
  │  └───────────────────────────────────────────────────┘  │
+ │  landing 컨테이너는 위 네트워크 밖이다(정적 파일만)     │
  └─────────────────────────────────────────────────────────┘
 ```
 
-컨테이너 6개(spring · postgres · redis · voice · chat-ai · collector)가 상시 가동하고,
-nginx만 호스트에 있다. **컨테이너 포트는 전부 `127.0.0.1`에만 바인딩된다** — 이유는
-아래 [방화벽](#방화벽--절대-건드리지-말-것) 참고.
+컨테이너 7개(spring · postgres · redis · voice · chat-ai · collector · landing)가 상시
+가동하고, nginx만 호스트에 있다. **컨테이너 포트는 전부 `127.0.0.1`에만 바인딩된다** —
+이유는 아래 [방화벽](#방화벽--절대-건드리지-말-것) 참고.
+
+브라우저로 접근하는 공개 표면은 세 개이며 전부 인증이 필요 없다 — 랜딩(`/`),
+포트폴리오 공개 뷰(`/p/<slug>`), 스트리머 디렉터리(`/discover`). 배포 절차는 아래 5번.
 
 ---
 
@@ -79,11 +87,13 @@ cat ~/.ssh/id_ed25519.pub      # 출력을 GitLab > Settings > Deploy Keys 에 �
 git -C ~/laive remote set-url origin git@lab.ssafy.com:s15-webmobile1-sub1/S15P11C204.git
 ```
 
-### 1-5. 다운로드 디렉터리
+### 1-5. 정적 파일 디렉터리
+
+설치 파일(`/download/`)과 공개 웹 빌드(`/p/`·`/discover`·`/assets/`)를 담는다.
 
 ```bash
-sudo mkdir -p /var/www/laive/download
-sudo chown ubuntu:ubuntu /var/www/laive/download
+sudo mkdir -p /var/www/laive/download /var/www/laive/web
+sudo chown ubuntu:ubuntu /var/www/laive/download /var/www/laive/web
 ```
 
 새 디렉터리만 만든다. **기존 시스템 디렉터리의 퍼미션은 건드리지 않는다** (SSAFY 서버 규정).
@@ -131,13 +141,39 @@ chmod 600 ~/laive/BackEnd/spring/laive/.env ~/laive/AI/.env
 | `SWAGGER_ENABLED` | `false` | API 구조 전체가 문서로 노출된다(nginx가 막지만 이중 잠금) |
 | `NAVER_REDIRECT_URI` | `https://i15c204.p.ssafy.io/api/v1/auth/oauth/naver/callback` | 로그인 실패 |
 | `CHZZK_REDIRECT_URI` | `https://i15c204.p.ssafy.io/api/v1/platform-accounts/chzzk/callback` | 플랫폼 연동 실패 |
-| `OAUTH_ALLOWED_RETURN_URIS` | `https://i15c204.p.ssafy.io/oauth/callback` | 로그인 마지막 단계에서 거부 |
+| `OAUTH_ALLOWED_RETURN_URIS` | `laive://app/oauth/callback` (+ 아래 참고) | 앱의 API 요청이 전부 403 |
 | `CLIP_PUBLIC_BASE_URL` | `https://i15c204.p.ssafy.io/clips` | 클립 링크가 전부 localhost로 나간다 |
 | `CHATAI_BASE_URL` | `http://chat-ai:8001` | 감정 분류가 조용히 꺼진다 |
 | `COLLECTOR_BASE_URL` | `http://collector:8002` | 채팅 수집이 안 된다 |
 
-`OAUTH_ALLOWED_RETURN_URIS`는 `FrontEnd/.env.production`의 `VITE_OAUTH_RETURN_URI`와
-**문자열이 정확히 일치**해야 한다.
+`OAUTH_ALLOWED_RETURN_URIS`는 이름과 달리 **CORS 허용 오리진의 원천이기도 하다.**
+`AuthProperties.allowedOrigins()`가 이 목록에서 scheme+host를 뽑아 CORS 허용 목록을
+만든다. 즉 여기 없는 오리진에서 온 요청은 인증이 필요 없는 공개 조회까지 403이 된다.
+
+그래서 앱·웹·개발 환경의 오리진을 **콤마로 모두** 넣는다.
+
+```
+OAUTH_ALLOWED_RETURN_URIS=https://i15c204.p.ssafy.io/oauth/callback,http://localhost:5173/oauth/callback,laive://app/oauth/callback
+```
+
+| 항목 | 무엇을 위한 것인가 |
+|---|---|
+| `https://i15c204.p.ssafy.io/oauth/callback` | 공개 웹 뷰(같은 오리진). 사실상 없어도 되지만 대칭을 위해 둔다 |
+| `http://localhost:5173/oauth/callback` | `pnpm dev`로 배포 서버에 붙는 개발자용. **시연이 끝나면 지울 것** |
+| `laive://app/oauth/callback` | **설치 앱(.exe)의 오리진. 이게 없으면 앱이 아무것도 못 한다** |
+
+`laive://app`은 `src/main/index.ts`가 렌더러를 서빙하는 커스텀 스킴이다. 예전처럼
+`file://`로 로드하면 오리진이 `null`이 되는데, `null`은 URI로 표현할 수 없어 이 목록에
+등록할 방법이 아예 없다 — 설치 앱의 API가 전부 403이던 원인이다. `null`을 허용하도록
+BE를 고치면 사용자가 임의로 만든 로컬 HTML도 같은 권한을 갖게 되므로 해서는 안 된다.
+
+이 문자열은 **세 곳에 같이 박힌다.** 바꿀 때 셋을 함께 고친다.
+
+```
+src/main/index.ts            RENDERER_SCHEME · RENDERER_HOST
+FrontEnd/.env.production     VITE_OAUTH_RETURN_URI
+서버 .env                     OAUTH_ALLOWED_RETURN_URIS
+```
 
 `POSTGRES_HOST`·`REDIS_HOST`는 건드릴 필요 없다 — compose가 `postgres`/`redis`로 덮어쓴다.
 
@@ -212,6 +248,9 @@ curl -sI https://i15c204.p.ssafy.io/api/v1/auth/health
 
 한 번 띄우면 `restart: unless-stopped`라 **서버 재부팅에도 자동으로 다시 뜬다.**
 
+여기까지는 앱이 쓰는 경로만 확인한 것이다. 브라우저로 들어오는 공개 화면(랜딩 ·
+포트폴리오 · 디렉터리)은 5번에서 따로 올린다.
+
 ---
 
 ## 4. Electron 앱 배포
@@ -244,7 +283,86 @@ https://i15c204.p.ssafy.io/download/laive-setup.exe
 
 ---
 
-## 5. 코드가 바뀌었을 때
+## 5. 공개 웹 배포 — 랜딩 · 포트폴리오 · 디렉터리
+
+브라우저로 들어오는 세 화면이 443 하나를 나눠 쓴다. **Jenkins 파이프라인 밖이라
+전부 수동이다** (`deploy/jenkins/scripts/laive-deploy`는 spring·AI만 다룬다).
+
+| 주소 | 화면 | 서빙 방식 |
+|---|---|---|
+| `/` | 랜딩 | landing 컨테이너 (127.0.0.1:8090) |
+| `/p/<slug>` | 포트폴리오 공개 뷰 (SC-10) | `/var/www/laive/web` 정적 + SPA 폴백 |
+| `/discover` | 스트리머 디렉터리 (SC-11) | 같음 |
+| `/assets/*` | 위 두 화면의 JS·CSS·폰트 | 같음 |
+
+### 5-1. 랜딩 페이지
+
+저장소의 `landing/`을 서버로 옮겨 컨테이너로 띄운다. Jenkins가 관리하는 `~/laive`
+워크트리를 더럽히면 배포가 거부되므로 **홈 아래 별도 디렉터리**를 쓴다.
+
+```bash
+scp -r -i <pem> landing ubuntu@i15c204.p.ssafy.io:~/
+ssh -i <pem> ubuntu@i15c204.p.ssafy.io "cd ~/landing && docker compose up -d --build"
+```
+
+`restart: unless-stopped`라 서버 재부팅에도 자동으로 다시 뜬다. nginx 설정은 한 번만
+하면 되고(1-6), 이후 랜딩을 고칠 때는 위 두 줄만 반복한다.
+
+### 5-2. 공개 웹 빌드 (포트폴리오 · 디렉터리)
+
+Electron 렌더러 산출물(`out/renderer`)은 **웹에 올릴 수 없다** — HashRouter라 주소가
+`/#/p/abc`가 되고, CSP에 `localhost` 내부 주소가 박혀 있으며, `window.api`(preload)에
+의존하는 화면이 섞여 있다. 그래서 `src/web`을 진입점으로 하는 별도 빌드를 쓴다.
+
+로컬에서:
+
+```bash
+cd FrontEnd && pnpm build:web        # → out/web
+```
+
+서버로:
+
+```bash
+ssh -i <pem> ubuntu@i15c204.p.ssafy.io "rm -rf /var/www/laive/web/*"
+scp -r -i <pem> FrontEnd/out/web/* ubuntu@i15c204.p.ssafy.io:/var/www/laive/web/
+ssh -i <pem> ubuntu@i15c204.p.ssafy.io "chmod 755 /var/www/laive/web/assets"
+```
+
+nginx는 최초 1회만 반영하면 되고(1-6), 이후 화면을 고칠 때는 위 세 줄만 반복한다.
+**자산 파일명에 해시가 붙어 있어 `index.html`을 `no-cache`로 잡아 뒀다** — 새 빌드가
+올라가면 브라우저가 바로 새 해시를 참조한다.
+
+확인:
+
+```bash
+curl -sI https://i15c204.p.ssafy.io/assets/<빌드된 css 파일명>   # 200 + 실제 크기
+curl -sI https://i15c204.p.ssafy.io/discover                    # 200 + index.html 크기
+```
+
+`/discover`와 `/p/<slug>`의 `Content-Length`가 `index.html`과 같아야 한다 — SPA 폴백이
+동작했다는 뜻이다. 그다음 브라우저에서 `/p/<slug>` 새로고침(F5)까지 확인한다.
+
+### 5-3. 실제로 밟은 함정 세 개
+
+**① `chmod 755`를 매번 해야 한다.** Windows에는 POSIX 퍼미션이 없어 `scp -r`이 원격
+디렉터리를 `0700`으로 만든다. nginx는 `www-data`로 도니 들어갈 수 없다. 안의 파일은
+`664`로 읽을 수 있어서 더 헷갈린다 — 증상이 403이라 nginx 설정을 의심하게 된다.
+
+**② `nginx -t`만 하고 `reload`를 빠뜨리면 404가 그대로다.** 그 404는 랜딩 컨테이너가
+낸 것(`Content-Length: 153`)이고 호스트 nginx의 404는 162바이트다. 크기로 어느 쪽이
+응답했는지 가른다.
+
+**③ Tailwind 스캔 범위.** Tailwind v4는 소스에서 발견한 클래스만 CSS로 만들고, 그
+탐지 기준이 Vite의 `root`다. 웹 빌드는 root가 `src/web`인데 화면 컴포넌트는
+`src/renderer/src` 아래에 있어, 명시하지 않으면 **유틸리티가 한 개도 생성되지 않는다**
+(CSS 10 kB, 화면은 스타일 없는 텍스트). `globals.css`의 `@source` 두 줄이 그것을
+막는다 — 지우면 재현된다. 정상 크기는 70 kB대다.
+
+세 경우 모두 **HTTP는 200이라 서버 로그에 아무것도 남지 않는다.**
+
+---
+
+## 6. 코드가 바뀌었을 때
 
 ```bash
 cd ~/laive && git pull
@@ -261,11 +379,22 @@ Spring 재빌드는 2~3분, 그동안 Spring만 내려간다(DB·Redis·AI는 �
 **새 환경변수가 추가되면 서버 `.env`에도 넣어야 한다.** 이게 조용히 터지는
 유일한 유형이다 — 기본값이 있으면 에러 없이 잘못된 값으로 돌아간다.
 
-프론트가 바뀌면 4번을 다시 한다.
+바뀐 곳에 따라:
+
+| 바뀐 것 | 할 일 |
+|---|---|
+| Electron 앱 | 4번 (빌드 + `.exe` 업로드) |
+| 포트폴리오·디렉터리 화면 | 5-2 (웹 빌드 + 업로드 + `chmod`) |
+| 랜딩 | 5-1 |
+| `deploy/nginx/laive.conf` | 1-6 (`cp` → `nginx -t` → `reload`) |
+
+**포트폴리오가 새로 공개되는 것은 배포가 아니다.** 공개 뷰는 조회 시점에 API로
+데이터를 가져오므로, 다른 스트리머가 포트폴리오를 공개하면 `/p/<slug>`와 `/discover`에
+재배포 없이 나타난다.
 
 ---
 
-## 6. 방화벽 — 절대 건드리지 말 것
+## 7. 방화벽 — 절대 건드리지 말 것
 
 SSAFY 서버는 **접속 불가가 되면 복구가 안 된다(초기화만 가능).**
 
@@ -295,7 +424,7 @@ ports: ["8000:8000"]              # ❌ 방화벽 우회
 
 ---
 
-## 7. 장애 대응
+## 8. 장애 대응
 
 ### 로그
 
@@ -322,6 +451,12 @@ AI는 파일로도 남는다: `~/laive/AI/logs/voice.log`, `chatai.log`
 | 감정 분류가 안 됨 | `CHATAI_BASE_URL`이 `http://chat-ai:8001`인지 확인 |
 | 컨테이너가 계속 재시작 | 대개 `.env` 누락. `docker compose logs <서비스>` |
 | 디스크 부족 | `docker system prune -af` (사용 중이 아닌 이미지 정리) |
+| `/discover`·`/p/`가 404 (153바이트) | 랜딩 컨테이너가 낸 404 = nginx `reload` 누락 (§5-3 ②) |
+| 공개 화면이 스타일 없는 텍스트 | `/assets/`가 403이거나(§5-3 ①) CSS에 클래스가 없음(§5-3 ③) |
+| 공개 화면이 흰 화면 | JS·CSS 404. `/assets/` 퍼미션·경로 확인 |
+| `/p/<slug>`가 F5에서만 404 | SPA 폴백 미동작. `@public_web` named location 확인 |
+| 설치한 `.exe`에서 API가 전부 403 | 서버 `OAUTH_ALLOWED_RETURN_URIS`에 `laive://app/oauth/callback`이 있는지 (§2-1) |
+| 앱 창이 흰 화면 | 커스텀 스킴 핸들러가 파일을 못 찾음. 창 제목이 `laive://app/index.html`인지 확인 |
 
 ### 되돌리기
 
@@ -340,13 +475,15 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ---
 
-## 8. 배포 전 체크리스트
+## 9. 배포 전 체크리스트
 
 - [ ] 네이버·치지직 개발자센터에 콜백 URL 등록
 - [ ] 서버 `.env` 시크릿 전부 새로 생성 (§2-2)
 - [ ] `AUTH_COOKIE_SECURE=true` / `DEV_LOGIN_ENABLED=false` / `SWAGGER_ENABLED=false`
 - [ ] `.env` 퍼미션 `600`
 - [ ] compose의 `ports`가 전부 `127.0.0.1:` 바인딩인지
-- [ ] `nginx -t` 통과
-- [ ] `docker ps`에 컨테이너 6개 전부 healthy
+- [ ] `nginx -t` 통과 **후 `systemctl reload nginx`까지** (§5-3 ②)
+- [ ] `docker ps`에 컨테이너 7개 전부 healthy (landing 포함)
 - [ ] 앱에서 로그인 → 플랫폼 연동 → 방송 시작 → 음성·채팅 수신 확인
+- [ ] 브라우저에서 `/` · `/discover` · `/p/<slug>` 확인 — `/p/<slug>` 새로고침(F5)까지
+- [ ] `/var/www/laive/web/assets`가 `755`인지 (§5-3 ①)

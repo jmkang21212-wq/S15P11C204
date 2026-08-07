@@ -3,7 +3,6 @@ import { useAsyncData } from '@renderer/hooks/useAsyncData'
 import { usePrimaryPlatformAccount } from '@renderer/hooks/usePlatformAccounts'
 import { ApiError } from '@renderer/api/client'
 import {
-  buildAnnouncementDraft,
   cancelCalendarEvent,
   createCalendarEvent,
   getCalendarSchedule,
@@ -17,7 +16,6 @@ import CalendarMonth from './components/CalendarMonth'
 import AgendaListView from './components/AgendaListView'
 import EventDetail from './components/EventDetail'
 import EventForm from './components/EventForm'
-import AnnouncementDraft from './components/AnnouncementDraft'
 import UnscheduledPromises from './components/UnscheduledPromises'
 import { getMonthGridDays, shiftEventToDate, toDateKey } from './components/calendarGrid'
 import type { ScheduleDragPayload } from './components/scheduleDnd'
@@ -98,8 +96,7 @@ function diffEventPatch(original: CalendarEvent, updated: CalendarEvent): Update
 }
 
 /**
- * SC-04 일정 캘린더 — 월 캘린더/목록 + 일정 조회·등록·수정·취소 + AI 공지 초안.
- * 공지 초안은 BE 발행 API가 아직 보류라 클라이언트에서 생성한다 (api/schedule.ts 참고).
+ * SC-04 일정 캘린더 — 월 캘린더/목록 + 일정 조회·등록·수정·취소.
  *
  * 약속은 두 갈래로 들어온다. 기한이 있는 것은 캘린더 조회에 얹혀 오고(`data.promises`),
  * 기한이 없는 것은 `GET /promises?status=PENDING`으로 따로 가져온다 — 캘린더 쿼리가
@@ -122,7 +119,6 @@ export default function SchedulePage(): React.JSX.Element {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null)
   const [mode, setMode] = useState<'view' | 'edit'>('view')
   const [newEventNonce, setNewEventNonce] = useState(0)
-  const [draftContent, setDraftContent] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [mutationError, setMutationError] = useState<string | null>(null)
   const [movingPromiseId, setMovingPromiseId] = useState<number | null>(null)
@@ -166,7 +162,6 @@ export default function SchedulePage(): React.JSX.Element {
   const handleSelectEvent = (event: CalendarEvent): void => {
     setSelectedEvent(event)
     setMode('view')
-    setDraftContent(null)
     setMutationError(null)
     setConvertingPromiseId(null)
   }
@@ -175,14 +170,12 @@ export default function SchedulePage(): React.JSX.Element {
     setSelectedEvent(blankEvent(viewYear, viewMonth, platformAccount?.platformAccountId ?? null))
     setMode('edit')
     setNewEventNonce((n) => n + 1)
-    setDraftContent(null)
     setMutationError(null)
     setConvertingPromiseId(null)
   }
 
   const handleEditClick = (): void => {
     setMode('edit')
-    setDraftContent(null)
     setMutationError(null)
   }
 
@@ -223,7 +216,6 @@ export default function SchedulePage(): React.JSX.Element {
       }
       setSelectedEvent(saved)
       setMode('view')
-      setDraftContent(buildAnnouncementDraft(saved))
       refetch()
     } catch (e) {
       setMutationError(e instanceof ApiError ? e.message : '일정을 저장하지 못했어요.')
@@ -235,7 +227,6 @@ export default function SchedulePage(): React.JSX.Element {
   const handleClose = (): void => {
     setSelectedEvent(null)
     setMode('view')
-    setDraftContent(null)
     setMutationError(null)
     // 전환을 취소한 것이므로 약속은 손대지 않고 미정 목록에 그대로 남는다.
     setConvertingPromiseId(null)
@@ -261,7 +252,6 @@ export default function SchedulePage(): React.JSX.Element {
     try {
       await cancelCalendarEvent(event.calendarEventId)
       setSelectedEvent(null)
-      setDraftContent(null)
       refetch()
       if (event.promiseId !== null) refetchPromises()
     } catch (e) {
@@ -309,7 +299,6 @@ export default function SchedulePage(): React.JSX.Element {
     setSelectedEvent(promiseEvent(dateKey, promise.content, platformAccount.platformAccountId))
     setMode('edit')
     setNewEventNonce((n) => n + 1)
-    setDraftContent(null)
     setMutationError(null)
   }
 
@@ -471,11 +460,6 @@ export default function SchedulePage(): React.JSX.Element {
                 deleting={saving}
                 error={mutationError}
               />
-            )}
-            {draftContent && (
-              <div className="px-5 pb-5">
-                <AnnouncementDraft content={draftContent} />
-              </div>
             )}
           </div>
         )}

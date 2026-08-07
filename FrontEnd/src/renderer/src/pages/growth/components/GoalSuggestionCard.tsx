@@ -36,7 +36,7 @@ export default function GoalSuggestionCard({
   return (
     <Card className="gap-3 border-dashed py-4">
       <CardHeader className="gap-1 px-4">
-        {/* 지표와 목표치를 한 줄에 둔다 — 카드 세 장이 세로로 쌓이므로 높이를 아끼는 게 우선이다 */}
+        {/* 지표와 목표치는 한 쌍으로 읽히므로 한 줄에 둔다 */}
         <div className="flex items-baseline justify-between gap-2">
           <CardTitle className="flex items-center gap-1.5 text-sm font-semibold">
             <Sparkles className="size-3.5 text-primary" strokeWidth={1.8} aria-hidden />
@@ -57,11 +57,12 @@ export default function GoalSuggestionCard({
       <CardContent className="flex flex-col gap-2.5 px-4">
         <p className="text-body font-semibold wrap-break-word">{suggestion.title}</p>
 
-        {/* 근거는 3줄까지만. 전문은 title 속성으로 남겨 잘린 내용을 잃지 않는다. */}
-        <p
-          className="line-clamp-3 border-l-2 pl-2.5 text-xs leading-relaxed text-muted-foreground"
-          title={suggestion.rationale}
-        >
+        {/*
+          근거는 자르지 않고 전부 보여준다. 채택 여부를 판단하는 근거인데 "…"로 끊기면
+          그걸 하라는 화면에서 정작 판단을 못 한다. 카드는 grid에 items-start로 놓여
+          서로 높이를 맞추지 않으므로(GoalRoadmapPanel) 길어져도 옆 카드를 밀지 않는다.
+        */}
+        <p className="border-l-2 pl-2.5 text-xs leading-relaxed text-muted-foreground">
           {suggestion.rationale}
         </p>
 
