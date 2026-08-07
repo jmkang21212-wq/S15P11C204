@@ -10,6 +10,7 @@ import { registerSessionIpc } from './session'
 import { registerSnapshotIpc } from './snapshot'
 import { registerQuestionIpc } from './question'
 import { registerClipIpc } from './clip'
+import { applyPowerGuard } from './power'
 
 /**
  * 렌더러가 넘긴 URL이 외부로 내보내도 되는 주소인지 검증한다.
@@ -168,6 +169,14 @@ function createWindow(): void {
 }
 
 /**
+ * 미니 모드 창의 제목.
+ *
+ * 사용자가 OBS 「창 캡처」에서 이 문자열로 창을 고르므로 사실상 공개 계약이다.
+ * 바꾸면 이미 설정해 둔 사람들의 캡처 소스가 대상을 잃는다.
+ */
+const MINI_WINDOW_TITLE = 'LAIVE - 미니 모드'
+
+/**
  * 방송 콘솔의 미니 모드 창.
  * 프레임 없는 항상-위 소형 창으로, 방송 화면 위에 두고 쓸 수 있게 한다.
  * 드래그 이동은 렌더러에서 `-webkit-app-region: drag`로 처리한다.
@@ -188,12 +197,20 @@ function createMiniWindow(): void {
     resizable: false,
     alwaysOnTop: true,
     skipTaskbar: true,
+    // frame: false라 화면에는 안 보이지만 OS 창 제목은 그대로 있고, OBS가 그걸로 창을
+    // 찾는다. 두 창이 같은 index.html을 로드해 제목이 둘 다 'LAIVE'였던 게 문제였다.
+    title: MINI_WINDOW_TITLE,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
     }
   })
   miniWindow = win
+
+  // 문서의 <title>('LAIVE')이 위 title 옵션을 덮어쓰는 것을 막는다. 이게 없으면 창이
+  // 뜬 직후에는 제목이 맞다가 로드가 끝나는 순간 'LAIVE'로 되돌아간다.
+  // loadRoute보다 먼저 걸어야 첫 갱신을 놓치지 않는다.
+  win.on('page-title-updated', (event) => event.preventDefault())
 
   win.on('ready-to-show', () => win.show())
   win.on('closed', () => {
@@ -219,6 +236,8 @@ app.whenReady().then(() => {
   // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
+    // 방송 중에 열리는 창(미니 모드)도 같은 보호를 받게 한다.
+    applyPowerGuard(window)
   })
 
   // IPC test
