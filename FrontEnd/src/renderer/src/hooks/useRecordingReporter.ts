@@ -36,6 +36,13 @@ export function useRecordingReporter(
     }
 
     const id = window.setInterval(tick, INTERVAL_MS)
-    return () => window.clearInterval(id)
+    // 창으로 돌아왔을 때 한 번 더 보낸다. 이 tick이 밀린 만큼 기준점이 낡고 그게 그대로
+    // 클립 컷 위치 오차가 되므로, 폴링 화면보다 여기가 밀렸을 때의 대가가 크다.
+    // 서버가 최신 기준점으로 덮어쓰기 때문에 한 번 더 보내도 무해하다.
+    window.addEventListener('focus', tick)
+    return () => {
+      window.clearInterval(id)
+      window.removeEventListener('focus', tick)
+    }
   }, [sessionId, recording, getRecordStatus])
 }
