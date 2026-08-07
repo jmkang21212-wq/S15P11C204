@@ -10,6 +10,7 @@ import { registerSessionIpc } from './session'
 import { registerSnapshotIpc } from './snapshot'
 import { registerQuestionIpc } from './question'
 import { registerClipIpc } from './clip'
+import { applyPowerGuard } from './power'
 
 /**
  * 렌더러가 넘긴 URL이 외부로 내보내도 되는 주소인지 검증한다.
@@ -219,6 +220,8 @@ app.whenReady().then(() => {
   // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
+    // 방송 중에 열리는 창(미니 모드)도 같은 보호를 받게 한다.
+    applyPowerGuard(window)
   })
 
   // IPC test

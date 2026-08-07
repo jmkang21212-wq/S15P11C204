@@ -64,7 +64,15 @@ export function useLiveSnapshot(
   useEffect(() => {
     if (!isOwner || sessionId === null) return
     const id = window.setInterval(refetch, POLL_INTERVAL_MS)
-    return () => window.clearInterval(id)
+    // 창으로 돌아왔을 때 다음 tick을 기다리지 않고 한 번 당긴다. main의 전력·스로틀
+    // 보호(main/power.ts)가 못 막는 경우 — 사용자가 직접 재운 절전, 최대 절전 — 에
+    // 폴링이 밀렸다면 그 공백을 여기서 메운다(useCurrentSession과 같은 안전망).
+    const onFocus = (): void => refetch()
+    window.addEventListener('focus', onFocus)
+    return () => {
+      window.clearInterval(id)
+      window.removeEventListener('focus', onFocus)
+    }
   }, [isOwner, sessionId, refetch])
 
   // ── follower: main의 IPC 릴레이 구독 ──
