@@ -9,6 +9,7 @@ import { fetchLiveSetting, isRelinkRequired, updateLiveSetting } from '@renderer
 import { useAsyncData } from '@renderer/hooks/useAsyncData'
 import { usePlatformAccounts } from '@renderer/hooks/usePlatformAccounts'
 import { PATHS } from '@renderer/routes/paths'
+import type { BroadcastPlatformSession } from '@renderer/types/broadcastSession'
 
 /** 치지직 스튜디오 UI 관측치 — 백엔드 `PlatformLiveSettingService.TITLE_MAX_LENGTH`와 맞춘다. */
 const TITLE_MAX = 100
@@ -18,16 +19,30 @@ const TITLE_MAX = 100
  *
  * 캘린더 일정 제목과 별개인 "치지직에 실제로 표시되는 제목"을 보여주고 즉석에서 수정한다.
  * 구 scope 토큰(방송 설정 권한 없음)이나 만료 토큰은 오류 코드로 구분해 재연동을 유도한다.
- * CHZZK 연동 자체가 없으면 아무것도 렌더하지 않는다 — 연동 유도는 GNB·연동 화면 몫이다.
  *
  * 대시보드가 아니라 콘솔에 둔다. 치지직에 실시간 반영되는 값이라 방송 중에 만지는 것이
  * 정상이고, 방송을 조작하는 화면이 콘솔이라 여기가 제 자리다.
+ *
+ * <b>치지직으로 방송 중일 때만 보여준다.</b> 유튜브는 진행 중인 방송의 제목을 바꾸는
+ * 경로가 없어 이 기능을 제공하지 않기로 했는데, 연동 여부만 보고 렌더하면 유튜브로
+ * 방송하는 중에도 입력칸이 떠서 고칠 수 있을 것처럼 보인다. 그래서 "치지직이 연동돼
+ * 있는가"가 아니라 "지금 방송이 치지직을 쓰는가"로 판단한다.
  */
-export default function ChzzkTitleSection(): React.JSX.Element | null {
+export default function ChzzkTitleSection({
+  platformSessions
+}: {
+  /** 현재 세션의 플랫폼별 자식 세션. 방송 전이면 빈 배열이다. */
+  platformSessions: BroadcastPlatformSession[]
+}): React.JSX.Element | null {
   const { accounts } = usePlatformAccounts()
   // 대표 계정 훅은 "CONNECTED 첫 번째"라 CHZZK 보장이 없어 직접 고른다.
   const chzzk = accounts?.find((a) => a.platform === 'CHZZK') ?? null
 
+  const broadcastingOnChzzk = platformSessions.some(
+    (session) => session.platformCode === 'CHZZK' && session.status !== 'FAILED'
+  )
+
+  if (!broadcastingOnChzzk) return null
   if (chzzk === null) return null
   if (chzzk.connectionStatus === 'REAUTH_REQUIRED' || chzzk.connectionStatus === 'DISCONNECTED') {
     return (

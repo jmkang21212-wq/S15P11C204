@@ -69,6 +69,8 @@ public class PlatformSessionPreparationRequestedHandler implements BroadcastOutb
         PlatformSessionPreparationRequestedEvent event = read(outboxEvent);
         PlatformIntegrationAdapter adapter = adapterRegistry.require(event.platformCode());
 
+        launchBroadcast(event, adapter);
+
         Optional<ExternalBroadcast> activeBroadcast = adapter.liveDiscovery().map(discovery -> {
             String accessToken = platformAccountService.accessToken(
                     event.streamerId(), event.platformAccountId());
@@ -113,6 +115,28 @@ public class PlatformSessionPreparationRequestedHandler implements BroadcastOutb
         } catch (RuntimeException ignored) {
             // A malformed payload cannot safely identify the child session.
         }
+    }
+
+    /**
+     * 플랫폼에 방송을 켜 둔다. discovery <b>앞에</b> 있어야 한다 — 찾을 대상을 먼저
+     * 만들어야 하기 때문이다.
+     *
+     * <p>제목 동기화와 달리 실패를 삼키지 않는다. 방송을 못 만들면 discovery도 반드시
+     * 실패하므로, 여기서 예외를 올려 Outbox 재시도에 맡기는 편이 낫다. 첫 시도에서
+     * 방송을 만들고 나면 이후 재시도는 "이미 있음"으로 빠르게 지나간다.
+     *
+     * <p>이 Capability가 없는 플랫폼(치지직)은 아무 일도 일어나지 않는다.
+     */
+    private void launchBroadcast(
+            PlatformSessionPreparationRequestedEvent event,
+            PlatformIntegrationAdapter adapter
+    ) {
+        adapter.broadcastLaunch().ifPresent(launch -> {
+            String accessToken = platformAccountService.accessToken(
+                    event.streamerId(), event.platformAccountId());
+            // title이 null이면 필드 추가 이전에 저장된 페이로드다. 제목 없이도 방송은 켠다.
+            launch.ensureLaunched(accessToken, event.title() == null ? "LAIVE" : event.title());
+        });
     }
 
     /**

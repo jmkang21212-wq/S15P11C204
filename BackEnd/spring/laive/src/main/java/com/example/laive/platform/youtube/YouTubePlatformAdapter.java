@@ -1,5 +1,6 @@
 package com.example.laive.platform.youtube;
 
+import com.example.laive.platform.core.BroadcastLaunchCapability;
 import com.example.laive.platform.core.LiveDiscoveryCapability;
 import com.example.laive.platform.core.PlatformCapabilityCode;
 import com.example.laive.platform.core.PlatformCode;
@@ -49,7 +50,9 @@ public class YouTubePlatformAdapter
                         PlatformCapabilityCode.CHAT_COLLECTION,
                         PlatformCapabilityCode.VIEWER_METRICS,
                         PlatformCapabilityCode.VIDEO_METADATA,
-                        PlatformCapabilityCode.BROADCAST_SETTINGS
+                        PlatformCapabilityCode.BROADCAST_SETTINGS,
+                        // 치지직에는 없다 — 그쪽은 송출만 시작하면 플랫폼이 알아서 라이브가 된다.
+                        PlatformCapabilityCode.BROADCAST_LAUNCH
                 ),
                 null
         );
@@ -63,6 +66,11 @@ public class YouTubePlatformAdapter
     @Override
     public Optional<LiveDiscoveryCapability> liveDiscovery() {
         return Optional.of(liveClient::findActiveBroadcast);
+    }
+
+    @Override
+    public Optional<BroadcastLaunchCapability> broadcastLaunch() {
+        return Optional.of(liveClient::ensureLaunched);
     }
 
     @Override
