@@ -167,7 +167,9 @@ export default function BroadcastConsolePage(): React.JSX.Element {
             아래 스냅샷 분기와 따로 두는 이유는 `data`에 매달리지 않아야 해서다. 스냅샷 조회가
             실패해도 제목 수정은 치지직 API만 쓰므로 그대로 동작한다.
           */}
-          {sid !== null && <ChzzkTitleSection />}
+          {sid !== null && (
+            <ChzzkTitleSection platformSessions={currentSession?.platformSessions ?? []} />
+          )}
 
           {data && sid !== null ? (
             <>

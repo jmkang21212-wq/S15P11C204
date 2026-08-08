@@ -34,7 +34,7 @@ public record PlatformProperties(
                 chzzk,
                 new YouTube("", "", "", "https://accounts.google.com/o/oauth2/v2/auth",
                         "https://oauth2.googleapis.com/token", "https://oauth2.googleapis.com/revoke",
-                        "https://www.googleapis.com"),
+                        "https://www.googleapis.com", null),
                 tokenEncryptionKey,
                 linkStateTtl,
                 accessTokenRefreshThreshold
@@ -57,6 +57,12 @@ public record PlatformProperties(
     }
 
     /** YouTube OAuth 및 Data/Live Streaming API 접속 정보다. */
+    /**
+     * @param broadcastPrivacyStatus LAIVE가 만드는 방송의 공개 범위
+     *                               (public | unlisted | private). 시연은 public,
+     *                               테스트 중에는 unlisted가 무난하다. 값이 없으면
+     *                               실수로 전체 공개되지 않도록 unlisted로 떨어진다.
+     */
     public record YouTube(
             String clientId,
             String clientSecret,
@@ -64,7 +70,13 @@ public record PlatformProperties(
             String authorizationUri,
             String tokenUri,
             String revokeUri,
-            String apiBaseUrl
+            String apiBaseUrl,
+            String broadcastPrivacyStatus
     ) {
+        public YouTube {
+            broadcastPrivacyStatus = broadcastPrivacyStatus == null || broadcastPrivacyStatus.isBlank()
+                    ? "unlisted"
+                    : broadcastPrivacyStatus;
+        }
     }
 }

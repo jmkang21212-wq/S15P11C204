@@ -6,7 +6,7 @@ from datetime import datetime
 
 import httpx
 
-from chatcollector.config import VIEWER_POLL_SEC, YOUTUBE_API_BASE
+from chatcollector.config import HEARTBEAT_SEC, VIEWER_POLL_SEC, YOUTUBE_API_BASE
 from chatcollector.hashing import viewer_hash
 from chatcollector.spring import PlatformSpringClient, iso
 
@@ -48,6 +48,14 @@ class YouTubeCollectorSession:
                 target=self._viewer_loop,
                 daemon=True,
                 name=f'youtube-viewers-{self.session_id}',
+            ),
+            # 하트비트는 별도 스레드여야 한다. 채팅 폴링 루프에 얹으면 유튜브가
+            # 주는 pollingIntervalMillis에 보고 주기가 끌려가고, 채팅 루프가
+            # 종료되는 순간(채팅 종료 판정) 상태 보고도 함께 멈춘다.
+            threading.Thread(
+                target=self._heartbeat_loop,
+                daemon=True,
+                name=f'youtube-heartbeat-{self.session_id}',
             ),
         ]
         for thread in self._threads:
@@ -238,6 +246,16 @@ class YouTubeCollectorSession:
             return max(float(retry_after), 0.5)
         except ValueError:
             return fallback
+
+    def _heartbeat_loop(self) -> None:
+        """상태를 주기적으로 보고한다 (session.py의 같은 이름 루프와 대응).
+
+        이것이 없으면 start()의 단발 보고 하나로 끝나서, Spring이
+        laive.collector.heartbeat-timeout(30초)을 넘긴 값을 STOPPED로 강등한다.
+        채팅은 정상 수집되는데 콘솔의 수집기 표시만 꺼져 실제와 어긋났다.
+        """
+        while not self._stop.wait(HEARTBEAT_SEC):
+            self._report_status()
 
     def _report_status(self) -> None:
         try:
