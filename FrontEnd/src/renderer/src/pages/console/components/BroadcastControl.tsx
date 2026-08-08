@@ -21,6 +21,7 @@ import {
   AlertDialogTrigger
 } from '@renderer/components/ui/alert-dialog'
 import { cn, getIpcErrorMessage } from '@renderer/lib/utils'
+import { resolveStreamTarget, type ObsStreamTarget } from '@renderer/lib/obsStreamTarget'
 import { useObs } from '@renderer/hooks/useObs'
 import { usePlatformAccounts } from '@renderer/hooks/usePlatformAccounts'
 import { ApiError } from '@renderer/api/client'
@@ -118,6 +119,49 @@ export default function BroadcastControl({
   const live = sessionId !== null
   const obsStatus = obs.status
   const obsConnect = obs.connect
+
+  /**
+   * OBS에 설정된 송출 대상. 시작 폼을 열 때 한 번 읽는다.
+   *
+   * LAIVE는 `StartStream`으로 송출을 켜기만 하고 목적지는 OBS 설정이 소유한다. 그래서
+   * 여기서 고른 채널과 OBS 대상이 어긋나면 그 플랫폼은 라이브가 되지 않고, 백엔드의
+   * "진행 중 방송" 조회가 끝내 실패해 세션이 조용히 죽는다. 실제로 유튜브를 고르고 OBS는
+   * 치지직인 채로 시작해 원인을 찾는 데 오래 걸렸다.
+   */
+  const [obsTarget, setObsTarget] = useState<ObsStreamTarget | null>(null)
+  useEffect(() => {
+    // 폼이 닫혀 있으면 조회하지 않는다. 남아 있는 값은 아래 판정에서 걸러진다 —
+    // effect에서 곧바로 setState를 부르면 렌더 중 상태 변경이라 lint가 막는다.
+    if (!showStartForm || !connected) return
+    let active = true
+    void window.api.obs
+      .getStreamService()
+      .then((settings) => {
+        if (active) setObsTarget(resolveStreamTarget(settings))
+      })
+      // 못 읽어도 시작을 막지 않는다 — 이 검사는 실수를 줄이는 보조 장치다.
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [showStartForm, connected])
+
+  const selectedPlatform =
+    connectedAccounts.find((a) => a.platformAccountId === selectedAccountId)?.platform ?? null
+  /**
+   * 선택한 플랫폼이 OBS 대상과 명백히 다를 때만 true.
+   *
+   * OBS 대상을 판별하지 못한 경우(사용자 지정 RTMP 등)는 막지 않는다 — 판별은 서비스
+   * 이름·서버 주소의 키워드 매칭이라 낯선 설정에서 실패할 수 있고, 그때 시작을 막으면
+   * 정상 사용자가 방송을 못 켠다. 확실히 어긋날 때만 개입한다.
+   */
+  const platformMismatch =
+    showStartForm &&
+    connected &&
+    obsTarget !== null &&
+    obsTarget.platform !== null &&
+    selectedPlatform !== null &&
+    obsTarget.platform !== selectedPlatform
 
   /** 지난번 접속 정보를 복원해 연결 폼을 미리 채운다. */
   useEffect(() => {
@@ -444,11 +488,19 @@ export default function BroadcastControl({
                   : '예정된 일정과 연결해 시작해요.'}{' '}
                 채널 방송 제목에도 함께 반영돼요.
               </p>
+              {/* 어긋난 채로 시작하면 그 플랫폼은 라이브가 되지 않고 세션만 실패한다.
+                  실패가 outbox 재시도 뒤에야 드러나 원인을 찾기 어려우므로 미리 막는다. */}
+              {platformMismatch && obsTarget !== null && (
+                <p className="rounded-md bg-warning/10 px-2.5 py-2 text-caption leading-relaxed text-warning">
+                  OBS는 <strong>{obsTarget.label}</strong>로 송출하도록 설정돼 있어요. 같은 플랫폼을
+                  선택하거나 OBS 설정을 바꿔 주세요.
+                </p>
+              )}
               {error && <p className="text-xs text-destructive">{error}</p>}
               <Button
                 size="sm"
                 onClick={() => void handleStart()}
-                disabled={busy || selectedAccountId === null}
+                disabled={busy || selectedAccountId === null || platformMismatch}
               >
                 {busy ? '시작하는 중…' : '방송 시작'}
               </Button>
