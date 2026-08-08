@@ -19,6 +19,11 @@ public interface PlatformIntegrationAdapter {
         return Optional.empty();
     }
 
+    /** 방송을 켜 두는 앞단. 없으면 사용자가 플랫폼에서 직접 켠 방송을 discovery가 찾는다. */
+    default Optional<BroadcastLaunchCapability> broadcastLaunch() {
+        return Optional.empty();
+    }
+
     default Optional<ViewerMetricCapability> viewerMetrics() {
         return Optional.empty();
     }

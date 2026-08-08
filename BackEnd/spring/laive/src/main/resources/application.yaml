@@ -114,6 +114,9 @@ laive:
       token-uri: "https://oauth2.googleapis.com/token"
       revoke-uri: "https://oauth2.googleapis.com/revoke"
       api-base-url: "https://www.googleapis.com"
+      # LAIVE가 만드는 방송의 공개 범위: public | unlisted | private.
+      # 기본을 unlisted로 두어, 설정을 빠뜨렸을 때 실수로 전체 공개되지 않게 한다.
+      broadcast-privacy-status: "${YOUTUBE_BROADCAST_PRIVACY:unlisted}"
     # NFR-S-03: 플랫폼 토큰은 이 키로 암호화해서 저장한다. Base64로 인코딩한 32바이트.
     token-encryption-key: "${PLATFORM_TOKEN_KEY:}"
     link-state-ttl: 5m

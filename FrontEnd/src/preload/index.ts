@@ -7,6 +7,12 @@ type ObsState = {
   recording: boolean
 }
 type ObsRecordStatus = { outputActive: boolean; outputDuration: number }
+/** OBS 송출 대상. 스트림 키는 main이 걸러내므로 여기 없다. */
+type ObsStreamService = {
+  streamServiceType: string
+  service: string | null
+  server: string | null
+}
 type ClipCutRequest = { recordingPath: string; clipStartSec: number; clipDurationSec: number }
 type ClipCutResult =
   | { ok: true; clip: Uint8Array; thumbnail: Uint8Array }
@@ -37,6 +43,8 @@ const api = {
     getCredentials: (): Promise<{ url: string; password: string } | null> =>
       ipcRenderer.invoke('obs:get-credentials'),
     startStream: (): Promise<void> => ipcRenderer.invoke('obs:start-stream'),
+    /** OBS가 어디로 송출하도록 설정돼 있는지 읽는다. */
+    getStreamService: (): Promise<ObsStreamService> => ipcRenderer.invoke('obs:get-stream-service'),
     stopStream: (): Promise<void> => ipcRenderer.invoke('obs:stop-stream'),
     startRecord: (): Promise<void> => ipcRenderer.invoke('obs:start-record'),
     /** 녹화를 멈추고 결과 파일 경로를 반환한다. */
