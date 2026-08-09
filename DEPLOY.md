@@ -277,6 +277,35 @@ landing 페이지 다운로드 버튼이 `/download/laive-setup.exe`로 고정�
 https://i15c204.p.ssafy.io/download/laive-setup.exe
 ```
 
+### macOS 빌드
+
+mac에서 `pnpm build:mac`으로 만든 `dist/laive-client-*.dmg`를 exe와 같은 자리에 올린다.
+
+```bash
+scp dist/laive-client-*.dmg laive:/var/www/laive/download/laive.dmg
+```
+
+landing 페이지 macOS 버튼이 `/download/laive.dmg`로 고정되어 있으므로, exe와 마찬가지로
+**반드시 이 이름으로 저장한다**(버전이 박힌 원본 파일명 그대로 올리면 링크가 404).
+
+다운로드 주소:
+
+```
+https://i15c204.p.ssafy.io/download/laive.dmg
+```
+
+> 파일을 Google Drive에 두고 링크만 거는 방법은 쓰지 않는다. Drive에는 파일에 직접
+> 대응하는 공개 URL이 없어 공유 링크가 HTML 페이지를 내려주고, 직링크처럼 보이는
+> `uc?export=download`도 100MB가 넘으면 바이러스 검사 안내 페이지(HTML)로 바뀐다 —
+> 실제 파일은 그 페이지의 일회성 confirm 토큰이 있어야 나오므로 고정 링크가 불가능하다.
+> `<a download>` 속성은 크로스 오리진에서 브라우저가 무시하므로 우회 수단이 되지 않는다.
+
+> `dmg.artifactName`에 아키텍처가 들어 있지 않다(`${name}-${version}.${ext}`). Intel과
+> Apple Silicon을 둘 다 빌드하면 파일명이 겹치므로, 한쪽만 배포하거나 이름을 나눠야 한다.
+>
+> `mac.notarize: false`라 공증되지 않은 빌드다. 처음 실행할 때 "확인되지 않은 개발자"
+> 경고가 뜨고, 사용자가 우클릭 → 열기로 넘겨야 한다.
+
 > `electron-updater`가 아직 의존성에 없어 **자동 업데이트는 동작하지 않는다.**
 > `latest.yml`은 나중에 붙일 때를 위해 같이 올려둔다. 지금은 새 버전을 배포하면
 > 사용자가 다시 받아 설치해야 한다.
