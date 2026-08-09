@@ -42,6 +42,26 @@
     </sql>
 
     <!--
+      노출 제외 닉네임(laive.fandom.excluded-nicknames)이다. 콘솔의 실시간 조회와
+      리포트 조회에 같은 규칙이 걸려야 하므로 SessionReportMapper.xml이 이 조각을
+      네임스페이스 전체 이름으로 include한다 — 복붙하면 한쪽만 고쳐져 콘솔에서
+      사라진 사람이 리포트에 남는다. 이름을 바꾸면 그쪽도 같이 고쳐야 한다.
+
+      COALESCE로 감싸는 이유: 닉네임이 아직 없는 시청자는 NOT IN이 NULL로 평가돼
+      조용히 목록에서 빠진다. FandomProperties가 빈 문자열을 걸러 두므로 ''는
+      제외 목록에 들어오지 않는다.
+    -->
+    <sql id="excludedNicknameFilter">
+        <if test="excludedNicknames != null and excludedNicknames.size() > 0">
+            AND lower(COALESCE(vp.nickname, '')) NOT IN
+            <foreach collection="excludedNicknames" item="nickname"
+                     open="(" separator="," close=")">
+                lower(#{nickname})
+            </foreach>
+        </if>
+    </sql>
+
+    <!--
       TopViewer record 생성자 순서와 컬럼 순서를 일치시킨다
       (viewerId, nickname, viewerHash, chatScore, watchScore, totalScore).
       스트리머 본인·매니저는 "시청자"가 아니므로 노출에서 뺀다 — 저장(persist)은
@@ -59,6 +79,7 @@
                ) agg
           JOIN viewer_profiles vp ON vp.id = agg.viewer_id
          WHERE COALESCE(vp.user_role, '') NOT IN ('streamer', 'manager')
+        <include refid="excludedNicknameFilter"/>
          ORDER BY agg.total_score DESC, agg.viewer_id
          LIMIT #{limit}
     </select>
