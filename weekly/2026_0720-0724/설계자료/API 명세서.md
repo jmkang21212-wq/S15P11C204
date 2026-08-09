@@ -980,6 +980,10 @@ Access Token과 Refresh Token은 `PLATFORM_ACCOUNTS`에 암호화하여 저장�
   총점 = `chatScore + watchScore×2 + Σ log10(후원액+1)×10`. 1분에 100개를 쳐도 3점이라
   5분 도배(5점대)가 2시간 꾸준 참여(100점대)를 이길 수 없다. 가중치는 초기값이며 튜닝 대상이다.
 - **스트리머 본인과 매니저는 제외**된다 (`viewer_profiles.user_role` 기준).
+- 운영 설정 `laive.fandom.excluded-nicknames`(환경변수 `FANDOM_EXCLUDED_NICKNAMES`,
+  쉼표 구분·대소문자 무시)에 적힌 **닉네임도 노출에서 제외**된다. 개발·시연 중 팀원
+  계정이 상위를 차지하는 것을 막는 용도이며, 세션 리포트의 `topViewers`에도 같은
+  목록이 걸린다. 점수 저장(`VIEWER_SCORES`)은 그대로라 값을 빼면 곧바로 되돌아온다.
 - `nickname`은 수집기가 관측한 표시용 닉네임이다. 아직 관측 전(과거 시청자 등)이면
   `null`이며, 그때는 항상 채워지는 `viewerAlias`(해시 파생, 11.5와 같은 형식)로 표시한다.
 - 계산은 조회 시점 `CHAT_MESSAGES` 집계이고, 방송 종료 시 `VIEWER_SCORES`에 확정

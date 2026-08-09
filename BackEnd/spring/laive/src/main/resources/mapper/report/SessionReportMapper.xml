@@ -115,6 +115,12 @@
           JOIN viewer_profiles vp ON vp.id = vs.viewer_id
          WHERE vs.session_id = #{sessionId}
            AND COALESCE(vp.user_role, '') NOT IN ('streamer', 'manager')
+        <!--
+          노출 제외 닉네임(laive.fandom.excluded-nicknames). 위의 역할 필터와 같은
+          이유로 여기에도 걸어야 한다 — ViewerScoreMapper.xml의 같은 이름 조각과
+          쌍이며, 한쪽만 고치면 콘솔에서 사라진 사람이 리포트에 남는다.
+        -->
+        <include refid="com.example.laive.broadcast.fandom.repository.mybatis.ViewerScoreMapper.excludedNicknameFilter"/>
          ORDER BY vs.total_score DESC, vs.viewer_id
          LIMIT #{limit}
     </select>

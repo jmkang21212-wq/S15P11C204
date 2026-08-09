@@ -16,10 +16,18 @@ import java.util.List;
 @Mapper
 public interface ViewerScoreMapper {
 
-    /** 진행 중 세션의 상위 시청자. 스트리머 본인·매니저는 "시청자"가 아니므로 뺀다. */
+    /**
+     * 진행 중 세션의 상위 시청자. 스트리머 본인·매니저는 "시청자"가 아니므로 뺀다.
+     *
+     * @param excludedNicknames 노출에서 뺄 닉네임(소문자). 보통
+     *                          {@code FandomProperties.excludedNicknames()}를 그대로 넘긴다.
+     *                          limit은 필터가 걸린 뒤에 적용되므로 제외된 만큼 다음 순위가
+     *                          올라와 목록은 항상 채워진다
+     */
     List<TopViewer> findTopViewers(
             @Param("sessionId") long sessionId,
-            @Param("limit") int limit
+            @Param("limit") int limit,
+            @Param("excludedNicknames") List<String> excludedNicknames
     );
 
     /**

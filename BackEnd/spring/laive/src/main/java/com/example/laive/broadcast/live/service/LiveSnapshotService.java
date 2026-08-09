@@ -1,6 +1,7 @@
 package com.example.laive.broadcast.live.service;
 
 import com.example.laive.broadcast.collect.integration.CollectorStatusStore;
+import com.example.laive.broadcast.fandom.config.FandomProperties;
 import com.example.laive.broadcast.fandom.domain.TopViewer;
 import com.example.laive.broadcast.fandom.repository.mybatis.ViewerScoreMapper;
 import com.example.laive.broadcast.live.dto.response.LiveSnapshotResponse;
@@ -59,6 +60,7 @@ public class LiveSnapshotService {
     private final RepeatedQuestionMapper repeatedQuestionMapper;
     private final RepeatedQuestionProperties repeatedQuestionProperties;
     private final ViewerScoreMapper viewerScoreMapper;
+    private final FandomProperties fandomProperties;
     private final RealtimeSessionRegistry realtimeSessionRegistry;
     private final TriggerMapper triggerMapper;
     private final StringRedisTemplate redisTemplate;
@@ -72,6 +74,7 @@ public class LiveSnapshotService {
             RepeatedQuestionMapper repeatedQuestionMapper,
             RepeatedQuestionProperties repeatedQuestionProperties,
             ViewerScoreMapper viewerScoreMapper,
+            FandomProperties fandomProperties,
             RealtimeSessionRegistry realtimeSessionRegistry,
             TriggerMapper triggerMapper,
             StringRedisTemplate redisTemplate,
@@ -84,6 +87,7 @@ public class LiveSnapshotService {
         this.repeatedQuestionMapper = repeatedQuestionMapper;
         this.repeatedQuestionProperties = repeatedQuestionProperties;
         this.viewerScoreMapper = viewerScoreMapper;
+        this.fandomProperties = fandomProperties;
         this.realtimeSessionRegistry = realtimeSessionRegistry;
         this.triggerMapper = triggerMapper;
         this.redisTemplate = redisTemplate;
@@ -167,12 +171,15 @@ public class LiveSnapshotService {
 
     /**
      * 열성 시청자 상위 {@value TOP_VIEWER_LIMIT}명이다 (FR-F-03). 도배 방지 산식은
-     * ViewerScoreMapper.xml이 단일 원천이고, 스트리머 본인·매니저는 SQL에서 이미
-     * 걸러져 있다. 닉네임이 아직 없는 시청자는 해시 파생 별칭으로 폴백한다 —
-     * 해시 원문은 프론트로 보내지 않는다.
+     * ViewerScoreMapper.xml이 단일 원천이고, 스트리머 본인·매니저와 설정으로 뺀
+     * 닉네임({@code laive.fandom.excluded-nicknames})은 SQL에서 이미 걸러져 있다.
+     * 닉네임이 아직 없는 시청자는 해시 파생 별칭으로 폴백한다 — 해시 원문은
+     * 프론트로 보내지 않는다.
      */
     private List<LiveSnapshotResponse.TopViewer> topViewers(long sessionId) {
-        return viewerScoreMapper.findTopViewers(sessionId, TOP_VIEWER_LIMIT).stream()
+        return viewerScoreMapper
+                .findTopViewers(sessionId, TOP_VIEWER_LIMIT, fandomProperties.excludedNicknames())
+                .stream()
                 .map(viewer -> new LiveSnapshotResponse.TopViewer(
                         viewer.viewerId(),
                         viewer.nickname(),
