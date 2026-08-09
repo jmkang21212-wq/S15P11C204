@@ -103,7 +103,7 @@ class FandomScoreIntegrationTest {
         }
         ingestService.appendChatMessages(f.sessionId, items);
 
-        List<TopViewer> top = viewerScoreMapper.findTopViewers(f.sessionId, 5);
+        List<TopViewer> top = viewerScoreMapper.findTopViewers(f.sessionId, 5, List.of());
         assertThat(top.get(0).viewerId()).isEqualTo(viewerIdOf(loyal));
         assertThat(top.get(0).totalScore()).isEqualTo(120.0); // 40 + 40×2
         assertThat(top.get(1).totalScore()).isEqualTo(5.0);
@@ -144,9 +144,56 @@ class FandomScoreIntegrationTest {
                 chat(fan, "팬 채팅", BASE, "한별팬1호", "common_user")
         ));
 
-        List<TopViewer> top = viewerScoreMapper.findTopViewers(f.sessionId, 5);
+        List<TopViewer> top = viewerScoreMapper.findTopViewers(f.sessionId, 5, List.of());
         assertThat(top).extracting(TopViewer::viewerId)
                 .containsExactly(viewerIdOf(fan));
+    }
+
+    /**
+     * 개발·시연 중 팀원 계정을 목록에서 빼는 경로다(laive.fandom.excluded-nicknames).
+     *
+     * <p>제외는 LIMIT보다 먼저 걸려야 한다 — 나중에 자바에서 걸러내면 다섯 줄을
+     * 요청했는데 네 줄이 온다. 다음 순위가 올라와 목록이 채워지는지까지 본다.
+     */
+    @Test
+    void 설정으로_제외한_닉네임은_빠지고_다음_순위가_올라온다() {
+        Fixture f = createFixture();
+        String teammate = hash();
+        String fan = hash();
+
+        List<ChatMessageItem> items = new ArrayList<>();
+        for (int minute = 0; minute < 10; minute++) {   // 팀원이 압도적 1위
+            items.add(chat(teammate, "테스트 " + minute,
+                    BASE.plus(minute, ChronoUnit.MINUTES), "팀원닉", "common_user"));
+        }
+        items.add(chat(fan, "팬 채팅", BASE, "한별팬1호", "common_user"));
+        ingestService.appendChatMessages(f.sessionId, items);
+
+        assertThat(viewerScoreMapper.findTopViewers(f.sessionId, 1, List.of()))
+                .as("제외 전에는 팀원이 1위다")
+                .extracting(TopViewer::viewerId)
+                .containsExactly(viewerIdOf(teammate));
+
+        // 소문자로 접어 넘긴다 — FandomProperties가 하는 정규화와 같은 규칙이다
+        assertThat(viewerScoreMapper.findTopViewers(f.sessionId, 1, List.of("팀원닉")))
+                .as("제외되면 그 자리에 다음 순위가 올라와 목록이 채워진다")
+                .extracting(TopViewer::viewerId)
+                .containsExactly(viewerIdOf(fan));
+    }
+
+    /**
+     * 제외 목록이 있어도 닉네임 없는 시청자는 남아야 한다. SQL이
+     * {@code COALESCE(nickname, '')}를 빼면 NOT IN이 NULL로 평가돼 이들이 통째로
+     * 사라진다 — 눈에 잘 안 띄는 회귀라 못을 박아 둔다.
+     */
+    @Test
+    void 제외_목록이_있어도_닉네임_없는_시청자는_남는다() {
+        Fixture f = createFixture();
+        ingestService.appendChatMessages(f.sessionId,
+                List.of(new ChatMessageItem("sha256:a91cffee0011", "익명 채팅", BASE)));
+
+        assertThat(viewerScoreMapper.findTopViewers(f.sessionId, 5, List.of("팀원닉")))
+                .hasSize(1);
     }
 
     @Test
@@ -178,7 +225,7 @@ class FandomScoreIntegrationTest {
         }
         ingestService.appendChatMessages(f.sessionId, items);
 
-        List<TopViewer> top = viewerScoreMapper.findTopViewers(f.sessionId, 5);
+        List<TopViewer> top = viewerScoreMapper.findTopViewers(f.sessionId, 5, List.of());
         assertThat(top).hasSize(5);
         assertThat(top).extracting(TopViewer::totalScore)
                 .containsExactly(21.0, 18.0, 15.0, 12.0, 9.0); // (n + n×2), n=7..3
@@ -316,7 +363,7 @@ class FandomScoreIntegrationTest {
 
     private TopViewer topOf(Fixture f, String hash) {
         long viewerId = viewerIdOf(hash);
-        return viewerScoreMapper.findTopViewers(f.sessionId, 50).stream()
+        return viewerScoreMapper.findTopViewers(f.sessionId, 50, List.of()).stream()
                 .filter(viewer -> viewer.viewerId() == viewerId)
                 .findFirst()
                 .orElseThrow();
