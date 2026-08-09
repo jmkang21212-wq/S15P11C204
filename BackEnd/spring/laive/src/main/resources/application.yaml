@@ -228,6 +228,14 @@ laive:
     # Spring에 도달조차 하지 않아 서버 로그에 아무것도 남지 않는다.
     max-upload-bytes: 209715200
 
+  # 열성 시청자(FR-F-03) 노출 규칙. 점수 산식은 ViewerScoreMapper.xml이 단일 원천이다.
+  fandom:
+    # 콘솔·리포트의 열성 시청자 목록에서 뺄 닉네임(대소문자 무시, 쉼표 구분).
+    # 개발·시연 중 팀원 계정이 TOP5를 차지하는 것을 막는 용도다.
+    # 점수 저장(viewer_scores)은 그대로 남고 노출만 빠지므로, 값을 지우면 되돌아온다.
+    # 예: FANDOM_EXCLUDED_NICKNAMES=한도현,팀원닉2
+    excluded-nicknames: "${FANDOM_EXCLUDED_NICKNAMES:}"
+
   report:
     ai:
       enabled: "${REPORT_AI_ENABLED:false}"

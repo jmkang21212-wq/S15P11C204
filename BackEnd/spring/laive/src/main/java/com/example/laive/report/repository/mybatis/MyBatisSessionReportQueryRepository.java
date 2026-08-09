@@ -1,5 +1,6 @@
 package com.example.laive.report.repository.mybatis;
 
+import com.example.laive.broadcast.fandom.config.FandomProperties;
 import com.example.laive.broadcast.fandom.domain.TopViewer;
 import com.example.laive.report.domain.ReportInsight;
 import com.example.laive.report.domain.ReportTrigger;
@@ -16,9 +17,12 @@ import java.util.Optional;
 @Repository
 public class MyBatisSessionReportQueryRepository implements SessionReportQueryRepository {
     private final SessionReportMapper mapper;
+    private final FandomProperties fandomProperties;
 
-    public MyBatisSessionReportQueryRepository(SessionReportMapper mapper) {
+    public MyBatisSessionReportQueryRepository(
+            SessionReportMapper mapper, FandomProperties fandomProperties) {
         this.mapper = mapper;
+        this.fandomProperties = fandomProperties;
     }
 
     @Override
@@ -56,8 +60,9 @@ public class MyBatisSessionReportQueryRepository implements SessionReportQueryRe
         return mapper.findPlatformMetrics(reportId);
     }
 
+    /** 노출 제외 닉네임은 설정에서 오고 호출자는 몰라도 된다 — 콘솔과 같은 규칙이다. */
     @Override
     public List<TopViewer> findTopViewers(long sessionId, int limit) {
-        return mapper.findTopViewers(sessionId, limit);
+        return mapper.findTopViewers(sessionId, limit, fandomProperties.excludedNicknames());
     }
 }
