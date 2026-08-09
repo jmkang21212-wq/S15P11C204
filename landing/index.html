@@ -22,6 +22,12 @@
     --brand-700: #0040cc;
     --brand-900: #052a80;
 
+    /* eyebrow 배지 글자색. 배경으로 쓰는 --brand-100이 다크에서 짙은 남색으로
+       뒤집히므로 글자색도 같이 뒤집어야 읽힌다. --brand-700 자체를 다크에서 밝게
+       바꾸는 방법은 못 쓴다 — .btn-primary·.cta-band 그라디언트와 흰 버튼의
+       글자색(.btn-white)까지 같은 토큰을 보고 있어 한꺼번에 망가진다. */
+    --eyebrow-ink: var(--brand-700);
+
     /* chart accents — reused verbatim from the app's own --chart-* tokens */
     --chart-indigo: #4338ca;
     --chart-green: #16a34a;
@@ -48,6 +54,7 @@
     --surface-2: #232732;
     --border: rgba(230, 235, 242, 0.1);
     --brand-100: #1b2740;
+    --eyebrow-ink: var(--brand-300);
     --shadow-card: 0 10px 34px rgba(0, 0, 0, 0.35);
   }
 
@@ -61,6 +68,7 @@
       --surface-2: #232732;
       --border: rgba(230, 235, 242, 0.1);
       --brand-100: #1b2740;
+      --eyebrow-ink: var(--brand-300);
       --shadow-card: 0 10px 34px rgba(0, 0, 0, 0.35);
     }
   }
@@ -109,6 +117,7 @@
   .btn-ghost { background: var(--surface-0); color: var(--ink-900); border-color: var(--border); }
   .btn-ghost:hover { border-color: var(--brand-300); }
 
+
   /* ---------- hero ---------- */
   .hero { position: relative; padding: 96px 0 40px; overflow: hidden; }
   .hero canvas { position: absolute; inset: 0; width: 100%; height: 100%; opacity: .55; }
@@ -121,10 +130,9 @@
   .eyebrow {
     display: inline-flex; align-items: center; gap: 8px;
     font-size: 12.5px; font-weight: 600; letter-spacing: .04em;
-    color: var(--brand-700); background: var(--brand-100);
+    color: var(--eyebrow-ink); background: var(--brand-100);
     border-radius: 999px; padding: 6px 14px; margin-bottom: 22px;
   }
-  :root[data-theme='dark'] .eyebrow, @media (prefers-color-scheme: dark) { }
   .eyebrow .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--chart-rose); box-shadow: 0 0 0 3px rgba(225,29,72,.2); }
 
   h1.headline {
@@ -144,7 +152,7 @@
     font-size: 17px; color: var(--ink-700); max-width: 560px; margin: 0 auto 34px;
     line-height: 1.6;
   }
-  .hero-cta { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 18px; }
+  .hero-cta { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
   .hero-note { font-size: 13px; color: var(--ink-500); }
 
   /* ---------- product mock ---------- */
@@ -240,7 +248,7 @@
   }
   @media (max-width: 560px) {
     .feature-grid { grid-template-columns: 1fr; }
-    nav .nav-links a:not(.btn) { display: none; }
+    nav .nav-links a:not(.btn):not(.nav-keep) { display: none; }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -258,6 +266,12 @@
     <div class="nav-links">
       <a href="#features">기능</a>
       <a href="#flow">사용 흐름</a>
+      <!-- 같은 오리진의 공개 웹 빌드(SC-11 디렉터리)로 넘어간다. 랜딩 컨테이너에는 이
+           경로가 없고, nginx가 /discover를 /var/www/laive/web으로 보내 준다
+           (deploy/nginx/laive.conf). 그래서 랜딩만 단독으로 띄우면 이 링크는 404다.
+           .nav-keep은 좁은 화면에서 살아남게 하는 표시다 — 광고주 유입 동선이라
+           기능·사용 흐름과 달리 모바일에서 사라지면 안 된다. -->
+      <a href="/discover" class="nav-keep">비즈니스 매칭</a>
       <a href="#download" class="btn btn-primary">무료로 시작하기</a>
     </div>
   </div>
@@ -268,12 +282,18 @@
   <div class="wrap hero-inner">
     <span class="eyebrow"><span class="dot"></span>1인 스트리머를 위한 AI 방송 동반자</span>
     <h1 class="headline">방송 준비부터 다시보기까지,<br /><span class="accent">LAIVE</span> 하나로</h1>
-    <p class="sub">위험 발언은 실시간으로 잡아내고, 방송이 끝나면 리포트로 정리합니다.
-      켜두는 것만으로 방송 전·중·후를 챙기는 데스크톱 앱.</p>
     <div class="hero-cta">
       <a href="https://i15c204.p.ssafy.io/download/laive-setup.exe" class="btn btn-primary">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v13m0 0 5-5m-5 5-5-5M4 21h16"/></svg>
         Windows용 다운로드
+      </a>
+      <!-- Windows와 같은 자리(/download/)에서 받는다. 버전이 박힌 원본 파일명
+           (LAIVE-client-1.0.1.dmg)이 아니라 고정 이름으로 올려 두고 링크는 고정한다 —
+           새 버전을 올릴 때 랜딩을 다시 배포하지 않아도 되기 때문이다(DEPLOY.md 4번).
+           아래 CTA 밴드에도 같은 버튼이 하나 더 있으니 두 곳을 같이 고쳐야 한다. -->
+      <a href="https://i15c204.p.ssafy.io/download/laive.dmg" class="btn btn-ghost">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09ZM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25Z"/></svg>
+        macOS용 다운로드
       </a>
     </div>
     <p class="hero-note">무료 체험 · 설치 후 바로 계정 연동</p>
@@ -283,13 +303,18 @@
     <div class="mock-window">
       <div class="mock-titlebar"><span></span><span></span><span></span></div>
       <div class="mock-body">
+        <!-- 실제 GNB(components/common/GNB.tsx의 NAV_ITEMS)와 항목·순서·이름을 맞춘다.
+             앱을 열었을 때 랜딩에서 본 것과 다르면 그것부터 눈에 띈다. -->
         <div class="mock-side">
           <div class="item active"><span class="ic"></span>대시보드</div>
           <div class="item"><span class="ic"></span>방송 콘솔</div>
-          <div class="item"><span class="ic"></span>일정 캘린더</div>
+          <div class="item"><span class="ic"></span>일정</div>
+          <div class="item"><span class="ic"></span>세션 리포트</div>
+          <div class="item"><span class="ic"></span>클립</div>
           <div class="item"><span class="ic"></span>성장 리포트</div>
-          <div class="item"><span class="ic"></span>하이라이트</div>
           <div class="item"><span class="ic"></span>포트폴리오</div>
+          <div class="item"><span class="ic"></span>비즈니스 매칭</div>
+          <div class="item"><span class="ic"></span>설정</div>
         </div>
         <div class="mock-main">
           <div class="mock-card">
@@ -311,7 +336,7 @@
           </div>
           <div class="mock-card alert">
             <span class="badge">!</span>
-            <p><b>위험 발언 감지</b> — 00:14:32 지점, 그레이존 표현이 감지되어 즉시 알림을 보냈습니다.<br /><small>실시간 감지 · Groq Whisper 전사 기반</small></p>
+            <p><b>위험 발언 감지</b> — 00:14:32 지점, 그레이존 표현이 감지되어 경고를 보냈습니다.<br /><small>실시간 감지 · Groq Whisper 전사 기반</small></p>
           </div>
         </div>
       </div>
@@ -324,28 +349,28 @@
     <div class="section-head">
       <div class="kicker">Everything in one app</div>
       <h2>방송에 필요한 모든 것, 창 하나에</h2>
-      <p>플랫폼 앱을 여러 개 켜둘 필요 없이, LAIVE가 방송 전 준비부터 사고 예방, 다시보기까지 이어서 관리합니다.</p>
+      <p>플랫폼 앱을 여러 개 켜둘 필요 없이, LAIVE가 방송 전 준비부터 사고 예방,</br> 다시보기까지 이어서 관리합니다.</p>
     </div>
     <div class="feature-grid">
       <div class="feature tone-risk">
         <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg></div>
         <h3>실시간 위험 발언 감지</h3>
-        <p>마이크 음성을 실시간 전사해 위험 발언을 0.4초 안에 잡아내고 즉시 경고합니다. 방송 사고를 사후가 아니라 그 순간에 막습니다.</p>
+        <p>마이크 음성을 실시간 전사해 위험 발언을 잡아내고<br> 방송 중에 바로 경고합니다. 방송 사고를 사후가 아니라 <br>그 순간에 막습니다.</p>
       </div>
       <div class="feature tone-growth">
         <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18M7 15l4-4 3 3 5-6"/></svg></div>
         <h3>성장 리포트</h3>
-        <p>세션별 시청자·채팅 데이터를 분석해 주간·월간 추이와 다음 방송에서 시도해볼 액션을 제안합니다.</p>
+        <p>세션별 시청자·채팅 데이터를 분석해 주간·월간 추이와<br> 다음 방송에서 시도해볼 액션을 제안합니다.</p>
       </div>
       <div class="feature tone-calendar">
         <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div>
         <h3>일정 캘린더</h3>
-        <p>방송 일정을 등록하면 시청자와 자동으로 공유됩니다. 정기 방송, 특별 방송을 한 곳에서 관리하세요.</p>
+        <p>방송 중 시청자와 한 약속을 일정으로 바로 옮깁니다.<br> 정기 방송, 특별 방송을 한 곳에서 관리하세요.</p>
       </div>
       <div class="feature tone-platform">
         <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 3.5 6 3.5 9s-1 6.5-3.5 9c-2.5-2.5-3.5-6-3.5-9s1-6.5 3.5-9Z"/></svg></div>
         <h3>플랫폼 계정 연동</h3>
-        <p>네이버·치지직·SOOP 계정을 연동해 방송 설정을 한 번에 바꾸고, 여러 플랫폼 상태를 한 화면에서 확인합니다.</p>
+        <p>치지직·유튜브 계정을 연동해 방송 설정을 한 번에 바꾸고, 두 플랫폼 상태를 한 화면에서 확인합니다.</p>
       </div>
       <div class="feature tone-clip">
         <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3V9Z"/></svg></div>
@@ -371,12 +396,12 @@
       <div class="flow-step">
         <div class="stage">방송 전</div>
         <h4>연동하고 일정만 잡으세요</h4>
-        <p>플랫폼 계정을 연동하면 방송 설정과 캘린더가 앱 안에서 바로 준비됩니다.</p>
+        <p>플랫폼 계정을 연동하면 방송 설정과 캘린더가<br> 앱 안에서 바로 준비됩니다.</p>
       </div>
       <div class="flow-step">
         <div class="stage">방송 중</div>
         <h4>위험 발언은 실시간으로 차단</h4>
-        <p>마이크를 감지하는 순간부터 위험 발언 경고와 채팅 반응이 콘솔에 표시됩니다.</p>
+        <p>마이크를 감지하는 순간부터<br> 위험 발언 경고와 채팅 반응이 콘솔에 표시됩니다.</p>
       </div>
       <div class="flow-step">
         <div class="stage">방송 후</div>
@@ -393,11 +418,16 @@
       <canvas id="ctaWave"></canvas>
       <div style="position:relative; z-index:2;">
         <h2>다음 방송부터, LAIVE와 함께</h2>
-        <p>설치는 1분, 계정 연동은 3분이면 끝납니다.</p>
+        <p>계정을 연동하고 켜두기만 하면, 방송 전·중·후를 이어서 챙깁니다.</p>
         <div class="cta-row">
           <a href="https://i15c204.p.ssafy.io/download/laive-setup.exe" class="btn btn-white">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v13m0 0 5-5m-5 5-5-5M4 21h16"/></svg>
             Windows용 다운로드
+          </a>
+          <!-- 히어로의 macOS 버튼과 한 쌍이다. 주소를 바꿀 때 두 곳을 함께 고친다. -->
+          <a href="https://i15c204.p.ssafy.io/download/laive.dmg" class="btn btn-outline">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09ZM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25Z"/></svg>
+            macOS용 다운로드
           </a>
         </div>
       </div>
