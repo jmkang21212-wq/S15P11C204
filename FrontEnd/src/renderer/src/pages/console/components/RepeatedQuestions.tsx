@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Button } from '@renderer/components/ui/button'
 import { dismissRepeatedQuestion } from '@renderer/api/repeatedQuestions'
 import { formatCount } from '@renderer/lib/format'
@@ -37,33 +37,21 @@ export default function RepeatedQuestions({
     .filter((q) => q.type !== 'CONTEXT' && !dismissed.includes(q.questionId))
     .slice(0, VISIBLE_LIMIT)
 
-  // setState를 모두 updater 형태로 써서 sessionId 외의 의존성이 없다 —
-  // 아래 IPC 구독이 매 렌더마다 재구독되지 않게 하려면 참조가 안정적이어야 한다.
-  const handleDismiss = useCallback(
-    async (questionId: number): Promise<void> => {
-      setError(null)
-      setDismissed((prev) => [...prev, questionId])
-      try {
-        await dismissRepeatedQuestion(sessionId, questionId)
-      } catch {
-        // 실패하면 다시 보여준다 — 답하지 않은 질문이 조용히 사라지면 안 된다.
-        setDismissed((prev) => prev.filter((id) => id !== questionId))
-        setError('답변 완료 처리에 실패했어요')
-      }
-    },
-    [sessionId]
-  )
-
-  // 미니 창은 토큰이 없어 dismiss를 직접 부를 수 없다. 인증을 가진 이 창(콘솔)이
-  // main을 거쳐 온 요청을 받아 대신 호출한다.
-  useEffect(() => {
-    const bridge = window.api.question
-    if (!bridge) return
-    return bridge.onDismissRequest((payload) => {
-      if (payload.sessionId !== sessionId) return
-      void handleDismiss(payload.questionId)
-    })
-  }, [sessionId, handleDismiss])
+  // 미니 창의 "답변 완료"는 여기서 받지 않는다 — 이 컴포넌트는 방송 콘솔 화면에서만
+  // 살아서, 사용자가 다른 화면에 가 있으면 요청을 받을 사람이 없었다. 지금은 화면과
+  // 무관하게 마운트되는 RequireAuth가 받아 API를 부르고, 이 목록은 다음 폴링에 정리된다.
+  // 그래서 참조를 안정시킬 이유가 없어져 useCallback도 걷어냈다.
+  const handleDismiss = async (questionId: number): Promise<void> => {
+    setError(null)
+    setDismissed((prev) => [...prev, questionId])
+    try {
+      await dismissRepeatedQuestion(sessionId, questionId)
+    } catch {
+      // 실패하면 다시 보여준다 — 답하지 않은 질문이 조용히 사라지면 안 된다.
+      setDismissed((prev) => prev.filter((id) => id !== questionId))
+      setError('답변 완료 처리에 실패했어요')
+    }
+  }
 
   return (
     <div className="border-t pt-4">
