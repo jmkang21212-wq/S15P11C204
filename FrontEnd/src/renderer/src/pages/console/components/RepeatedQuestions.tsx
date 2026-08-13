@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { Button } from '@renderer/components/ui/button'
 import { dismissRepeatedQuestion } from '@renderer/api/repeatedQuestions'
 import { formatCount } from '@renderer/lib/format'
@@ -23,10 +23,7 @@ interface RepeatedQuestionsProps {
   questions: RepeatedQuestion[]
 }
 
-export default function RepeatedQuestions({
-  sessionId,
-  questions
-}: RepeatedQuestionsProps): React.JSX.Element {
+function RepeatedQuestions({ sessionId, questions }: RepeatedQuestionsProps): React.JSX.Element {
   /** 낙관적으로 숨긴 질문 — 다음 폴링에서 서버 목록이 따라오면 자연히 정리된다. */
   const [dismissed, setDismissed] = useState<number[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -104,3 +101,11 @@ export default function RepeatedQuestions({
     </div>
   )
 }
+
+/*
+ * 3초 스냅샷 폴링이 도는 화면이라 memo로 감싼다. 폴링 응답은 매번 새로 파싱된 객체라
+ * 값이 그대로여도 참조가 달라지는데, useLiveSnapshot이 바뀌지 않은 조각의 참조를
+ * 유지해 주므로(hooks/useLiveSnapshot.ts) 여기서 memo가 실제로 걸린다.
+ * 측정: perf/console-render.bench.tsx
+ */
+export default memo(RepeatedQuestions)

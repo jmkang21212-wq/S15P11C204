@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { memo, useCallback, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Pencil } from 'lucide-react'
 import { Button } from '@renderer/components/ui/button'
@@ -28,7 +28,7 @@ const TITLE_MAX = 100
  * 방송하는 중에도 입력칸이 떠서 고칠 수 있을 것처럼 보인다. 그래서 "치지직이 연동돼
  * 있는가"가 아니라 "지금 방송이 치지직을 쓰는가"로 판단한다.
  */
-export default function ChzzkTitleSection({
+function ChzzkTitleSection({
   platformSessions
 }: {
   /** 현재 세션의 플랫폼별 자식 세션. 방송 전이면 빈 배열이다. */
@@ -212,3 +212,11 @@ function RelinkNotice({ message }: { message: string }): React.JSX.Element {
     </p>
   )
 }
+
+/*
+ * 3초 스냅샷 폴링이 도는 화면이라 memo로 감싼다. 폴링 응답은 매번 새로 파싱된 객체라
+ * 값이 그대로여도 참조가 달라지는데, useLiveSnapshot이 바뀌지 않은 조각의 참조를
+ * 유지해 주므로(hooks/useLiveSnapshot.ts) 여기서 memo가 실제로 걸린다.
+ * 측정: perf/console-render.bench.tsx
+ */
+export default memo(ChzzkTitleSection)

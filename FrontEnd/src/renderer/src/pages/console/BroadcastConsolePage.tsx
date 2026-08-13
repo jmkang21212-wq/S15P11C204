@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate, useOutletContext } from 'react-router-dom'
 import { useLiveSnapshot } from '@renderer/hooks/useLiveSnapshot'
 import { useAsyncData } from '@renderer/hooks/useAsyncData'
@@ -32,6 +32,12 @@ import RepeatedQuestions from './components/RepeatedQuestions'
  * 그러면 useRef 값이 사라져 음성 분석이 조용히 안 켜진다. App.tsx의 bootRefresh와 같은 이유.
  */
 let pendingAudioStart = false
+
+/*
+ * 빈 배열을 렌더 안에서 만들지 않고 모듈 레벨에 둔다 — `?? []`는 매 렌더 새 배열이라
+ * ChzzkTitleSection에 건 memo가 그것만으로 매번 깨진다.
+ */
+const NO_SESSIONS: NonNullable<CurrentSessionContext['session']>['platformSessions'] = []
 
 const AUDIO_STATUS_LABEL = {
   IDLE: '음성 분석 대기',
@@ -87,6 +93,11 @@ export default function BroadcastConsolePage(): React.JSX.Element {
   const [mountedAt] = useState(() => new Date().toISOString())
   const briefingCutoff = audio.startedAt ?? mountedAt
 
+  const briefings = useMemo(
+    () => mergeBriefings(audio.briefings, data?.briefings ?? [], briefingCutoff),
+    [audio.briefings, data?.briefings, briefingCutoff]
+  )
+
   /**
    * 약속의 현재 상태. 브리핑 응답(`live_briefings`)에는 `promiseId`만 있고 상태가 없어서
    * 따로 조회한다 — 이게 없으면 확정·무시 표시가 콘솔 언마운트와 함께 사라져, 다른 화면에
@@ -96,16 +107,28 @@ export default function BroadcastConsolePage(): React.JSX.Element {
    */
   const promiseLoader = useCallback(() => listPromises(), [])
   const { data: promisePage, refetch: refetchPromises } = useAsyncData(promiseLoader)
-  const promiseStatuses = new Map(
-    (promisePage?.items ?? []).map((promise) => [promise.promiseId, promise.status])
+  /*
+   * 아래 세 개(promiseStatuses·briefings·handleStarted)를 useMemo/useCallback으로 고정한다.
+   * 매 렌더마다 새 Map·새 배열·새 함수를 만들면 패널에 건 memo가 얕은 비교에서 전부
+   * 깨져 아무 효과가 없다 — 3초 폴링이 도는 화면이라 그 차이가 계속 쌓인다.
+   * 측정: perf/console-render.bench.tsx
+   */
+  const promiseStatuses = useMemo(
+    () => new Map((promisePage?.items ?? []).map((promise) => [promise.promiseId, promise.status])),
+    [promisePage]
   )
 
   const startAudio = audio.start
 
-  const handleStarted = (newSessionId: number): void => {
-    pendingAudioStart = true
-    navigate(PATHS.consoleSession.replace(':sessionId', String(newSessionId)), { replace: true })
-  }
+  const handleStarted = useCallback(
+    (newSessionId: number): void => {
+      pendingAudioStart = true
+      navigate(PATHS.consoleSession.replace(':sessionId', String(newSessionId)), { replace: true })
+    },
+    [navigate]
+  )
+
+  const openMini = useCallback((): void => window.api.openMiniWindow(), [])
 
   useEffect(() => {
     if (sid === null || !pendingAudioStart) return
@@ -139,7 +162,7 @@ export default function BroadcastConsolePage(): React.JSX.Element {
         sessionId={sid}
         session={data?.session ?? null}
         services={data?.services ?? null}
-        onOpenMini={() => window.api.openMiniWindow()}
+        onOpenMini={openMini}
         audio={audio}
         onStarted={handleStarted}
       />
@@ -147,7 +170,7 @@ export default function BroadcastConsolePage(): React.JSX.Element {
       <div className="flex flex-1 overflow-hidden">
         {/* 좌: 브리핑 피드 — 진입 후는 음성 서버 실시간 이벤트, 진입 전 이력과 채팅 요약은 스냅샷 */}
         <BriefingFeed
-          briefings={mergeBriefings(audio.briefings, data?.briefings ?? [], briefingCutoff)}
+          briefings={briefings}
           promiseStatuses={promiseStatuses}
           onPromiseResolved={refetchPromises}
         />
@@ -168,7 +191,7 @@ export default function BroadcastConsolePage(): React.JSX.Element {
             실패해도 제목 수정은 치지직 API만 쓰므로 그대로 동작한다.
           */}
           {sid !== null && (
-            <ChzzkTitleSection platformSessions={currentSession?.platformSessions ?? []} />
+            <ChzzkTitleSection platformSessions={currentSession?.platformSessions ?? NO_SESSIONS} />
           )}
 
           {data && sid !== null ? (

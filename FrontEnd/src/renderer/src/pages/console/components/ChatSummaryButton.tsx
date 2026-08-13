@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { memo, useEffect, useState } from 'react'
 import { Sparkles } from 'lucide-react'
 import { Button } from '@renderer/components/ui/button'
 import { createChatSummary } from '@renderer/api/chatSummary'
@@ -13,7 +13,7 @@ import { formatCount } from '@renderer/lib/format'
  * 생성 결과를 여기서 직접 보여주지 않는다 — 요약은 CHAT_SUMMARY 브리핑으로 저장되어
  * 다음 스냅샷 폴링에 브리핑 피드로 나타난다. 두 곳에 같은 내용을 띄우면 중복이다.
  */
-export default function ChatSummaryButton({ sessionId }: { sessionId: number }): React.JSX.Element {
+function ChatSummaryButton({ sessionId }: { sessionId: number }): React.JSX.Element {
   const [requesting, setRequesting] = useState(false)
   /** 남은 쿨다운(초). 0보다 크면 버튼을 잠근다. */
   const [cooldownSec, setCooldownSec] = useState(0)
@@ -82,3 +82,11 @@ function secondsUntil(iso: string | null): number | null {
   const remaining = Math.ceil((new Date(iso).getTime() - Date.now()) / 1000)
   return remaining > 0 ? remaining : null
 }
+
+/*
+ * 3초 스냅샷 폴링이 도는 화면이라 memo로 감싼다. 폴링 응답은 매번 새로 파싱된 객체라
+ * 값이 그대로여도 참조가 달라지는데, useLiveSnapshot이 바뀌지 않은 조각의 참조를
+ * 유지해 주므로(hooks/useLiveSnapshot.ts) 여기서 memo가 실제로 걸린다.
+ * 측정: perf/console-render.bench.tsx
+ */
+export default memo(ChatSummaryButton)

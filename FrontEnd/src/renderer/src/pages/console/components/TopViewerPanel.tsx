@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import TopViewerList from '@renderer/components/common/TopViewerList'
 import type { TopViewer } from '@renderer/types/topViewer'
 
@@ -12,7 +13,7 @@ import type { TopViewer } from '@renderer/types/topViewer'
  * 인라인 문구로 맞춘다 — 좁은 사이드바에서 `EmptyState`의 아이콘·여백은 과하고,
  * 패널 하나만 카드가 되면 사이드바의 리듬이 깨진다.
  */
-export default function TopViewerPanel({ viewers }: { viewers: TopViewer[] }): React.JSX.Element {
+function TopViewerPanel({ viewers }: { viewers: TopViewer[] }): React.JSX.Element {
   return (
     <div>
       <div className="mb-3 flex items-baseline justify-between">
@@ -35,3 +36,11 @@ export default function TopViewerPanel({ viewers }: { viewers: TopViewer[] }): R
     </div>
   )
 }
+
+/*
+ * 3초 스냅샷 폴링이 도는 화면이라 memo로 감싼다. 폴링 응답은 매번 새로 파싱된 객체라
+ * 값이 그대로여도 참조가 달라지는데, useLiveSnapshot이 바뀌지 않은 조각의 참조를
+ * 유지해 주므로(hooks/useLiveSnapshot.ts) 여기서 memo가 실제로 걸린다.
+ * 측정: perf/console-render.bench.tsx
+ */
+export default memo(TopViewerPanel)

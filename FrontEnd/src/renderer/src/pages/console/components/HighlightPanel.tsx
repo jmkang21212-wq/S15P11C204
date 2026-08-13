@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import StatusBadge, { type StatusTone } from '@renderer/components/common/StatusBadge'
 import { formatTime } from '@renderer/lib/format'
 import { cn } from '@renderer/lib/utils'
@@ -28,11 +29,7 @@ const SKIP_LABEL: Record<NonNullable<HighlightStatus['skipReason']>, string> = {
   'empty-baseline': '평소 수준(기준선) 수집 중이에요'
 }
 
-export default function HighlightPanel({
-  highlight
-}: {
-  highlight: HighlightStatus
-}): React.JSX.Element {
+function HighlightPanel({ highlight }: { highlight: HighlightStatus }): React.JSX.Element {
   const badge = highlight.phase ? PHASE_BADGE[highlight.phase] : null
   // 게이지는 임계 대비 비율. z는 음수도 나오므로(평소보다 조용) 0~1로 자른다.
   const gaugeRatio =
@@ -105,3 +102,11 @@ export default function HighlightPanel({
     </div>
   )
 }
+
+/*
+ * 3초 스냅샷 폴링이 도는 화면이라 memo로 감싼다. 폴링 응답은 매번 새로 파싱된 객체라
+ * 값이 그대로여도 참조가 달라지는데, useLiveSnapshot이 바뀌지 않은 조각의 참조를
+ * 유지해 주므로(hooks/useLiveSnapshot.ts) 여기서 memo가 실제로 걸린다.
+ * 측정: perf/console-render.bench.tsx
+ */
+export default memo(HighlightPanel)

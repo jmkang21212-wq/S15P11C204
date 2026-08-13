@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { Button } from '@renderer/components/ui/button'
 import { cn } from '@renderer/lib/utils'
 import { formatMs, formatCount } from '@renderer/lib/format'
@@ -85,7 +85,7 @@ function ElapsedClock({ session }: { session: LiveSnapshotSession }): React.JSX.
   return <span className="font-mono text-xl font-bold">{formatMs(elapsed * 1000)}</span>
 }
 
-export default function ConsoleStatusBar({
+function ConsoleStatusBar({
   sessionId,
   session,
   services,
@@ -179,3 +179,11 @@ export default function ConsoleStatusBar({
     </div>
   )
 }
+
+/*
+ * 3초 스냅샷 폴링이 도는 화면이라 memo로 감싼다. 폴링 응답은 매번 새로 파싱된 객체라
+ * 값이 그대로여도 참조가 달라지는데, useLiveSnapshot이 바뀌지 않은 조각의 참조를
+ * 유지해 주므로(hooks/useLiveSnapshot.ts) 여기서 memo가 실제로 걸린다.
+ * 측정: perf/console-render.bench.tsx
+ */
+export default memo(ConsoleStatusBar)

@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { formatCount, formatPercent } from '@renderer/lib/format'
 import { topSentiments } from '@renderer/lib/sentiment'
 import { cn } from '@renderer/lib/utils'
@@ -11,7 +12,7 @@ import type { Sentiment } from '@renderer/types/console'
  *
  * 세션 리포트(SC-06)의 3분류 막대는 응답 구조가 달라 공용 SentimentBar를 계속 쓴다.
  */
-export default function SentimentPanel({ sentiment }: { sentiment: Sentiment }): React.JSX.Element {
+function SentimentPanel({ sentiment }: { sentiment: Sentiment }): React.JSX.Element {
   const shares = topSentiments(sentiment)
 
   return (
@@ -71,3 +72,11 @@ export default function SentimentPanel({ sentiment }: { sentiment: Sentiment }):
     </div>
   )
 }
+
+/*
+ * 3초 스냅샷 폴링이 도는 화면이라 memo로 감싼다. 폴링 응답은 매번 새로 파싱된 객체라
+ * 값이 그대로여도 참조가 달라지는데, useLiveSnapshot이 바뀌지 않은 조각의 참조를
+ * 유지해 주므로(hooks/useLiveSnapshot.ts) 여기서 memo가 실제로 걸린다.
+ * 측정: perf/console-render.bench.tsx
+ */
+export default memo(SentimentPanel)

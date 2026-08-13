@@ -1,4 +1,4 @@
-import { useCallback, useSyncExternalStore } from 'react'
+import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import { AudioStreamClient } from '@renderer/lib/AudioStreamClient'
 import type {
   AlertCategory,
@@ -239,5 +239,14 @@ export function useAudioStream(
     audioStreamStore.end()
   }, [])
 
-  return { status, error, briefings, startedAt, start, stop, end }
+  /*
+   * 반환 객체를 고정한다. 리터럴을 그대로 돌려주면 값이 그대로여도 매 렌더 참조가 달라져,
+   * 이걸 prop으로 받는 ConsoleStatusBar의 memo가 항상 깨진다 — 3초 폴링이 도는 화면이라
+   * 콘솔이 다시 렌더될 때마다 상태줄도 따라 렌더됐다(측정: perf/console-render.bench.tsx).
+   * briefings는 저장소가 바뀔 때만 새 배열이 되므로(위 setState) 의존성으로 안전하다.
+   */
+  return useMemo(
+    () => ({ status, error, briefings, startedAt, start, stop, end }),
+    [status, error, briefings, startedAt, start, stop, end]
+  )
 }

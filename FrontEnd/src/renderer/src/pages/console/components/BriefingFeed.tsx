@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { Button } from '@renderer/components/ui/button'
 import { EmptyState } from '@renderer/components/common/StateView'
 import { cn } from '@renderer/lib/utils'
@@ -188,7 +188,7 @@ interface BriefingFeedProps {
   onPromiseResolved: () => void
 }
 
-export default function BriefingFeed({
+function BriefingFeed({
   briefings,
   promiseStatuses,
   onPromiseResolved
@@ -216,3 +216,11 @@ export default function BriefingFeed({
     </section>
   )
 }
+
+/*
+ * 3초 스냅샷 폴링이 도는 화면이라 memo로 감싼다. 폴링 응답은 매번 새로 파싱된 객체라
+ * 값이 그대로여도 참조가 달라지는데, useLiveSnapshot이 바뀌지 않은 조각의 참조를
+ * 유지해 주므로(hooks/useLiveSnapshot.ts) 여기서 memo가 실제로 걸린다.
+ * 측정: perf/console-render.bench.tsx
+ */
+export default memo(BriefingFeed)

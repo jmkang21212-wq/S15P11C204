@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getLiveSnapshot } from '@renderer/api/console'
 import { useAsyncData } from '@renderer/hooks/useAsyncData'
+import { reuseUnchanged } from '@renderer/lib/reuseUnchanged'
 import type { LiveSnapshot } from '@renderer/types/console'
 
 /**
@@ -49,10 +50,19 @@ export function useLiveSnapshot(
   // loader를 객체로 감싸 두는 건 필수다 — setState에 함수를 그대로 넘기면 React가 값이
   // 아니라 업데이터로 해석해 loader(prev)를 실행해 버리고, 저장된 값이 영영 loader와
   // 같아지지 않아 렌더 루프가 된다.
+  //
+  // 붙들어 둘 때 응답을 그대로 쓰지 않고 `reuseUnchanged`를 거친다. 응답은 매번 새로
+  // 파싱된 객체라 값이 같아도 참조가 전부 달라지는데, 그러면 콘솔의 패널들이 3초마다
+  // 빠짐없이 다시 렌더된다(20 tick에 패널 렌더 320회 — perf/console-render.bench.tsx).
+  // 바뀌지 않은 조각의 참조를 물려주면 그 패널들의 memo가 실제로 걸린다.
   const [lastGood, setLastGood] = useState<LiveSnapshot | null>(null)
   const [settled, setSettled] = useState<{ loader: unknown } | null>(null)
   if (isOwner && !asyncLoading) {
-    if (!error && data !== lastGood) setLastGood(data)
+    if (!error && data !== lastGood) {
+      const stable = data ? reuseUnchanged(lastGood, data) : data
+      // 전부 그대로면 stable === lastGood이라 setState 자체가 생략된다.
+      if (stable !== lastGood) setLastGood(stable)
+    }
     if (settled?.loader !== loader) setSettled({ loader })
   }
 

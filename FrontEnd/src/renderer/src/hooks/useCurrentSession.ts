@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { fetchCurrentSession } from '@renderer/api/broadcastSessions'
 import { useAsyncData } from '@renderer/hooks/useAsyncData'
+import { reuseUnchanged } from '@renderer/lib/reuseUnchanged'
 import type { BroadcastSessionDetail } from '@renderer/types/broadcastSession'
 
 /**
@@ -49,10 +50,17 @@ export function useCurrentSession(mode: 'owner' | 'follower' = 'owner'): UseCurr
   // 성공해도 값이 null이라 lastGood이 영영 null로 남는데, 그걸 로딩으로 치면 폴링이 돌
   // 때마다 화면 전체가 스켈레톤으로 되돌아간다. 실패도 "완료"로 친다 — 에러는 error로
   // 따로 알리며, 계속 실패하는 동안 화면을 스켈레톤으로 덮을 이유는 없다.
+  //
+  // useLiveSnapshot과 같은 이유로 `reuseUnchanged`를 거친다. 이 값은 ConsoleLayout이
+  // Outlet context로 콘솔에 내려주므로, 응답이 매번 새 객체이면 값이 그대로여도 15초마다
+  // 콘솔 페이지와 ChzzkTitleSection이 다시 렌더된다.
   const [lastGood, setLastGood] = useState<BroadcastSessionDetail | null>(null)
   const [settledOnce, setSettledOnce] = useState(false)
   if (isOwner && !asyncLoading) {
-    if (!error && data !== lastGood) setLastGood(data)
+    if (!error && data !== lastGood) {
+      const stable = data ? reuseUnchanged(lastGood, data) : data
+      if (stable !== lastGood) setLastGood(stable)
+    }
     if (!settledOnce) setSettledOnce(true)
   }
 
