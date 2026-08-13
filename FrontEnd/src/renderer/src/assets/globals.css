@@ -75,9 +75,18 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 
-  /* 타이포: 본문·수치 모두 Wanted Sans. 수치는 같은 서체의 tabular-nums(고정폭 숫자)로 구분한다 — 아래 .font-mono 참고 */
-  --font-sans: 'Wanted Sans Variable', 'Pretendard', system-ui, sans-serif;
-  --font-mono: 'Wanted Sans Variable', 'Pretendard', system-ui, sans-serif;
+  /*
+   * 타이포: 본문·수치 모두 Wanted Sans. 수치는 같은 서체의 tabular-nums(고정폭 숫자)로
+   * 구분한다 — 아래 .font-mono 참고.
+   *
+   * 'Wanted Sans Variable'은 KS X 1001 2,350자만 담은 서브셋(350KB)이고,
+   * 'Wanted Sans Variable Full'은 11,172자 원본(1.26MB)이다. 서브셋에 없는 문자가
+   * 나올 때만 원본을 받는다 — fonts/WantedSansVariable.css 참고.
+   */
+  --font-sans: 'Wanted Sans Variable', 'Wanted Sans Variable Full', 'Pretendard', system-ui,
+    sans-serif;
+  --font-mono: 'Wanted Sans Variable', 'Wanted Sans Variable Full', 'Pretendard', system-ui,
+    sans-serif;
 
   /* 타이포 스케일 — design.md §1 (text-title/body/caption/metric로 사용) */
   --text-title: 2rem; /* 32px 화면 제목 */

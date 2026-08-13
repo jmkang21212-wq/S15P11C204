@@ -6,8 +6,36 @@ This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:
 http://scripts.sil.org/OFL
 */
+/*
+ * 서체를 두 벌로 나눠 싣는다.
+ *
+ * 원본은 한글 음절 11,172자를 전부 담아 1.26MB인데, 공개 웹의 전송량 1.76MB 중
+ * 71%가 이 파일 하나였다. 그래서 KS X 1001 완성형 2,350자 + 라틴·기호만 남긴
+ * 서브셋(350KB)을 기본으로 쓰고, 원본은 폴백 패밀리로 둔다.
+ *
+ * 폰트 스택은 assets/globals.css의 --font-sans / --font-mono에 있다:
+ *   'Wanted Sans Variable', 'Wanted Sans Variable Full', 'Pretendard', ...
+ *
+ * 브라우저는 문자 단위로 커버리지를 보고 패밀리를 고르므로, 서브셋에 있는 문자만
+ * 나오는 한 아래 Full은 요청조차 되지 않는다. 서브셋에 없는 문자(희귀 음절·한자 등)가
+ * 화면에 뜨면 그때 Full을 받는다 — 그 경우의 전송량이 서브셋 도입 전과 같아질 뿐이라
+ * 손해가 되지는 않는다.
+ *
+ * unicode-range를 쓰지 않은 이유: KS X 1001 2,350자는 1,613개 구간으로 흩어져 있어
+ * unicode-range로 적으면 CSS에만 14KB가 붙는다. 폴백 패밀리는 그 비용이 0이다.
+ *
+ * 서브셋 재생성: node scripts/subset-font.mjs
+ */
 @font-face {
     font-family: "Wanted Sans Variable";
+    font-style: normal;
+    font-display: swap;
+    font-weight: 400 1000;
+    src: url("./woff2/WantedSansVariable.subset.woff2") format("woff2-variations");
+}
+
+@font-face {
+    font-family: "Wanted Sans Variable Full";
     font-style: normal;
     font-display: swap;
     font-weight: 400 1000;
