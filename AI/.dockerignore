@@ -29,3 +29,6 @@ logs/
 .vscode/
 .git/
 .gitignore
+
+# 부하 테스트 도구 — 서버가 import하지 않는 독립 스크립트
+AI/bench/

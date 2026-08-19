@@ -1,0 +1,36 @@
+# 부하 테스트용 오버레이. 배포 구성 위에 얹어 쓴다.
+#
+#   BENCH_DIR=<이 폴더의 절대경로> \
+#   BENCH_THREADPOOL=4 \
+#   docker compose -f compose.yaml -f <이 파일> up -d --force-recreate chat-ai
+#
+# ⚠ 상대경로를 쓰면 안 된다. -f 를 여러 개 줄 때 볼륨 경로는 '첫 번째'
+#    compose 파일이 있는 폴더 기준으로 풀린다. 이 파일은 worktree 안에
+#    있고 compose.yaml 은 원래 저장소에 있어 서로 다르다.
+#
+# 하는 일 두 가지
+# ---------------
+# 1) GMS_KEY 를 비워 외부 API 호출을 0으로 만든다(결정 C).
+#      질문 임베딩(text-embedding-3-large)이 꺼져 offer() 가 즉시 return False.
+#      /summary 는 애초에 부하 스크립트가 호출하지 않는다.
+#      ⚠ 셸에서 `GMS_KEY= docker compose ...` 로는 안 된다. compose.yaml 의
+#        env_file(.env)이 값을 채우고, 셸 변수는 ${} 치환에만 쓰인다.
+#        environment: 로 명시해야 env_file 을 이긴다.
+#      ⚠ 이 구성은 /ingest 의 Redis 작업량을 실제보다 '낮게' 만든다.
+#        추론 시간에는 영향이 없다.
+#
+# 2) 스레드풀 상한을 바꾼 래퍼로 기동한다(threadpool_patch.py).
+#      서버 코드는 그대로 두고 읽기 전용 마운트로 얹는다.
+#      BENCH_THREADPOOL 을 안 주면 4.
+services:
+  chat-ai:
+    environment:
+      GMS_KEY: ""
+      BENCH_THREADPOOL: "${BENCH_THREADPOOL:-4}"
+      # 1이면 int8(123MB) 사용. 기본은 fp32(488MB).
+      # 추론 시간이 곧 처리 능력이므로 처리량에 직접 영향한다.
+      CHATAI_INT8: "${BENCH_INT8:-0}"
+    volumes:
+      - ${BENCH_DIR:?BENCH_DIR 에 bench 폴더 절대경로를 지정하세요}/threadpool_patch.py:/app/chat-ai/threadpool_patch.py:ro
+    command: ["uvicorn", "threadpool_patch:app", "--host", "0.0.0.0",
+              "--port", "8001", "--app-dir", "chat-ai"]
