@@ -11,11 +11,13 @@
 -- 해시 파생 별칭(viewer-a91c)으로 폴백한다 (API 11.5의 viewerAlias 형식).
 -- =============================================================================
 
+-- user_role 폭 30자: 실측 최장값 streaming_channel_manager(25자) + 여유.
+-- 20자로 잡으면 매니저 채팅이 오는 순간 배치 INSERT 전체가 길이 초과로 터진다.
 ALTER TABLE viewer_profiles
     ADD COLUMN nickname  VARCHAR(100),
-    ADD COLUMN user_role VARCHAR(20);
+    ADD COLUMN user_role VARCHAR(30);
 
 COMMENT ON COLUMN viewer_profiles.nickname
     IS '마지막으로 관측된 표시용 닉네임. 닉변 시 최신 값으로 갱신되며 미관측이면 NULL';
 COMMENT ON COLUMN viewer_profiles.user_role
-    IS '치지직 userRoleCode 어휘(streamer/manager/common_user). streamer·manager는 열성 집계 제외';
+    IS '치지직 userRoleCode 실측 어휘: common_user/streamer/streaming_chat_manager/streaming_channel_manager (+YouTube 매핑 manager). 스트리머·매니저 계열은 열성 집계 제외';

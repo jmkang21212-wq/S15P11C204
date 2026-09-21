@@ -127,16 +127,25 @@ class FandomScoreIntegrationTest {
 
     // -------------------------------------------------------- 노출 규칙
 
+    /**
+     * 제외 역할은 실측 어휘를 쓴다 — 치지직은 'manager'가 아니라
+     * streaming_chat_manager/streaming_channel_manager를 보낸다(수집 397만 건 분포).
+     * 'manager'는 YouTube 어댑터의 모더레이터 매핑이라 같이 검증한다.
+     */
     @Test
     void 스트리머_본인과_매니저는_노출에서_빠진다() {
         Fixture f = createFixture();
         String streamer = hash();
-        String manager = hash();
+        String chatManager = hash();
+        String channelManager = hash();
+        String youtubeModerator = hash();
         String fan = hash();
 
         ingestService.appendChatMessages(f.sessionId, List.of(
                 chat(streamer, "방장 채팅", BASE, "한별TV", "streamer"),
-                chat(manager, "매니저 채팅", BASE, "매니저", "manager"),
+                chat(chatManager, "채팅 매니저", BASE, "매니저1", "streaming_chat_manager"),
+                chat(channelManager, "채널 매니저", BASE, "매니저2", "streaming_channel_manager"),
+                chat(youtubeModerator, "유튜브 모더", BASE, "모더", "manager"),
                 chat(fan, "팬 채팅", BASE, "한별팬1호", "common_user")
         ));
 

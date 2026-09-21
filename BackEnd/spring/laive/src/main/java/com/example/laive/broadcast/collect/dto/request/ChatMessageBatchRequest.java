@@ -37,8 +37,9 @@ public record ChatMessageBatchRequest(
             @Size(max = 10) String currency,
             @Size(max = 100) String providerEventType,
             // 표시용 닉네임·역할 (FR-F-03). 구버전 수집기는 안 보내므로 선택 필드다.
+            // userRole 30자: 실측 최장 streaming_channel_manager(25자) 기준.
             @Size(max = 100) String nickname,
-            @Size(max = 20) String userRole
+            @Size(max = 30) String userRole
     ) {
 
         public Item(String viewerHash, String message, Instant sentAt) {

@@ -46,6 +46,11 @@
       (viewerId, nickname, viewerHash, chatScore, watchScore, totalScore).
       스트리머 본인·매니저는 "시청자"가 아니므로 노출에서 뺀다 — 저장(persist)은
       전 시청자를 남기고 노출만 거른다.
+
+      제외 목록은 실측 기반이다 — 수집 채팅 397만 건의 userRoleCode 분포:
+      common_user / streaming_chat_manager / streaming_channel_manager / streamer.
+      치지직은 'manager'라는 값을 쓰지 않는다. 'manager'는 YouTube 어댑터가
+      isChatModerator를 눕힌 값이라 함께 남긴다.
     -->
     <select id="findTopViewers" resultType="com.example.laive.broadcast.fandom.domain.TopViewer">
         SELECT agg.viewer_id,
@@ -58,7 +63,8 @@
                <include refid="viewerScoreAggregate"/>
                ) agg
           JOIN viewer_profiles vp ON vp.id = agg.viewer_id
-         WHERE COALESCE(vp.user_role, '') NOT IN ('streamer', 'manager')
+         WHERE COALESCE(vp.user_role, '') NOT IN
+               ('streamer', 'manager', 'streaming_chat_manager', 'streaming_channel_manager')
          ORDER BY agg.total_score DESC, agg.viewer_id
          LIMIT #{limit}
     </select>

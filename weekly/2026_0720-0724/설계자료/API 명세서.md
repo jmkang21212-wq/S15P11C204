@@ -1745,9 +1745,9 @@ Spring은 `viewerHash`로 `VIEWER_PROFILES`를 조회하거나 생성한 뒤 `CH
   닉네임은 열성 시청자 화면 표기를 위해 **표시 목적에 한해** 원문으로 저장하기로
   확정한 의도적 완화다 (2026-08-03 결정).
 - `VIEWER_PROFILES.nickname`은 마지막으로 관측된 값으로 갱신되고(닉변 추적), 값이
-  없는 배치는 기존 값을 지우지 않는다. `userRole`(치지직 `userRoleCode` 어휘:
-  `streamer`/`manager`/`common_user`)은 스트리머 본인·매니저를 열성 집계에서
-  제외하는 근거다.
+  없는 배치는 기존 값을 지우지 않는다. `userRole`(치지직 `userRoleCode` **실측 어휘**: `common_user`/`streamer`/
+  `streaming_chat_manager`/`streaming_channel_manager`, YouTube 매핑은 `manager`)은
+  스트리머 본인·매니저 계열을 열성 집계에서 제외하는 근거다.
 
 #### 13.3.2 시청자 지표 배치 저장
 
